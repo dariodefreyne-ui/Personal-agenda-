@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// Starting point for the personal-agenda webapp.
+// Garmin data is written server-side by the sync pipeline (Admin SDK, which
+// bypasses these rules) and read by the signed-in owner from the webapp.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      // The owner can read their own profile + all nested Garmin data.
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Writes come from the Admin SDK only; clients cannot write Garmin data.
+      allow write: if false;
+
+      match /{document=**} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+  }
+}

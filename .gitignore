@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Secrets / credentials -- NEVER commit these
+.env
+.env.*
+!.env.example
+serviceAccount*.json
+firebase-*.json
+*-service-account.json
+.garminconnect/
+tokens.tar
+*.tar
+
+# Garmin export dumps
+DI_CONNECT/
+export/
+*.zip
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
