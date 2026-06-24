@@ -64,4 +64,3 @@ client. Keep documents under Firestore's 1 MB limit -- prefer summary endpoints.
 - Long backfills can hit Garmin rate limits; `backfill.py` sleeps between days
   (`--delay`). Increase it if you see failures.
 - The daily GitHub Action needs the secrets listed in README / CLAUDE.md.
-"""
