@@ -37,11 +37,16 @@ export function useDagPlan(datumObj = new Date()) {
         getCollection(uid, 'vakanties'),
       ]);
 
-      // Weekends standaard 'vrij' tenzij expliciet anders gekozen.
-      const isWeekend = dagKort === 'za' || dagKort === 'zo';
-      const werkModus = week?.dagen?.[dagKort] || (isWeekend ? 'vrij' : null);
-      const blessureActief = (reva || []).some((r) => r.blessureActief);
       const periode = vakantieVoorDatum(vakanties, datum);
+      const isWeekend = dagKort === 'za' || dagKort === 'zo';
+      // Effectief dagtype: expliciete keuze wint, anders verlofperiode -> 'verlof',
+      // anders weekend -> 'vrij'. Zo wordt er tijdens verlof geen werk gepland.
+      let werkModus = week?.dagen?.[dagKort] || null;
+      if (!werkModus) {
+        if (periode?.verlof) werkModus = 'verlof';
+        else if (isWeekend) werkModus = 'vrij';
+      }
+      const blessureActief = (reva || []).some((r) => r.blessureActief);
       const isVakantie = !!week?.vakantie || !!periode?.verlof;
       const geenJudo = !!periode?.geenJudo;
       const garminSam = garminSamenvatting(garmin);
