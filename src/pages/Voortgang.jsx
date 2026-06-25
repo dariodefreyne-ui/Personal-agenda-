@@ -1,13 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getGarminDag, getCollection, subscribeCollection, addItem, updateItem, deleteItem } from '../services/data';
+import { getGarminDag, getCollection, subscribeCollection, addItem, setItem, deleteItem } from '../services/data';
 import { garminSamenvatting } from '../services/garmin';
-import { doelProgress, doelKleur, huidigeWaarde, METRIEKEN } from '../services/doelen';
+import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
 import { datumKey } from '../services/tijd';
-import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash } from '../components/Icons';
+import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash, IcoBike } from '../components/Icons';
 import Gauge from '../components/Gauge';
+import Sparkline from '../components/Sparkline';
 import BelastingKaart from '../components/BelastingKaart';
+
+// Ruwe Garmin-activiteit -> nette samenvatting (defensief).
+function activiteitInfo(a) {
+  return {
+    id: a.id || String(a.activityId || ''),
+    naam: a.activityName || a.activityType?.typeKey || 'Activiteit',
+    type: a.activityType?.typeKey || '',
+    datum: (a.startTimeLocal || a.startTimeGMT || '').slice(0, 10),
+    duurMin: a.duration ? Math.round(a.duration / 60) : null,
+    afstandKm: a.distance ? Math.round(a.distance / 100) / 10 : null,
+    kcal: a.calories ? Math.round(a.calories) : null,
+    hr: a.averageHR ? Math.round(a.averageHR) : null,
+  };
+}
 
 function laatsteDagen(n) {
   const out = [];
@@ -27,6 +42,8 @@ export default function Voortgang() {
   const [taken, setTaken] = useState([]);
   const [doelen, setDoelen] = useState([]);
   const [garminVandaag, setGarminVandaag] = useState(null);
+  const [activiteiten, setActiviteiten] = useState([]);
+  const [rpe, setRpe] = useState({});
   const [form, setForm] = useState(LEEG);
   const [open, setOpen] = useState(false);
   const [laden, setLaden] = useState(true);
@@ -34,16 +51,24 @@ export default function Voortgang() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const dagen = laatsteDagen(7);
+      const dagen = laatsteDagen(28);
       const garmin = await Promise.all(dagen.map((d) => getGarminDag(user.uid, datumKey(d))));
       const r = dagen.map((d, i) => ({ datum: d, label: d.toLocaleDateString('nl-BE', { weekday: 'short' }), g: garminSamenvatting(garmin[i]) }));
       setReeks(r);
       setGarminVandaag(r[r.length - 1]?.g || null);
       setTaken((await getCollection(user.uid, 'taken')).filter((t) => t.type === 'gewoonte'));
+      const acts = (await getCollection(user.uid, 'garminActivities')).map(activiteitInfo)
+        .filter((a) => a.datum).sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 8);
+      setActiviteiten(acts);
       setLaden(false);
     })();
-    return subscribeCollection(user.uid, 'doelen', setDoelen);
+    const u1 = subscribeCollection(user.uid, 'doelen', setDoelen);
+    const u2 = subscribeCollection(user.uid, 'activiteitLog', (items) =>
+      setRpe(Object.fromEntries(items.map((i) => [i.id, i.rpe]))));
+    return () => { u1(); u2(); };
   }, [user]);
+
+  const zetRpe = (id, val) => setItem(user.uid, 'activiteitLog', id, { rpe: val });
 
   const bewaarDoel = async () => {
     if (!form.titel.trim()) return toast('Geef je doel een naam.');
@@ -59,10 +84,24 @@ export default function Voortgang() {
 
   if (laden) return <div className="empty">Statistieken laden…</div>;
 
-  const readinessReeks = reeks.map((r) => r.g?.readiness ?? null);
-  const slaapReeks = reeks.map((r) => r.g?.slaapUren ?? null);
+  const reeks7 = reeks.slice(-7);
+  const readinessReeks = reeks7.map((r) => r.g?.readiness ?? null);
+  const slaapReeks = reeks7.map((r) => r.g?.slaapUren ?? null);
   const topStreaks = [...taken].sort((a, b) => (b.streak || 0) - (a.streak || 0)).slice(0, 6);
   const autoMetric = ['vo2max', 'gewicht', 'rusthr'].includes(form.metric);
+
+  // Trends over ~4 weken (alleen metrieken met genoeg data).
+  const trendDefs = [
+    { key: 'vo2max', label: 'VO₂max', pick: (g) => g?.vo2max, omhoog: true },
+    { key: 'gewicht', label: 'Gewicht (kg)', pick: (g) => g?.gewichtKg, omhoog: false },
+    { key: 'rusthr', label: 'Rust-HR', pick: (g) => g?.rustHr, omhoog: false },
+  ].map((t) => {
+    const serie = reeks.map((r) => t.pick(r.g)).filter((v) => typeof v === 'number');
+    const eerste = serie[0], laatste = serie[serie.length - 1];
+    const delta = serie.length >= 2 ? Math.round((laatste - eerste) * 10) / 10 : null;
+    const goed = delta == null ? null : (t.omhoog ? delta >= 0 : delta <= 0);
+    return { ...t, serie, laatste, delta, goed };
+  }).filter((t) => t.serie.length >= 2);
 
   return (
     <div className="stack reveal">
@@ -135,14 +174,66 @@ export default function Voortgang() {
         )}
       </section>
 
+      {/* Trends over ~4 weken */}
+      {trendDefs.length > 0 && (
+        <section className="card stack">
+          <div className="card-title">Trends · ±4 weken</div>
+          {trendDefs.map((t) => (
+            <div className="row between" key={t.key} style={{ gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600 }}>{t.label}</div>
+                <div className="small dim">
+                  nu {Math.round(t.laatste * 10) / 10}
+                  {t.delta != null && (
+                    <span style={{ color: t.goed ? 'var(--success)' : 'var(--danger)', marginLeft: 6 }}>
+                      {t.delta > 0 ? '+' : ''}{t.delta}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <Sparkline data={t.serie} kleur={t.goed === false ? 'var(--danger)' : 'var(--primary)'} />
+            </div>
+          ))}
+        </section>
+      )}
+
       <section className="card">
         <div className="card-title"><IcoBolt width={14} height={14} /> Training readiness (7 dagen)</div>
-        <BarChart reeks={reeks} waarden={readinessReeks} max={100} eenheid="" />
+        <BarChart reeks={reeks7} waarden={readinessReeks} max={100} eenheid="" />
       </section>
 
       <section className="card">
         <div className="card-title"><IcoMoon width={14} height={14} /> Slaap (uren, 7 dagen)</div>
-        <BarChart reeks={reeks} waarden={slaapReeks} max={10} eenheid="u" decimal />
+        <BarChart reeks={reeks7} waarden={slaapReeks} max={10} eenheid="u" decimal />
+      </section>
+
+      {/* Activiteiten + RPE */}
+      <section className="card stack">
+        <div className="card-title"><IcoBike width={14} height={14} /> Recente trainingen</div>
+        {activiteiten.length === 0 && (
+          <p className="small muted" style={{ margin: 0 }}>Nog geen Garmin-activiteiten gesynct. Na een training verschijnen ze hier.</p>
+        )}
+        {activiteiten.map((a) => (
+          <div className="stack" key={a.id} style={{ gap: 6, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+            <div className="row between">
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600 }}>{a.naam}</div>
+                <div className="small dim">
+                  {a.datum}{a.duurMin ? ` · ${a.duurMin} min` : ''}{a.afstandKm ? ` · ${a.afstandKm} km` : ''}
+                  {a.hr ? ` · ${a.hr} bpm` : ''}{a.kcal ? ` · ${a.kcal} kcal` : ''}
+                </div>
+              </div>
+            </div>
+            <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
+              <span className="small dim" style={{ marginRight: 4 }}>RPE:</span>
+              {[2, 4, 6, 8, 10].map((n) => (
+                <button key={n} className={'btn sm' + (rpe[a.id] === n ? ' primary' : '')}
+                  style={{ minWidth: 36, padding: '0 8px' }} onClick={() => zetRpe(a.id, n)}>{n}</button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <p className="small dim" style={{ margin: 0 }}>RPE = hoe zwaar voelde het (2 licht … 10 maximaal). Helpt de coach je belasting fijner inschatten.</p>
       </section>
 
       <section className="card stack">

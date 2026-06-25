@@ -51,8 +51,8 @@ const MATRIX = {
   },
 };
 
-function bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief }) {
-  if (blessureActief) return 'herstel';
+function bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief, overbelast }) {
+  if (blessureActief || overbelast) return 'herstel';
   const r = readiness ?? 55;
   const bb = bodyBattery ?? 60;
   let score = r * 0.6 + bb * 0.4;
@@ -68,13 +68,14 @@ function bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief }) {
 
 export function coachAdvies({
   readiness = null, bodyBattery = null, slaapUren = null,
-  goal = 'algemeen', blessureActief = false,
+  goal = 'algemeen', blessureActief = false, overbelast = false,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
-  const niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief });
+  const niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief, overbelast });
   const advies = MATRIX[doel][niveau];
 
   const redenen = [];
+  if (overbelast) redenen.push('Garmin: overbelast — herstel afgedwongen');
   if (blessureActief) redenen.push('blessure actief — herstel staat voorop');
   if (readiness != null) redenen.push(`readiness ${Math.round(readiness)}/100`);
   if (bodyBattery != null) redenen.push(`body battery ${Math.round(bodyBattery)}`);

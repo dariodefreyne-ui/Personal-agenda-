@@ -1,15 +1,18 @@
 import { coachAdvies } from '../services/coach';
+import { belastingStatus } from '../services/belasting';
 import { IcoBolt, IcoClock } from './Icons';
 
 const NIVEAU_LABEL = { hard: 'Vol gas', matig: 'Matig', rustig: 'Rustig', herstel: 'Herstel' };
 
 // Coach-advies van de dag. Toont sport + intensiteit op basis van Garmin + doel.
+// Veiligheidsslot: bij Garmin-overbelasting dwingt de coach herstel af.
 export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false }) {
+  const overbelast = belastingStatus({ trainingStatus: garmin?.trainingStatus }).key === 'overbelast';
   const a = coachAdvies({
     readiness: garmin?.readiness ?? null,
     bodyBattery: garmin?.bodyBattery ?? null,
     slaapUren: garmin?.slaapUren ?? null,
-    goal, blessureActief,
+    goal, blessureActief, overbelast,
   });
 
   return (
