@@ -177,7 +177,28 @@ export function genereerDagPlan({
     }
   }
 
-  return { blokken: blok, todos, advies };
+  // Conflictdetectie tussen vaste/belangrijke blokken (overlap in tijd).
+  const conflicten = detecteerConflicten(blok);
+  conflicten.forEach((c) => advies.tekst.push(`⚠️ Conflict: “${c.a}” overlapt met “${c.b}”.`));
+
+  return { blokken: blok, todos, advies, conflicten };
+}
+
+function detecteerConflicten(blok) {
+  const belangrijk = blok.filter((b) =>
+    b.vast || ['judo', 'agenda', 'werk'].includes(b.bron) || ['judo', 'lesgeven', 'voetbal', 'sport'].includes(b.type)
+  );
+  const conflicten = [];
+  for (let i = 0; i < belangrijk.length; i++) {
+    for (let j = i + 1; j < belangrijk.length; j++) {
+      const a = belangrijk[i], b = belangrijk[j];
+      if (toMin(a.start) < toMin(b.eind) && toMin(a.eind) > toMin(b.start)) {
+        a.conflict = true; b.conflict = true;
+        conflicten.push({ a: a.titel, b: b.titel });
+      }
+    }
+  }
+  return conflicten;
 }
 
 // Voegt "vrije tijd"-blokken toe in lege avond-/dagdelen tussen ankers.

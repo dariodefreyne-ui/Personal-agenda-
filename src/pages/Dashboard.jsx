@@ -107,7 +107,9 @@ export default function Dashboard() {
                 <div className={'tl-body' + (on ? ' done' : '') + (isNu ? ' now' : '')}
                   style={{ '--block': b.kleur }}>
                   <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="tl-title">{b.titel}</div>
+                    <div className="tl-title">
+                      {b.titel}{b.conflict && <span className="badge bad small" style={{ marginLeft: 8 }}>conflict</span>}
+                    </div>
                     <div className="small dim">
                       {b.start}–{b.eind} · {BLOK_TYPES[b.type]?.naam || b.type}
                       {b.detail ? ` · ${b.detail}` : ''}
