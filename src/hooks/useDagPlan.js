@@ -51,6 +51,17 @@ export function useDagPlan(datumObj = new Date()) {
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, werkModus, datum, dagKort,
       });
+
+      // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen
+      // sturen (ook als de app vandaag niet meer geopend wordt).
+      if (datum === datumKey(new Date())) {
+        const sleutelTypes = new Set(['judo', 'lesgeven', 'sport', 'reva', 'maaltijd', 'slaap', 'voetbal']);
+        const minimaal = plan.blokken.map((b) => ({
+          id: b.id, start: b.start, eind: b.eind, titel: b.titel, type: b.type,
+          push: b.push !== false, detail: b.detail || null, sleutel: sleutelTypes.has(b.type),
+        }));
+        saveDag(uid, datum, { plan: minimaal, planOp: new Date().toISOString() }).catch(() => {});
+      }
     })();
     return () => { actief = false; };
   }, [uid, datum, dagKort, versie]); // eslint-disable-line react-hooks/exhaustive-deps
