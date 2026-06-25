@@ -78,7 +78,15 @@ jobs:
       - name: Deploy Hosting
         run: |
           for i in 1 2 3 4 5 6; do
-            firebase deploy --only hosting --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
+            if out=$(firebase deploy --only hosting --project ${{ secrets.FIREBASE_PROJECT_ID }} 2>&1); then
+              echo "$out"; echo "Hosting gedeployed."; break
+            fi
+            echo "$out"
+            # firebase-tools 15.22 activeert de versie al bij finalize; de release-call
+            # geeft dan deze 400. De site is op dat moment al live -> succes.
+            if echo "$out" | grep -q "is the current active version"; then
+              echo "Versie staat al live (release-call is een no-op). Behandeld als succes."; break
+            fi
             if [ "$i" = "6" ]; then exit 1; fi
-            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
+            echo "Poging $i mislukt, opnieuw na 30s..."; sleep 30
           done
