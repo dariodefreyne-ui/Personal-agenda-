@@ -1,0 +1,44 @@
+name: Garmin Auth (token aanmaken)
+
+# Handmatig starten: Actions -> "Garmin Auth (token aanmaken)" -> Run workflow.
+# Logt in op Garmin en levert de tokenblob als download-artifact.
+# Vereist secrets: GARMIN_EMAIL, GARMIN_PASSWORD.
+# Heeft je account 2FA? Zet die tijdelijk uit in Garmin, draai dit, zet weer aan
+# (de tokens blijven ~6 maanden geldig). Of vul de MFA-code hieronder in.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mfa_code:
+        description: "MFA-code (laat leeg als je account geen 2FA heeft)"
+        required: false
+        default: ""
+
+jobs:
+  auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Login bij Garmin en maak token
+        env:
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
+          GARMIN_MFA: ${{ github.event.inputs.mfa_code }}
+          GARMIN_IS_CN: ${{ vars.GARMIN_IS_CN }}
+        run: python -m garmin.auth_ci
+
+      - name: Upload token als artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: garmin-token
+          path: garmin_token_b64.txt
+          retention-days: 1
