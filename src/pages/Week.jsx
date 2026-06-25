@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getDocById, setItem, subscribeCollection, addItem, deleteItem } from '../services/data';
+import { getDocById, setItem, subscribeCollection, addItem, deleteItem, getCollection } from '../services/data';
 import { vakantieVoorDatum, vakantieInWeek, vakantieLabel } from '../services/vakanties';
 import { WERK_MODI, DAG_NAMEN } from '../config/appConfig';
 import { datumKey, weekKey, DAG_KORT } from '../services/tijd';
@@ -54,6 +54,12 @@ export default function Week() {
     if (!user) return;
     return subscribeCollection(user.uid, 'vakanties', (items) =>
       setVakanties(items.sort((a, b) => (a.van || '').localeCompare(b.van || ''))));
+  }, [user]);
+
+  const [agenda, setAgenda] = useState([]);
+  useEffect(() => {
+    if (!user) return;
+    getCollection(user.uid, 'agendaEvents').then(setAgenda);
   }, [user]);
 
   const zetModus = async (dagKort, modus) => {
@@ -120,32 +126,56 @@ export default function Week() {
         {DAG_KORT.slice(1).concat(DAG_KORT[0]).map((dk) => {
           const idx = dk === 'zo' ? 6 : DAG_KORT.indexOf(dk) - 1;
           const d = dagen[idx];
-          const isVandaag = datumKey(d) === datumKey(new Date());
-          const per = vakantieVoorDatum(vakanties, datumKey(d));
+          const dDatum = datumKey(d);
+          const isVandaag = dDatum === datumKey(new Date());
+          const per = vakantieVoorDatum(vakanties, dDatum);
           const judoDag = dk === 'wo' || dk === 'za';
+          const dagEvents = agenda
+            .filter((e) => e.datum === dDatum)
+            .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
           return (
-            <div className="card tight row between" key={dk}
-              style={isVandaag ? { borderColor: 'var(--primary)' } : undefined}>
-              <div style={{ minWidth: 0 }}>
-                <div className="row" style={{ gap: 8 }}>
-                  <span style={{ fontWeight: 600 }}>{DAG_NAMEN[dk]}</span>
-                  {isVandaag && <span className="badge accent small">vandaag</span>}
-                  {per?.geenJudo && judoDag && <span className="badge warn small">judovrij</span>}
-                  {(per?.verlof || data.vakantie) && <span className="badge small">verlof</span>}
+            <div className="card tight stack" key={dk} style={{ gap: 8,
+              ...(isVandaag ? { borderColor: 'var(--primary)' } : {}) }}>
+              <div className="row between">
+                <div style={{ minWidth: 0 }}>
+                  <div className="row" style={{ gap: 8 }}>
+                    <span style={{ fontWeight: 600 }}>{DAG_NAMEN[dk]}</span>
+                    {isVandaag && <span className="badge accent small">vandaag</span>}
+                    {per?.geenJudo && judoDag && <span className="badge warn small">judovrij</span>}
+                    {(per?.verlof || data.vakantie) && <span className="badge small">verlof</span>}
+                  </div>
+                  <div className="small dim">
+                    {d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}
+                    {dk === 'wo' && (per?.geenJudo ? ' · geen les (vakantie)' : ' · judoles geven 18:30')}
+                  </div>
                 </div>
-                <div className="small dim">
-                  {d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}
-                  {dk === 'wo' && (per?.geenJudo ? ' · geen les (vakantie)' : ' · judoles geven 18:30')}
-                </div>
+                <select className="select" style={{ width: 'auto', minWidth: 140 }}
+                  value={data.dagen[dk] || (per?.verlof ? 'verlof' : ((dk === 'za' || dk === 'zo') ? 'vrij' : ''))}
+                  onChange={(e) => zetModus(dk, e.target.value)}>
+                  <option value="">— kies —</option>
+                  {Object.entries(WERK_MODI).map(([k, v]) => (
+                    <option key={k} value={k}>{v.naam}</option>
+                  ))}
+                </select>
               </div>
-              <select className="select" style={{ width: 'auto', minWidth: 140 }}
-                value={data.dagen[dk] || (per?.verlof ? 'verlof' : ((dk === 'za' || dk === 'zo') ? 'vrij' : ''))}
-                onChange={(e) => zetModus(dk, e.target.value)}>
-                <option value="">— kies —</option>
-                {Object.entries(WERK_MODI).map(([k, v]) => (
-                  <option key={k} value={k}>{v.naam}</option>
-                ))}
-              </select>
+
+              {dagEvents.length > 0 && (
+                <details className="small">
+                  <summary className="dim" style={{ cursor: 'pointer' }}>
+                    📅 {dagEvents.length} afspra{dagEvents.length === 1 ? 'ak' : 'aken'}
+                  </summary>
+                  <div className="stack" style={{ gap: 3, marginTop: 6 }}>
+                    {dagEvents.map((ev) => (
+                      <div key={ev.id} className="row" style={{ gap: 8 }}>
+                        <span className="dim" style={{ minWidth: 64, fontVariantNumeric: 'tabular-nums' }}>
+                          {ev.allDay ? 'hele dag' : ev.start}
+                        </span>
+                        <span className="grow" style={{ minWidth: 0 }}>{ev.titel}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
             </div>
           );
         })}
