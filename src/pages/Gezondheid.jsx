@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
@@ -39,6 +40,11 @@ export default function Gezondheid() {
   return (
     <div className="stack">
       <h1 style={{ margin: 0 }}>Gezondheid</h1>
+
+      <div className="row" style={{ gap: 10 }}>
+        <Link to="/voortgang" className="btn grow">Voortgang & stats</Link>
+        <Link to="/maaltijden" className="btn grow">Maaltijden & voeding</Link>
+      </div>
 
       {/* Garmin vandaag */}
       <section className="card">
