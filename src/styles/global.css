@@ -212,6 +212,74 @@ textarea.input { min-height: 80px; resize: vertical; }
   z-index: 60; background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
   padding: 12px 16px; border-radius: 12px; box-shadow: var(--shadow); max-width: 90%; }
 
+/* =========================================================================
+   Beweging, diepte & persoonlijkheid
+   ========================================================================= */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes popIn { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes nowPulse { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent); } 50% { box-shadow: 0 0 0 7px transparent; } }
+@keyframes auraDrift { 0% { transform: translate(-12%, -8%) scale(1); } 50% { transform: translate(10%, 6%) scale(1.15); } 100% { transform: translate(-12%, -8%) scale(1); } }
+@keyframes ringSweep { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+
+/* Staggerde binnenkomst: zet --i op kinderen voor de cascade */
+.reveal > * {
+  animation: fadeUp .55s cubic-bezier(.16,1,.3,1) backwards;
+  animation-delay: calc(var(--i, 0) * 60ms + 40ms);
+}
+
+/* Tijd-van-dag aura achter de hero */
+.hero { position: relative; isolation: isolate; padding: 8px 0 2px; }
+.hero::before {
+  content: ''; position: absolute; z-index: -1; inset: -40px -30% auto -10%;
+  height: 220px; border-radius: 50%;
+  background: radial-gradient(closest-side,
+    color-mix(in srgb, var(--aura, var(--primary)) 38%, transparent), transparent 70%);
+  filter: blur(36px); opacity: .55; animation: auraDrift 18s ease-in-out infinite;
+}
+.hero h1 { font-size: clamp(1.7rem, 7vw, 2.4rem); font-weight: 700; letter-spacing: -.02em; text-wrap: balance; }
+.hero .accent { color: var(--primary); }
+
+/* Readiness/score-ring (conic) */
+.ring { --val: 0; --size: 92px; --thick: 9px;
+  width: var(--size); height: var(--size); border-radius: 50%; position: relative; flex: none;
+  background:
+    radial-gradient(closest-side, var(--surface) calc(100% - var(--thick) - 1px), transparent calc(100% - var(--thick)) 100%),
+    conic-gradient(from -90deg, var(--primary), var(--primary-2) calc(var(--val) * 1%), var(--surface-2) 0);
+  display: grid; place-items: center;
+}
+.ring.anim { animation: popIn .5s cubic-bezier(.16,1,.3,1) backwards; }
+.ring .ring-v { font-size: 1.35rem; font-weight: 700; line-height: 1; }
+.ring .ring-l { font-size: .62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; }
+
+/* Inline mini-stats naast de ring (geen identieke kaartjes-grid) */
+.statline { display: flex; flex-direction: column; gap: 10px; }
+.stat { display: flex; align-items: baseline; gap: 8px; }
+.stat .sv { font-size: 1.05rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.stat .sl { font-size: .8rem; color: var(--text-muted); }
+.stat .si { color: var(--primary); }
+
+/* Voortgangsbalk met shimmer */
+.progress.shine > span {
+  background-image: linear-gradient(90deg, var(--primary), var(--primary-2), var(--primary));
+  background-size: 200% 100%; animation: shimmer 2.4s linear infinite;
+}
+
+/* Tijdlijn-spine + levende nu-indicator */
+.timeline { position: relative; padding-left: 4px; }
+.tl-check.pop { animation: popIn .35s cubic-bezier(.16,1,.3,1); }
+.tl-body.now { position: relative; }
+.tl-body.now::after {
+  content: 'nu'; position: absolute; top: -9px; right: 12px;
+  font-size: .62rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--on-primary); background: var(--primary); padding: 1px 7px; border-radius: 999px;
+}
+.now-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--primary);
+  animation: nowPulse 2s ease-out infinite; flex: none; }
+
+.fab-press:active { transform: scale(.92); }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
+  .hero::before { opacity: .35; }
 }
