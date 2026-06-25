@@ -34,6 +34,29 @@ jobs:
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > $HOME/firebase-service-account.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-service-account.json" >> $GITHUB_ENV
 
+      # DIAGNOSE: probeer een token te minten met exact dezelfde credentials.
+      # Print de echte reden bij falen (invalid_grant / clock skew / disabled).
+      - name: Diagnose service account token
+        env:
+          PROJ: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          cd "$HOME"
+          npm init -y >/dev/null 2>&1
+          npm i google-auth-library@9 >/dev/null 2>&1
+          node -e "
+            const c = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+            console.log('type:', c.type, '| has private_key:', !!c.private_key);
+            console.log('project_id matches FIREBASE_PROJECT_ID:', c.project_id === process.env.PROJ);
+            console.log('client_email domain:', String(c.client_email||'').split('@')[1]);
+            const { GoogleAuth } = require('google-auth-library');
+            (async () => {
+              const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+              const client = await auth.getClient();
+              const t = await client.getAccessToken();
+              console.log('TOKEN MINT OK, length', (t.token || '').length);
+            })().catch(e => { console.error('TOKEN MINT FAIL:', e.message); process.exit(1); });
+          "
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools@15.20.0
 
