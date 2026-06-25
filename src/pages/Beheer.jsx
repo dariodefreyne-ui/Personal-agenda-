@@ -125,16 +125,23 @@ export default function Beheer() {
 
       {/* Algemeen / ritme */}
       <Sectie titel="Dagritme & agenda">
+        <div className="small dim">Werkdag-ritme</div>
         <TweeTijd a={['Opstaan', I.algemeen.opstaan, (v) => bewaar('algemeen', { opstaan: v })]}
           b={['Slapen', I.algemeen.slapen, (v) => bewaar('algemeen', { slapen: v })]} />
-        <Veld label="iPhone-agenda (ICS-abonnementslink)">
-          <input className="input" value={I.algemeen.icsUrl || ''} placeholder="webcal://… of https://…"
+        <div className="small dim">Vrije-/vakantiedag-ritme</div>
+        <TweeTijd a={['Opstaan (vrij)', I.algemeen.opstaanVrij, (v) => bewaar('algemeen', { opstaanVrij: v })]}
+          b={['Slapen (vrij)', I.algemeen.slapenVrij, (v) => bewaar('algemeen', { slapenVrij: v })]} />
+        <Veld label="iPhone-agenda — ICS-links (één per lijn)">
+          <textarea className="input" rows={3}
+            value={I.algemeen.icsUrl || ''} placeholder={'webcal://p..-caldav.icloud.com/published/..\nhttps://...rsca-matchen.ics'}
             onChange={(e) => setI({ ...I, algemeen: { ...I.algemeen, icsUrl: e.target.value } })}
             onBlur={(e) => bewaarMelding('algemeen', { icsUrl: e.target.value })} />
         </Veld>
         <p className="small dim" style={{ margin: 0 }}>
-          Plak hier de gedeelde/openbare link van je iPhone-kalender. De app leest je afspraken
-          en RSCA-matchen automatisch in (alleen-lezen).
+          Plak je openbare iCloud-agendalink(en) — je mag er meerdere onder elkaar zetten
+          (bv. je eigen agenda + de RSCA-matchkalender). Alleen-lezen, elke 3 uur ververst.
+          <br />Zo maak je de link op je iPhone: Agenda-app → tabblad <b>Agenda’s</b> → tik op de
+          <b> ⓘ</b> naast je agenda → zet <b>Openbare agenda</b> aan → <b>Deel link / Kopieer</b>.
         </p>
       </Sectie>
 

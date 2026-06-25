@@ -37,7 +37,9 @@ export function useDagPlan(datumObj = new Date()) {
         getCollection(uid, 'vakanties'),
       ]);
 
-      const werkModus = week?.dagen?.[dagKort] || null;
+      // Weekends standaard 'vrij' tenzij expliciet anders gekozen.
+      const isWeekend = dagKort === 'za' || dagKort === 'zo';
+      const werkModus = week?.dagen?.[dagKort] || (isWeekend ? 'vrij' : null);
       const blessureActief = (reva || []).some((r) => r.blessureActief);
       const periode = vakantieVoorDatum(vakanties, datum);
       const isVakantie = !!week?.vakantie || !!periode?.verlof;

@@ -48,6 +48,8 @@ export const DEFAULT_INSTELLINGEN = {
     thema: 'middernacht',
     opstaan: '06:45',
     slapen: '22:45',
+    opstaanVrij: '08:00',   // ritme op vrije/vakantiedagen
+    slapenVrij: '23:30',
     icsUrl: '', // iPhone-agenda abonnementslink
     woonplaats: 'Brussel',
     lat: 50.85,

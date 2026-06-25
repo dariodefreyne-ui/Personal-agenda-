@@ -202,13 +202,23 @@ exports.icsSync = onSchedule(
     const snap = await db.collection('users').get();
     for (const userDoc of snap.docs) {
       const alg = (await userDoc.ref.collection('instellingen').doc('algemeen').get()).data() || {};
-      let url = alg.icsUrl;
-      if (!url) continue;
-      url = url.replace(/^webcal:\/\//i, 'https://');
+      // Eén of meerdere links (gescheiden door nieuwe regels of komma's).
+      const urls = String(alg.icsUrl || '')
+        .split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+        .map((u) => u.replace(/^webcal:\/\//i, 'https://'));
+      if (!urls.length) continue;
       try {
-        const res = await fetch(url);
-        if (!res.ok) { console.warn('ICS-fetch faalde', userDoc.id, res.status); continue; }
-        const events = parseIcs(await res.text());
+        let events = [];
+        for (const url of urls) {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) { console.warn('ICS-fetch faalde', userDoc.id, url, res.status); continue; }
+            events.push(...parseIcs(await res.text()));
+          } catch (e) { console.warn('ICS-link fout', userDoc.id, e.message); }
+        }
+        // Ontdubbel op uid.
+        const gezien = new Set();
+        events = events.filter((e) => (gezien.has(e.uid) ? false : gezien.add(e.uid)));
         const col = userDoc.ref.collection('agendaEvents');
         // Verwijder oude toekomstige events en herschrijf (eenvoudig + correct).
         const vandaag = brussel().datum;

@@ -302,13 +302,32 @@ python -m garmin.backfill --start 2023-01-01
 
 ## 9. DEEL G — Je iPhone-agenda koppelen (ICS)
 
-Zo komen je afspraken én **RSCA-matchen** automatisch in je planning:
-1. iPhone → **Agenda**-app → tabblad **Agenda’s** → kies de agenda → maak ze
-   **openbaar/gedeeld** en kopieer de **webcal://**- of **https://…ics**-link.
-   *(Apple iCloud: agenda → “Openbare agenda” aanzetten → link kopiëren.)*
-2. In de app: **Beheer → Dagritme & agenda → iPhone-agenda (ICS-link)** → plak en
-   verlaat het veld.
-3. De Cloud Function `icsSync` leest je agenda elke 3 uur in (alleen-lezen).
+Zo komen je afspraken én **RSCA-matchen** automatisch in je planning. Je kan
+**meerdere agenda’s** koppelen (bv. je eigen agenda + de matchkalender).
+
+**Stap 1 — je eigen iCloud-agenda openbaar maken (op de iPhone):**
+1. Open de **Agenda**-app.
+2. Tik onderaan op **Agenda’s**.
+3. Tik op de **ⓘ** (info-knop) naast de agenda die je wil delen.
+   *(Let op: dit werkt enkel voor agenda’s die je zélf in iCloud bezit, niet voor
+   agenda’s waarop je geabonneerd bent.)*
+4. Zet **Openbare agenda** aan.
+5. Tik **Deel link** → **Kopieer link**. Die ziet er zo uit:
+   `webcal://p##-caldav.icloud.com/published/2/...`
+
+**Stap 2 — in de app plakken:**
+1. **Beheer → Dagritme & agenda → iPhone-agenda — ICS-links**.
+2. Plak de link. Meerdere agenda’s? Zet elke link **op een nieuwe lijn**.
+3. Verlaat het veld (het bewaart automatisch).
+
+**RSCA-matchen:** zoek de **openbare ICS-link** van de matchkalender (vaak een
+`https://…/calendar.ics`) en plak die op een aparte lijn. Vind je geen aparte
+RSCA-link? Maak dan in iCloud een eigen agenda “Voetbal”, abonneer/zet de matchen
+erin, en deel díe agenda zoals in stap 1.
+
+**Stap 3 — automatisch:** de Cloud Function `icsSync` leest alle links elke 3 uur
+in (alleen-lezen) en dedupliceert. Herhalende afspraken (wekelijks/maandelijks)
+worden 60 dagen vooruit uitgeklapt.
 
 ---
 
