@@ -1,0 +1,24 @@
+{
+  "name": "personal-agenda",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/generateMessagingSw.mjs && vite",
+    "build": "node scripts/generateMessagingSw.mjs && vite build",
+    "preview": "vite preview",
+    "gen:sw": "node scripts/generateMessagingSw.mjs"
+  },
+  "dependencies": {
+    "date-fns": "^3.6.0",
+    "firebase": "^10.14.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.19",
+    "vite-plugin-pwa": "^0.20.5"
+  }
+}

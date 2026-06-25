@@ -1,0 +1,35 @@
+name: Garmin Daily Sync
+
+on:
+  schedule:
+    # 05:15 UTC every day -- after the night's data has settled.
+    - cron: "15 5 * * *"
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: "How many days before today to sync"
+        required: false
+        default: "1"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run daily sync
+        env:
+          GARMIN_TOKENS_BASE64: ${{ secrets.GARMIN_TOKENS_BASE64 }}
+          GARMIN_IS_CN: ${{ vars.GARMIN_IS_CN }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIRESTORE_PROJECT_ID: ${{ secrets.FIRESTORE_PROJECT_ID }}
+          FIRESTORE_USER_ID: ${{ secrets.FIRESTORE_USER_ID }}
+        run: python -m garmin.sync_daily --days-back "${{ github.event.inputs.days_back || '1' }}"

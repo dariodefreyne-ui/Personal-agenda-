@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Personal Agenda gebruikt voorlopig geen bestandsuploads. We houden Storage
+// dicht: enkel de ingelogde eigenaar kan bij een eigen map, niemand anders.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

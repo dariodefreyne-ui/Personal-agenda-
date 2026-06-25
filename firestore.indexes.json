@@ -1,0 +1,20 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "agendaEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "start", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "taken",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "actief", "order": "ASCENDING" },
+        { "fieldPath": "volgorde", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

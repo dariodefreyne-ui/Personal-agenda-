@@ -1,0 +1,42 @@
+# --- Node / Vite ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# --- Environment / secrets — NOOIT committen ---
+.env
+.env.*
+!.env.example
+serviceAccount*.json
+firebase-*.json
+*-service-account.json
+.firebase/
+
+# --- Python (Garmin-pipeline) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.garminconnect/
+tokens.tar
+*.tar
+
+# Garmin export-dumps
+DI_CONNECT/
+export/
+*.zip
+
+# --- Functions ---
+functions/node_modules/
+
+# Gegenereerd bij build uit env (bevat publieke Firebase-config)
+public/firebase-messaging-sw.js
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+.vscode/
+*.log
