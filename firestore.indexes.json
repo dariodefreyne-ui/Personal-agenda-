@@ -1,13 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "agendaEvents",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "start", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "taken",
       "queryScope": "COLLECTION",
       "fields": [
