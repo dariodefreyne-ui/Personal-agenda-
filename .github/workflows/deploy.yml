@@ -10,6 +10,11 @@ on:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+    # GitHub-runners hebben een flaky IPv6-route naar googleapis.com, wat
+    # "Premature close" / "Failed to authenticate" geeft bij het minten van het
+    # service-account-token. Node op IPv4-first dwingen lost dat op.
+    env:
+      NODE_OPTIONS: --dns-result-order=ipv4first
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,8 +39,7 @@ jobs:
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > $HOME/firebase-service-account.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-service-account.json" >> $GITHUB_ENV
 
-      # DIAGNOSE: probeer een token te minten met exact dezelfde credentials.
-      # Print de echte reden bij falen (invalid_grant / clock skew / disabled).
+      # Diagnose: bevestigt dat het token nu wél gemint kan worden (IPv4-fix).
       - name: Diagnose service account token
         env:
           PROJ: ${{ secrets.FIREBASE_PROJECT_ID }}
@@ -45,9 +49,7 @@ jobs:
           npm i google-auth-library@9 >/dev/null 2>&1
           node -e "
             const c = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
-            console.log('type:', c.type, '| has private_key:', !!c.private_key);
             console.log('project_id matches FIREBASE_PROJECT_ID:', c.project_id === process.env.PROJ);
-            console.log('client_email domain:', String(c.client_email||'').split('@')[1]);
             const { GoogleAuth } = require('google-auth-library');
             (async () => {
               const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
