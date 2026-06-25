@@ -6,6 +6,7 @@ import {
 } from '../services/data';
 import { genereerDagPlan } from '../services/planner';
 import { garminSamenvatting } from '../services/garmin';
+import { vakantieVoorDatum } from '../services/vakanties';
 import { zetTaakGedaan } from '../services/taken';
 import { datumKey, dagKortVanDatum, weekKey } from '../services/tijd';
 
@@ -24,7 +25,7 @@ export function useDagPlan(datumObj = new Date()) {
     let actief = true;
     (async () => {
       setStaat((s) => ({ ...s, laden: true }));
-      const [instellingen, taken, reva, maaltijden, garmin, agendaEvents, dag, week] = await Promise.all([
+      const [instellingen, taken, reva, maaltijden, garmin, agendaEvents, dag, week, vakanties] = await Promise.all([
         getInstellingen(uid),
         getCollection(uid, 'taken'),
         getCollection(uid, 'reva'),
@@ -33,17 +34,20 @@ export function useDagPlan(datumObj = new Date()) {
         getAgendaEventsVoorDag(uid, datum),
         getDocById(uid, 'dagen', datum),
         getDocById(uid, 'weken', weekKey(datumObj)),
+        getCollection(uid, 'vakanties'),
       ]);
 
       const werkModus = week?.dagen?.[dagKort] || null;
       const blessureActief = (reva || []).some((r) => r.blessureActief);
-      const isVakantie = !!week?.vakantie;
+      const periode = vakantieVoorDatum(vakanties, datum);
+      const isVakantie = !!week?.vakantie || !!periode?.verlof;
+      const geenJudo = !!periode?.geenJudo;
       const garminSam = garminSamenvatting(garmin);
 
       const plan = genereerDagPlan({
         datum, dagKort, instellingen, werkModus,
         taken, reva, maaltijden, agendaEvents, garmin: garminSam,
-        weer: null, blessureActief, isVakantie,
+        weer: null, blessureActief, isVakantie, geenJudo,
       });
 
       if (!actief) return;

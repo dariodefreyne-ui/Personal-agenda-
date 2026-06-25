@@ -24,6 +24,14 @@ describe('genereerDagPlan', () => {
     expect(t.some((x) => /Snel eten voor judo/.test(x))).toBe(true);
   });
 
+  it('geenJudo (clubs dicht) schrapt training én les en meldt judovrij', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'thuis', geenJudo: true });
+    const t = titels(plan);
+    expect(t.some((x) => /Judotraining/.test(x))).toBe(false);
+    expect(t.some((x) => /Judoles geven/.test(x))).toBe(false);
+    expect(plan.advies.tekst.some((x) => /Judovrij/.test(x))).toBe(true);
+  });
+
   it('judoles geven vervalt tijdens vakantie', () => {
     const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'verlof', isVakantie: true });
     expect(titels(plan).some((x) => /Judoles geven/.test(x))).toBe(false);

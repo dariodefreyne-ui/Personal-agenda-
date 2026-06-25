@@ -51,6 +51,7 @@ service cloud.firestore {
       match /takenLog/{doc}          { allow read, write: if isOwner(userId); }
       match /reva/{doc}              { allow read, write: if isOwner(userId); }
       match /maaltijden/{doc}        { allow read, write: if isOwner(userId); }
+      match /vakanties/{doc}         { allow read, write: if isOwner(userId); }
       match /dagen/{doc}             { allow read, write: if isOwner(userId); }
       match /pushTokens/{doc}        { allow read, write: if isOwner(userId); }
 

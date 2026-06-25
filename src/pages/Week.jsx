@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getDocById, setItem } from '../services/data';
+import { getDocById, setItem, subscribeCollection, addItem, deleteItem } from '../services/data';
+import { vakantieVoorDatum, vakantieInWeek, vakantieLabel } from '../services/vakanties';
 import { WERK_MODI, DAG_NAMEN } from '../config/appConfig';
 import { datumKey, weekKey, DAG_KORT } from '../services/tijd';
+import { IcoPlus, IcoTrash } from '../components/Icons';
 
 function maandagVan(d) {
   const x = new Date(d);
@@ -12,11 +14,15 @@ function maandagVan(d) {
   x.setHours(12, 0, 0, 0);
   return x;
 }
+const LEEG_PERIODE = { naam: '', van: '', tot: '', geenJudo: true, verlof: true };
 
 export default function Week() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [offset, setOffset] = useState(0);
+  const [vakanties, setVakanties] = useState([]);
+  const [nieuw, setNieuw] = useState(LEEG_PERIODE);
+  const [formOpen, setFormOpen] = useState(false);
 
   const maandag = useMemo(() => {
     const m = maandagVan(new Date());
@@ -33,6 +39,7 @@ export default function Week() {
     }),
     [maandag]
   );
+  const dagDatums = useMemo(() => dagen.map(datumKey), [dagen]);
 
   const [data, setData] = useState({ dagen: {}, vakantie: false });
 
@@ -43,11 +50,17 @@ export default function Week() {
     );
   }, [user, wkId]);
 
+  useEffect(() => {
+    if (!user) return;
+    return subscribeCollection(user.uid, 'vakanties', (items) =>
+      setVakanties(items.sort((a, b) => (a.van || '').localeCompare(b.van || ''))));
+  }, [user]);
+
   const zetModus = async (dagKort, modus) => {
-    const nieuw = { ...data.dagen, [dagKort]: modus || undefined };
-    if (!modus) delete nieuw[dagKort];
-    setData((s) => ({ ...s, dagen: nieuw }));
-    await setItem(user.uid, 'weken', wkId, { dagen: nieuw });
+    const nieuwD = { ...data.dagen, [dagKort]: modus || undefined };
+    if (!modus) delete nieuwD[dagKort];
+    setData((s) => ({ ...s, dagen: nieuwD }));
+    await setItem(user.uid, 'weken', wkId, { dagen: nieuwD });
   };
 
   const zetVakantie = async (v) => {
@@ -56,7 +69,16 @@ export default function Week() {
     toast(v ? 'Week op vakantie — judoles geven valt weg.' : 'Vakantie uit.');
   };
 
+  const voegPeriodeToe = async () => {
+    if (!nieuw.naam.trim() || !nieuw.van || !nieuw.tot) return toast('Vul naam, van én tot in.');
+    if (nieuw.tot < nieuw.van) return toast('“Tot” ligt vóór “van”.');
+    await addItem(user.uid, 'vakanties', { ...nieuw, naam: nieuw.naam.trim() });
+    setNieuw(LEEG_PERIODE); setFormOpen(false); toast('Vakantieperiode toegevoegd.');
+  };
+
+  const weekPeriode = vakantieInWeek(vakanties, dagDatums);
   const weekLabel = `${dagen[0].toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – ${dagen[6].toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}`;
+  const fmt = (s) => new Date(s + 'T12:00:00').toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' });
 
   return (
     <div className="stack reveal">
@@ -70,31 +92,53 @@ export default function Week() {
       </div>
       <p className="muted small" style={{ margin: 0 }}>{wkId} · {weekLabel}</p>
 
+      {/* Banner als deze week in een vakantieperiode valt */}
+      {weekPeriode && (
+        <div className="card" style={{ borderColor: 'color-mix(in srgb, var(--warning) 40%, var(--border))' }}>
+          <div className="row" style={{ gap: 10 }}>
+            <span style={{ fontSize: 22 }}>🌴</span>
+            <div>
+              <div style={{ fontWeight: 600 }}>{weekPeriode.naam}</div>
+              <div className="small muted">{vakantieLabel(weekPeriode)} · {fmt(weekPeriode.van)}–{fmt(weekPeriode.tot)}
+                {weekPeriode.geenJudo ? ' · geen judo (training & les vallen weg)' : ''}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <label className="card row between" style={{ cursor: 'pointer' }}>
         <div>
-          <div style={{ fontWeight: 600 }}>Vakantieweek</div>
-          <div className="small dim">Geen judoles geven, soepelere planning</div>
+          <div style={{ fontWeight: 600 }}>Deze week als vakantie markeren</div>
+          <div className="small dim">Losse weekmarkering (geen judoles geven, soepeler)</div>
         </div>
         <input type="checkbox" checked={data.vakantie}
           onChange={(e) => zetVakantie(e.target.checked)} style={{ width: 22, height: 22 }} />
       </label>
 
+      {/* Dagen */}
       <section className="stack" style={{ gap: 10 }}>
         {DAG_KORT.slice(1).concat(DAG_KORT[0]).map((dk) => {
           const idx = dk === 'zo' ? 6 : DAG_KORT.indexOf(dk) - 1;
           const d = dagen[idx];
           const isVandaag = datumKey(d) === datumKey(new Date());
+          const per = vakantieVoorDatum(vakanties, datumKey(d));
+          const judoDag = dk === 'wo' || dk === 'za';
           return (
             <div className="card tight row between" key={dk}
               style={isVandaag ? { borderColor: 'var(--primary)' } : undefined}>
-              <div>
-                <div style={{ fontWeight: 600 }}>
-                  {DAG_NAMEN[dk]} {isVandaag && <span className="badge accent small">vandaag</span>}
+              <div style={{ minWidth: 0 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>{DAG_NAMEN[dk]}</span>
+                  {isVandaag && <span className="badge accent small">vandaag</span>}
+                  {per?.geenJudo && judoDag && <span className="badge warn small">judovrij</span>}
+                  {(per?.verlof || data.vakantie) && <span className="badge small">verlof</span>}
                 </div>
-                <div className="small dim">{d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}
-                  {dk === 'wo' ? ' · judoles geven 18:30' : ''}</div>
+                <div className="small dim">
+                  {d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}
+                  {dk === 'wo' && (per?.geenJudo ? ' · geen les (vakantie)' : ' · judoles geven 18:30')}
+                </div>
               </div>
-              <select className="select" style={{ width: 'auto', minWidth: 150 }}
+              <select className="select" style={{ width: 'auto', minWidth: 140 }}
                 value={data.dagen[dk] || ''} onChange={(e) => zetModus(dk, e.target.value)}>
                 <option value="">— kies —</option>
                 {Object.entries(WERK_MODI).map(([k, v]) => (
@@ -106,9 +150,68 @@ export default function Week() {
         })}
       </section>
 
+      {/* Vakantieperiodes (grote periodes) */}
+      <section className="card stack">
+        <div className="row between">
+          <div className="card-title" style={{ margin: 0 }}>Vakantieperiodes</div>
+          <button className="btn sm" onClick={() => setFormOpen((o) => !o)}>
+            <IcoPlus width={16} height={16} /> Periode
+          </button>
+        </div>
+
+        {vakanties.length === 0 && !formOpen && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Voeg grote periodes toe (schoolvakanties, reizen). Markeer of judo dan vrij is
+            (clubs dicht: geen training én geen les).
+          </p>
+        )}
+
+        {vakanties.map((v) => (
+          <div className="list-row" key={v.id}>
+            <div className="grow">
+              <div style={{ fontWeight: 600 }}>{v.naam}</div>
+              <div className="small dim">{fmt(v.van)} – {fmt(v.tot)} · {vakantieLabel(v)}</div>
+            </div>
+            <button className="icon-btn" onClick={() => deleteItem(user.uid, 'vakanties', v.id)} aria-label="Verwijderen">
+              <IcoTrash width={18} height={18} />
+            </button>
+          </div>
+        ))}
+
+        {formOpen && (
+          <div className="stack" style={{ gap: 10, marginTop: 4 }}>
+            <div className="field">
+              <label>Naam</label>
+              <input className="input" value={nieuw.naam} placeholder="bv. Zomervakantie"
+                onChange={(e) => setNieuw({ ...nieuw, naam: e.target.value })} />
+            </div>
+            <div className="row wrap" style={{ gap: 12 }}>
+              <div className="field grow"><label>Van</label>
+                <input className="input" type="date" value={nieuw.van} onChange={(e) => setNieuw({ ...nieuw, van: e.target.value })} /></div>
+              <div className="field grow"><label>Tot</label>
+                <input className="input" type="date" value={nieuw.tot} onChange={(e) => setNieuw({ ...nieuw, tot: e.target.value })} /></div>
+            </div>
+            <label className="row between">
+              <span>Judovrij (clubs dicht: geen training & geen les)</span>
+              <input type="checkbox" checked={nieuw.geenJudo}
+                onChange={(e) => setNieuw({ ...nieuw, geenJudo: e.target.checked })} style={{ width: 22, height: 22 }} />
+            </label>
+            <label className="row between">
+              <span>Persoonlijk verlof (soepeler plannen)</span>
+              <input type="checkbox" checked={nieuw.verlof}
+                onChange={(e) => setNieuw({ ...nieuw, verlof: e.target.checked })} style={{ width: 22, height: 22 }} />
+            </label>
+            <div className="row between">
+              <button className="btn ghost" onClick={() => { setFormOpen(false); setNieuw(LEEG_PERIODE); }}>Annuleren</button>
+              <button className="btn primary" onClick={voegPeriodeToe}>Toevoegen</button>
+            </div>
+          </div>
+        )}
+      </section>
+
       <p className="small dim center">
-        Stel per dag in of je thuiswerkt, naar kantoor gaat (auto of fiets), of vrij/verlof bent.
-        Je dagplanning op “Vandaag” past zich automatisch aan.
+        Dagmodus bepaalt je planning (thuis/kantoor/vrij). Vakantieperiodes overschrijven judo
+        automatisch op “Vandaag”.
       </p>
     </div>
   );

@@ -49,7 +49,7 @@ export function berekenFietsAdvies({ sport, blessureActief, garmin, weer }) {
 export function genereerDagPlan({
   datum, dagKort, instellingen, werkModus,
   taken = [], reva = [], maaltijden = [], agendaEvents = [],
-  garmin = null, weer = null, blessureActief = false, isVakantie = false,
+  garmin = null, weer = null, blessureActief = false, isVakantie = false, geenJudo = false,
 }) {
   const I = instellingen || {};
   const alg = I.algemeen || {};
@@ -106,6 +106,7 @@ export function genereerDagPlan({
   // 3) Judo les geven (woensdag, tenzij vakantie)
   (sport.judoLesgeven || []).forEach((les, i) => {
     if (les.dag !== dagKort) return;
+    if (geenJudo) return;
     if (isVakantie && !les.tijdensVakantie) return;
     const vertrek = addMin(les.start, -(les.vertrekVoorMin || 30));
     maakBlok(blok, addMin(vertrek, -25), addMin(vertrek, -5), 'Snel eten voor judo', 'maaltijd', { bron: 'maaltijd' });
@@ -116,8 +117,14 @@ export function genereerDagPlan({
   // 4) Eigen judotraining
   (sport.judoEigenClub || []).forEach((t, i) => {
     if (t.dag !== dagKort) return;
+    if (geenJudo) return;
     maakBlok(blok, t.start, t.eind, 'Judotraining', 'judo', { bron: 'judo', vast: true, id: `judo-${i}` });
   });
+
+  // Judovrij melden als er normaal judo zou zijn
+  const judoVandaag = (sport.judoEigenClub || []).some((t) => t.dag === dagKort)
+    || (sport.judoLesgeven || []).some((l) => l.dag === dagKort);
+  if (geenJudo && judoVandaag) advies.tekst.push('🥋 Judovrij vandaag (vakantie) — geen training of les.');
 
   // 5) Agenda-events (ICS): o.a. RSCA-matchen
   agendaEvents.forEach((ev, i) => {
