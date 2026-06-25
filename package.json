@@ -7,7 +7,8 @@
     "dev": "node scripts/generateMessagingSw.mjs && vite",
     "build": "node scripts/generateMessagingSw.mjs && vite build",
     "preview": "vite preview",
-    "gen:sw": "node scripts/generateMessagingSw.mjs"
+    "gen:sw": "node scripts/generateMessagingSw.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "date-fns": "^3.6.0",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^5.4.19",
-    "vite-plugin-pwa": "^0.20.5"
+    "vite-plugin-pwa": "^0.20.5",
+    "vitest": "^4.1.9"
   }
 }

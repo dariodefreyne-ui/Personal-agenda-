@@ -5,8 +5,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { getInstellingen, saveInstellingen } from '../services/data';
 import { activeerPush } from '../services/push';
-import { PUSH_INTENSITEIT, APP_NAAM } from '../config/appConfig';
-import { IcoBell, IcoLogout } from '../components/Icons';
+import { PUSH_INTENSITEIT, APP_NAAM, DAGEN, DAG_NAMEN } from '../config/appConfig';
+import { IcoBell, IcoLogout, IcoPlus, IcoTrash } from '../components/Icons';
 
 export default function Beheer() {
   const { user, logout } = useAuth();
@@ -31,10 +31,29 @@ export default function Beheer() {
     catch (e) { toast(e.message); }
   };
 
+  // --- Sportschema (in-app beheer) ---
+  const sportLijst = (key) => I.sport?.[key] || [];
+  const zetSportLijst = (key, list) => bewaar('sport', { [key]: list });
+  const updateRij = (key, idx, patch) => {
+    const list = sportLijst(key).map((r, i) => (i === idx ? { ...r, ...patch } : r));
+    zetSportLijst(key, list);
+  };
+  const verwijderRij = (key, idx) => zetSportLijst(key, sportLijst(key).filter((_, i) => i !== idx));
+  const voegRijToe = (key, item) => zetSportLijst(key, [...sportLijst(key), item]);
+  const toggleElders = (d) => {
+    const huidig = I.sport?.elderstrainenDagen || [];
+    bewaar('sport', { elderstrainenDagen: huidig.includes(d) ? huidig.filter((x) => x !== d) : [...huidig, d] });
+  };
+
   if (!I) return <div className="empty">Instellingen laden…</div>;
 
+  const snoozeActief = I.push?.snoozeTot && Date.parse(I.push.snoozeTot) > Date.now();
+  const snoozeLabel = snoozeActief
+    ? new Date(I.push.snoozeTot).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }) : '';
+  const snooze = (uren) => bewaarMelding('push', { snoozeTot: new Date(Date.now() + uren * 3600000).toISOString() });
+
   return (
-    <div className="stack">
+    <div className="stack reveal">
       <h1 style={{ margin: 0 }}>Beheer</h1>
 
       {/* Thema */}
@@ -70,6 +89,37 @@ export default function Beheer() {
           <input type="checkbox" checked={!!I.push.antiScrollNudges}
             onChange={(e) => bewaarMelding('push', { antiScrollNudges: e.target.checked })} style={{ width: 22, height: 22 }} />
         </label>
+
+        <div className="divider" />
+        <div className="card-title" style={{ margin: 0 }}>Welke meldingen?</div>
+        {[
+          ['ochtend', 'Ochtendbriefing'],
+          ['readiness', 'Readiness-check'],
+          ['slot', 'Herinnering per tijdslot'],
+          ['avond', 'Avondvooruitblik'],
+          ['antiscroll', 'Anti-scroll nudges'],
+        ].map(([key, label]) => (
+          <label className="row between" key={key}>
+            <span>{label}</span>
+            <input type="checkbox" checked={I.push.categorieen?.[key] !== false}
+              onChange={(e) => bewaar('push', { categorieen: { ...(I.push.categorieen || {}), [key]: e.target.checked } })}
+              style={{ width: 22, height: 22 }} />
+          </label>
+        ))}
+
+        <div className="divider" />
+        <div className="row between">
+          <span className="small">{snoozeActief ? `Gepauzeerd tot ${snoozeLabel}` : 'Meldingen pauzeren (snooze)'}</span>
+          <div className="row" style={{ gap: 6 }}>
+            {snoozeActief
+              ? <button className="btn sm" onClick={() => bewaarMelding('push', { snoozeTot: null })}>Hervat</button>
+              : <>
+                  <button className="btn sm" onClick={() => snooze(1)}>1u</button>
+                  <button className="btn sm" onClick={() => snooze(3)}>3u</button>
+                </>}
+          </div>
+        </div>
+
         <p className="small dim" style={{ margin: 0 }}>Tip: voeg de app toe aan je iPhone-beginscherm — anders kan iOS geen push tonen.</p>
       </Sectie>
 
@@ -117,9 +167,83 @@ export default function Beheer() {
           <input type="checkbox" checked={!!I.sport.fietsBijBlessure}
             onChange={(e) => bewaarMelding('sport', { fietsBijBlessure: e.target.checked })} style={{ width: 22, height: 22 }} />
         </label>
+        <div className="divider" />
+
+        {/* Eigen judotrainingen */}
+        <div className="card-title" style={{ margin: 0 }}>Eigen judotraining</div>
+        {sportLijst('judoEigenClub').map((r, idx) => (
+          <div className="row wrap" style={{ gap: 8 }} key={`eigen-${idx}`}>
+            <select className="select" style={{ width: 'auto' }} value={r.dag}
+              onChange={(e) => updateRij('judoEigenClub', idx, { dag: e.target.value })}>
+              {DAGEN.map((d) => <option key={d} value={d}>{DAG_NAMEN[d]}</option>)}
+            </select>
+            <input className="input" type="time" style={{ width: 110 }} value={r.start || ''}
+              onChange={(e) => updateRij('judoEigenClub', idx, { start: e.target.value })} />
+            <input className="input" type="time" style={{ width: 110 }} value={r.eind || ''}
+              onChange={(e) => updateRij('judoEigenClub', idx, { eind: e.target.value })} />
+            <button className="icon-btn" onClick={() => verwijderRij('judoEigenClub', idx)} aria-label="Verwijderen">
+              <IcoTrash width={18} height={18} />
+            </button>
+          </div>
+        ))}
+        <button className="btn sm" onClick={() => voegRijToe('judoEigenClub', { dag: 'wo', start: '20:00', eind: '21:30', rol: 'training' })}>
+          <IcoPlus width={16} height={16} /> Training toevoegen
+        </button>
+
+        <div className="divider" />
+
+        {/* Judoles geven */}
+        <div className="card-title" style={{ margin: 0 }}>Judoles geven</div>
+        {sportLijst('judoLesgeven').map((r, idx) => (
+          <div className="stack" style={{ gap: 6 }} key={`les-${idx}`}>
+            <div className="row wrap" style={{ gap: 8 }}>
+              <select className="select" style={{ width: 'auto' }} value={r.dag}
+                onChange={(e) => updateRij('judoLesgeven', idx, { dag: e.target.value })}>
+                {DAGEN.map((d) => <option key={d} value={d}>{DAG_NAMEN[d]}</option>)}
+              </select>
+              <input className="input" type="time" style={{ width: 110 }} value={r.start || ''}
+                onChange={(e) => updateRij('judoLesgeven', idx, { start: e.target.value })} />
+              <input className="input" type="time" style={{ width: 110 }} value={r.eind || ''}
+                onChange={(e) => updateRij('judoLesgeven', idx, { eind: e.target.value })} />
+              <button className="icon-btn" onClick={() => verwijderRij('judoLesgeven', idx)} aria-label="Verwijderen">
+                <IcoTrash width={18} height={18} />
+              </button>
+            </div>
+            <div className="row wrap" style={{ gap: 12 }}>
+              <label className="row small" style={{ gap: 6 }}>
+                Vertrek vooraf (min):
+                <input className="input" type="number" style={{ width: 80, minHeight: 36 }} value={r.vertrekVoorMin ?? 30}
+                  onChange={(e) => updateRij('judoLesgeven', idx, { vertrekVoorMin: Number(e.target.value) })} />
+              </label>
+              <label className="row small" style={{ gap: 6 }}>
+                <input type="checkbox" checked={!!r.tijdensVakantie}
+                  onChange={(e) => updateRij('judoLesgeven', idx, { tijdensVakantie: e.target.checked })} />
+                ook tijdens vakantie
+              </label>
+            </div>
+          </div>
+        ))}
+        <button className="btn sm" onClick={() => voegRijToe('judoLesgeven', { dag: 'wo', start: '18:30', eind: '19:45', vertrekVoorMin: 30, tijdensVakantie: false })}>
+          <IcoPlus width={16} height={16} /> Les toevoegen
+        </button>
+
+        <div className="divider" />
+
+        {/* Elders trainen */}
+        <div className="field">
+          <label>Mogelijke dagen om elders te trainen</label>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {DAGEN.map((d) => (
+              <button key={d} type="button" title={DAG_NAMEN[d]}
+                className={'btn sm' + ((I.sport?.elderstrainenDagen || []).includes(d) ? ' primary' : '')}
+                onClick={() => toggleElders(d)}>{d}</button>
+            ))}
+          </div>
+        </div>
         <p className="small dim" style={{ margin: 0 }}>
-          Judo eigen club: wo 20:00–21:30 & za 16:00–18:00. Judoles geven: wo 18:30 (niet in vakantie).
-          Elders trainen mogelijk: ma & vr. Pas dit later fijn aan; voor nu vast ingesteld.
+          De planning op “Vandaag” gebruikt dit schema automatisch: eigen trainingen worden vaste
+          blokken, judoles geven plant ook een vertrek + snelle maaltijd ervoor (valt weg in vakantie
+          tenzij aangevinkt).
         </p>
       </Sectie>
 

@@ -85,6 +85,9 @@ export const DEFAULT_INSTELLINGEN = {
     antiScrollTot: '23:30',
     stilVan: '22:45',          // geen push tijdens slaap
     stilTot: '06:30',
+    // Per-categorie aan/uit
+    categorieen: { ochtend: true, readiness: true, slot: true, avond: true, antiscroll: true },
+    snoozeTot: null,           // ISO-tijdstip; alle push gepauzeerd tot dan
   },
   gezondheid: {
     eiwitDoelG: 110,

@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import Week from './pages/Week';
 import Taken from './pages/Taken';
 import Gezondheid from './pages/Gezondheid';
+import Maaltijden from './pages/Maaltijden';
+import Voortgang from './pages/Voortgang';
 import Beheer from './pages/Beheer';
 
 function Laden() {
@@ -32,6 +34,8 @@ export default function App() {
       <Route path="/week" element={<Beveiligd><Week /></Beveiligd>} />
       <Route path="/taken" element={<Beveiligd><Taken /></Beveiligd>} />
       <Route path="/gezondheid" element={<Beveiligd><Gezondheid /></Beveiligd>} />
+      <Route path="/maaltijden" element={<Beveiligd><Maaltijden /></Beveiligd>} />
+      <Route path="/voortgang" element={<Beveiligd><Voortgang /></Beveiligd>} />
       <Route path="/beheer/*" element={<Beveiligd><Beheer /></Beveiligd>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

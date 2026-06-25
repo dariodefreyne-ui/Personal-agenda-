@@ -41,6 +41,15 @@ def main() -> None:
     )
     garmin.login()
 
+    # Bij een 429 (IP rate-limit) slikt garminconnect de fout soms in en blijft
+    # garth ongeïnitialiseerd. Geef dan een duidelijke melding i.p.v. een crash.
+    if getattr(garmin, "garth", None) is None:
+        raise SystemExit(
+            "Login niet voltooid (waarschijnlijk 429 IP rate-limit van Garmin).\n"
+            "Wacht 30-60 min en probeer opnieuw, of genereer de token via "
+            "Google Cloud Shell (zie README). 2FA staat best tijdelijk uit."
+        )
+
     tokenstore = config.GARMIN_TOKENSTORE
     os.makedirs(tokenstore, exist_ok=True)
     garmin.garth.dump(tokenstore)

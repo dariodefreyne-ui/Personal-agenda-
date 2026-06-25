@@ -106,12 +106,15 @@ exports.dispatcher = onSchedule(
       const I = await getInstellingen(uid);
       const push = I.push || {};
       if (isStil(nu.minuten, push.stilVan || '22:45', push.stilTot || '06:30')) continue;
+      // Globale snooze: alle push gepauzeerd tot snoozeTot.
+      if (push.snoozeTot && Date.parse(push.snoozeTot) > Date.now()) continue;
+      const cat = push.categorieen || {};
       const tokens = await actieveTokens(uid);
       if (!tokens.length) continue;
       const intensiteit = push.intensiteit || 'elk_blok';
 
       // 1) Ochtendbriefing
-      if (due(push.ochtendBriefing || '07:00') && !(await alGestuurd(uid, nu.datum, 'ochtend'))) {
+      if (cat.ochtend !== false && due(push.ochtendBriefing || '07:00') && !(await alGestuurd(uid, nu.datum, 'ochtend'))) {
         const plan = await getPlan(uid, nu.datum);
         const eerste = plan.find((b) => toMin(b.start) >= nu.minuten);
         await stuurPush(uid, tokens, 'Goeiemorgen ☀️',
@@ -120,7 +123,7 @@ exports.dispatcher = onSchedule(
       }
 
       // 2) Readiness-check
-      if (due(push.readinessCheck || '07:15') && !(await alGestuurd(uid, nu.datum, 'readiness'))) {
+      if (cat.readiness !== false && due(push.readinessCheck || '07:15') && !(await alGestuurd(uid, nu.datum, 'readiness'))) {
         const g = await garminVan(uid, nu.datum);
         const body = g
           ? `Slaap ${g.slaap ?? '?'}u · readiness ${g.readiness ?? '?'}/100. ${g.readiness != null && g.readiness < 40 ? 'Kies vandaag herstel.' : 'Plan je training gerust.'}`
@@ -129,7 +132,7 @@ exports.dispatcher = onSchedule(
       }
 
       // 3) Per-slot herinneringen
-      if (intensiteit !== 'minimaal') {
+      if (intensiteit !== 'minimaal' && cat.slot !== false) {
         const plan = await getPlan(uid, nu.datum);
         for (const b of plan) {
           if (b.push === false) continue;
@@ -142,7 +145,7 @@ exports.dispatcher = onSchedule(
       }
 
       // 4) Avondvooruitblik
-      if (due(push.avondVooruitblik || '21:30') && !(await alGestuurd(uid, nu.datum, 'avond'))) {
+      if (cat.avond !== false && due(push.avondVooruitblik || '21:30') && !(await alGestuurd(uid, nu.datum, 'avond'))) {
         const morgen = volgendeDatum(nu.datum);
         const evs = await db.collection('users').doc(uid).collection('agendaEvents').where('datum', '==', morgen).get();
         await stuurPush(uid, tokens, 'Vooruitblik morgen 🌙',
@@ -150,7 +153,7 @@ exports.dispatcher = onSchedule(
       }
 
       // 5) Anti-scroll nudges (elk half uur binnen het venster)
-      if (push.antiScrollNudges &&
+      if (push.antiScrollNudges && cat.antiscroll !== false &&
           binnenVenster(nu.minuten, push.antiScrollVan || '21:00', push.antiScrollTot || '23:30') &&
           nu.minuten % 30 < venster) {
         const sl = `scroll-${nu.hhmm}`;
