@@ -1,0 +1,46 @@
+import { describe, it, expect } from 'vitest';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { parseIcs } = require('../functions/lib/ics.js');
+
+const cal = (...vevents) => ['BEGIN:VCALENDAR', ...vevents, 'END:VCALENDAR'].join('\r\n');
+const ev = (lines) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT'].join('\r\n');
+
+describe('ICS-parser', () => {
+  it('parseert een losse afspraak met UTC-tijd naar Brussel', () => {
+    const out = parseIcs(cal(ev(['UID:a', 'SUMMARY:Tandarts', 'DTSTART:20260701T080000Z', 'DTEND:20260701T083000Z'])));
+    expect(out).toHaveLength(1);
+    expect(out[0].titel).toBe('Tandarts');
+    expect(out[0].start).toBe('10:00'); // 08:00Z = 10:00 zomertijd Brussel
+    expect(out[0].eind).toBe('10:30');
+  });
+
+  it('herkent een hele-dag-afspraak', () => {
+    const out = parseIcs(cal(ev(['UID:b', 'SUMMARY:Verlof', 'DTSTART;VALUE=DATE:20260705'])));
+    expect(out[0].allDay).toBe(true);
+    expect(out[0].start).toBe('00:00');
+  });
+
+  it('klapt een wekelijkse RRULE uit binnen het venster', () => {
+    const out = parseIcs(cal(ev([
+      'UID:c', 'SUMMARY:Wekelijkse training',
+      'DTSTART:20260101T190000Z', 'DTEND:20260101T203000Z',
+      'RRULE:FREQ=WEEKLY;BYDAY=WE',
+    ])));
+    expect(out.length).toBeGreaterThan(3);
+    // alle occurrences op woensdag, en in de toekomst t.o.v. venster
+    expect(out.every((e) => e.start === '21:00' && e.eind === '22:30')).toBe(true);
+    // unieke datums
+    const datums = new Set(out.map((e) => e.datum));
+    expect(datums.size).toBe(out.length);
+  });
+
+  it('respecteert COUNT zodat afgelopen reeksen leeg zijn', () => {
+    const out = parseIcs(cal(ev([
+      'UID:d', 'SUMMARY:Afgelopen reeks',
+      'DTSTART:20200101T100000Z', 'DTEND:20200101T110000Z',
+      'RRULE:FREQ=DAILY;COUNT=5',
+    ])));
+    expect(out).toHaveLength(0); // 2020, ver buiten het 60-dagen-venster
+  });
+});
