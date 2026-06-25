@@ -10,6 +10,8 @@ on:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --dns-result-order=ipv4first
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,40 +45,40 @@ jobs:
 
       - name: Deploy Firestore rules
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt (netwerk/auth), opnieuw na 45s..."; sleep 45
           done
 
       - name: Deploy Firestore indexes
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only firestore:indexes --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
           done
 
       - name: Deploy Storage rules
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only storage --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
           done
 
       - name: Deploy Cloud Functions
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }} --force && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
           done
 
       - name: Deploy Hosting
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only hosting --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
           done
