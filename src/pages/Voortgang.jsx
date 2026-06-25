@@ -7,6 +7,7 @@ import { doelProgress, doelKleur, huidigeWaarde, METRIEKEN } from '../services/d
 import { datumKey } from '../services/tijd';
 import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash } from '../components/Icons';
 import Gauge from '../components/Gauge';
+import BelastingKaart from '../components/BelastingKaart';
 
 function laatsteDagen(n) {
   const out = [];
@@ -66,6 +67,8 @@ export default function Voortgang() {
   return (
     <div className="stack reveal">
       <h1 style={{ margin: 0 }}>Voortgang</h1>
+
+      <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} />
 
       {/* Doelen */}
       <section className="card stack">
