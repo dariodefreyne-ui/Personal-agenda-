@@ -4,6 +4,7 @@ import { BLOK_TYPES } from '../config/appConfig';
 import { toMin, nuMin, toHHMM } from '../services/tijd';
 import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
+import BelastingKaart from '../components/BelastingKaart';
 
 function tijdvak() {
   const h = new Date().getHours();
@@ -46,6 +47,9 @@ export default function Dashboard() {
       {garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (
         <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel} blessureActief={blessureActief} />
       )}
+
+      {/* Belasting & herstel */}
+      {garmin?.trainingStatus && <BelastingKaart garmin={garmin} />}
 
       {/* Advies */}
       {plan.advies?.tekst?.length > 0 && (
