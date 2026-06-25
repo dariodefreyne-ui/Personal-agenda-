@@ -1,0 +1,70 @@
+rules_version = '2';
+
+// =========================================================================
+//  Personal Agenda — Firestore-beveiligingsregels
+//
+//  Alles leeft onder users/{userId}. Enkel de ingelogde eigenaar mag zijn
+//  eigen data lezen. De eigenaar mag het meeste zelf schrijven vanuit de app
+//  (planning, taken, instellingen, ...). Een paar collecties worden ENKEL
+//  server-side geschreven door de Garmin-pipeline en de Cloud Functions
+//  (Admin SDK omzeilt deze regels): die zetten we op write:false zodat de
+//  browser ze nooit kan overschrijven.
+// =========================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+
+      // --- Server-only collecties (Admin SDK schrijft, client leest) ---
+      match /garminDaily/{doc} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /garminActivities/{doc} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /agendaEvents/{doc} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /weer/{doc} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+      match /dagAdvies/{doc} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // --- Door de eigenaar beheerd vanuit de app ---
+      match /instellingen/{doc}      { allow read, write: if isOwner(userId); }
+      match /weken/{doc}             { allow read, write: if isOwner(userId); }
+      match /blokTemplates/{doc}     { allow read, write: if isOwner(userId); }
+      match /taken/{doc}             { allow read, write: if isOwner(userId); }
+      match /takenLog/{doc}          { allow read, write: if isOwner(userId); }
+      match /reva/{doc}              { allow read, write: if isOwner(userId); }
+      match /maaltijden/{doc}        { allow read, write: if isOwner(userId); }
+      match /dagen/{doc}             { allow read, write: if isOwner(userId); }
+      match /pushTokens/{doc}        { allow read, write: if isOwner(userId); }
+
+      // Vangnet: overige subcollecties enkel leesbaar door de eigenaar.
+      match /{document=**} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+    }
+
+    // De "mail"-collectie wordt door Cloud Functions (Admin SDK) gevuld en door
+    // de Trigger-Email-extensie verstuurd. De browser mag er niet bij.
+    match /mail/{doc} {
+      allow read, write: if false;
+    }
+  }
+}
