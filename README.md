@@ -262,6 +262,21 @@ Het script print een lange `GARMIN_TOKENS_BASE64`-waarde. Zet die als GitHub-sec
 **Daarna draait alles vanzelf** via de workflow `.github/workflows/garmin-daily.yml`.
 Handmatig bijwerken kan via **Actions → Garmin Daily Sync → Run workflow**.
 
+**Geen pc? Token via GitHub Actions:** zet secrets `GARMIN_EMAIL`/`GARMIN_PASSWORD`,
+merge naar `main`, en draai **Actions → Garmin Auth (token aanmaken)**. Download
+nadien het artifact `garmin-token`, kopieer de inhoud naar de secret
+`GARMIN_TOKENS_BASE64`.
+
+> **Krijg je `429 IP rate limited by Garmin`?** Garmin blokkeert datacenter-IP's
+> van GitHub. Wacht 30-60 min en probeer opnieuw, óf gebruik **Google Cloud Shell**
+> (<https://shell.cloud.google.com>, browser, gratis):
+> ```bash
+> pip install garminconnect
+> python3 -c "from garminconnect import Garmin; import base64,io,tarfile,os; g=Garmin('MAIL','WW'); g.login(); d=os.path.expanduser('~/.garminconnect'); os.makedirs(d,exist_ok=True); g.garth.dump(d); b=io.BytesIO(); t=tarfile.open(fileobj=b,mode='w'); t.add(d,arcname='.'); t.close(); print(base64.b64encode(b.getvalue()).decode())"
+> ```
+> De uitvoer is je `GARMIN_TOKENS_BASE64`. (Zet 2FA tijdelijk uit tijdens dit.)
+> De **dagelijkse sync** gebruikt de token (geen login-endpoint) en wordt niet 429't.
+
 Volledige geschiedenis inladen (optioneel, eenmalig):
 ```bash
 python -m garmin.backfill --start 2023-01-01
