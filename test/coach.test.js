@@ -26,6 +26,12 @@ describe('coachAdvies', () => {
     expect(rang[weinig.niveau]).toBeLessThanOrEqual(rang[veel.niveau]);
   });
 
+  it('dwingt herstel af bij overbelasting, ook bij hoge readiness', () => {
+    const a = coachAdvies({ readiness: 85, bodyBattery: 85, goal: 'kracht', overbelast: true });
+    expect(a.niveau).toBe('herstel');
+    expect(/overbelast/i.test(a.reden)).toBe(true);
+  });
+
   it('valt terug op algemeen doel bij onbekend doel', () => {
     const a = coachAdvies({ readiness: 55, goal: 'onbekend' });
     expect(a.doelLabel).toBe(DOELEN.algemeen);
