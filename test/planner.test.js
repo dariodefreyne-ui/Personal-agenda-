@@ -44,6 +44,13 @@ describe('genereerDagPlan', () => {
     expect(fiets.every((b) => b.type === 'sport')).toBe(true);
   });
 
+  it('gebruikt het vrije-dag-ritme (later opstaan) op een vrije dag', () => {
+    const werk = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis' });
+    const vrij = genereerDagPlan({ datum: '2026-06-27', dagKort: 'za', instellingen: I, werkModus: 'vrij' });
+    expect(werk.blokken[0].start).toBe('06:45');     // werkdag
+    expect(vrij.blokken[0].start).toBe('08:00');     // vrije dag, later
+  });
+
   it('detecteert overlappende vaste blokken als conflict', () => {
     const agenda = [{ titel: 'RSCA match', start: '20:30', eind: '22:30' }];
     const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'thuis', agendaEvents: agenda });

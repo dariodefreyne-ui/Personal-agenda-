@@ -58,17 +58,22 @@ export function genereerDagPlan({
   const blok = [];
   const advies = { tekst: [] };
 
-  const opstaan = alg.opstaan || '06:45';
-  const slapen = alg.slapen || '22:45';
   const isWo = dagKort === 'wo';
+
+  // Bepaal werkmodus eerst, want het ritme (opstaan/slapen) hangt ervan af.
+  const modus = werkModus || 'thuis';
+  const werktVandaag = ['thuis', 'kantoor_auto', 'kantoor_fiets'].includes(modus);
+  const vrijeDag = !werktVandaag || isVakantie;
+
+  // Ritme verschilt: vrije/vakantiedagen mogen later starten en eindigen.
+  const opstaan = vrijeDag ? (alg.opstaanVrij || alg.opstaan || '08:00') : (alg.opstaan || '06:45');
+  const slapen = vrijeDag ? (alg.slapenVrij || alg.slapen || '23:30') : (alg.slapen || '22:45');
 
   // 1) Ochtendroutine + ontbijt
   maakBlok(blok, opstaan, addMin(opstaan, 25), 'Opstaan & klaarmaken', 'routine', { bron: 'routine' });
   maakBlok(blok, addMin(opstaan, 25), addMin(opstaan, 45), 'Ontbijt', 'maaltijd', { bron: 'maaltijd' });
 
   // 2) Werk + woon-werk
-  const modus = werkModus || 'thuis';
-  const werktVandaag = ['thuis', 'kantoor_auto', 'kantoor_fiets'].includes(modus);
   if (werktVandaag) {
     const fiets = modus === 'kantoor_fiets';
     const kantoor = modus !== 'thuis';
