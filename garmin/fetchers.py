@@ -25,6 +25,13 @@ def fetch_day(garmin, date_str: str) -> dict:
         "trainingReadiness": _safe(garmin.get_training_readiness, date_str),
         "trainingStatus": _safe(garmin.get_training_status, date_str),
         "stepsIntraday": _safe(garmin.get_steps_data, date_str),
+        # Fase 3: profiel & lichaamsmetrieken voor de coach-laag.
+        "bodyBattery": _safe(garmin.get_body_battery, date_str, date_str),
+        "bodyComposition": _safe(garmin.get_body_composition, date_str, date_str),
+        "maxMetrics": _safe(garmin.get_max_metrics, date_str),
+        "hrv": _safe(garmin.get_hrv_data, date_str),
+        # Statisch profiel (leeftijd/lengte/gewicht/geslacht); zelfde elke dag.
+        "userProfile": _safe(garmin.get_userprofile),
     }
 
 

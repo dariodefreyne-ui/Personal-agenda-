@@ -55,7 +55,7 @@ export function useDagPlan(datumObj = new Date()) {
       if (!actief) return;
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
-        gedaan: dag?.gedaan || {}, werkModus, datum, dagKort,
+        gedaan: dag?.gedaan || {}, werkModus, datum, dagKort, blessureActief,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen

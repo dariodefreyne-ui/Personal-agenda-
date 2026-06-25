@@ -41,6 +41,31 @@ export function garminSamenvatting(g) {
     ? Object.values(g.trainingStatus.latestTrainingStatusData)[0]?.trainingStatusFeedbackPhrase
     : null;
 
+  // ---- Fase 3: body battery, VO2max, profiel ----
+  const bb = Array.isArray(g.bodyBattery) ? g.bodyBattery[0] : g.bodyBattery;
+  const bbArray = bb?.bodyBatteryValuesArray || bb?.bodyBatteryValuesArrayLevel;
+  let bodyBattery = null, bodyBatteryMax = null;
+  if (Array.isArray(bbArray) && bbArray.length) {
+    const levels = bbArray.map((p) => (Array.isArray(p) ? p[1] : p?.level)).filter((n) => typeof n === 'number');
+    if (levels.length) { bodyBattery = levels[levels.length - 1]; bodyBatteryMax = Math.max(...levels); }
+  }
+
+  const mm = Array.isArray(g.maxMetrics) ? g.maxMetrics[0] : g.maxMetrics;
+  const vo2max = eersteGetal(mm?.generic?.vo2MaxValue, mm?.vo2MaxValue, g.userProfile?.userData?.vo2Max);
+
+  const bc = g.bodyComposition?.totalAverage || (Array.isArray(g.bodyComposition) ? g.bodyComposition[0] : g.bodyComposition);
+  const gewichtG = eersteGetal(bc?.weight, g.userProfile?.userData?.weight);
+  const gewichtKg = gewichtG ? Math.round(gewichtG / 1000 * 10) / 10 : null;
+  const vetPct = eersteGetal(bc?.bodyFat);
+
+  const ud = g.userProfile?.userData || g.userProfile || {};
+  const lengteCm = eersteGetal(ud.height);
+  let leeftijd = null;
+  if (ud.birthDate) {
+    const d = new Date(ud.birthDate);
+    if (!isNaN(d)) leeftijd = Math.floor((Date.now() - d.getTime()) / (365.25 * 864e5));
+  }
+
   return {
     stappen,
     slaapUren,
@@ -49,6 +74,13 @@ export function garminSamenvatting(g) {
     rustHr,
     kcal,
     trainingStatus: status,
+    bodyBattery,
+    bodyBatteryMax,
+    vo2max,
+    gewichtKg,
+    vetPct,
+    leeftijd,
+    lengteCm,
     // genormaliseerd voor de planner-advieslogica
     trainingReadiness: readiness != null ? { score: readiness } : null,
     sleep: slaapUren != null ? { urenTotaal: slaapUren } : null,

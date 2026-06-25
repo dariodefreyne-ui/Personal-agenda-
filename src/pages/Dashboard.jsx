@@ -3,6 +3,7 @@ import { useDagPlan } from '../hooks/useDagPlan';
 import { BLOK_TYPES } from '../config/appConfig';
 import { toMin, nuMin, toHHMM } from '../services/tijd';
 import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock } from '../components/Icons';
+import CoachKaart from '../components/CoachKaart';
 
 function tijdvak() {
   const h = new Date().getHours();
@@ -15,7 +16,7 @@ const datumLabel = () =>
   new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default function Dashboard() {
-  const { laden, plan, garmin, gedaan, toggleBlok } = useDagPlan();
+  const { laden, plan, garmin, gedaan, toggleBlok, instellingen, blessureActief } = useDagPlan();
   const [popId, setPopId] = useState(null);
 
   const checkbare = useMemo(
@@ -40,6 +41,11 @@ export default function Dashboard() {
 
       {/* Gezondheid: ring + inline stats (geen 4 identieke kaartjes) */}
       <GezondheidKaart garmin={garmin} i={1} />
+
+      {/* Coach-advies van de dag */}
+      {garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (
+        <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel} blessureActief={blessureActief} />
+      )}
 
       {/* Advies */}
       {plan.advies?.tekst?.length > 0 && (
