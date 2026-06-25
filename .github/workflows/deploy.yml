@@ -10,9 +10,6 @@ on:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-    # GitHub-runners hebben een flaky IPv6-route naar googleapis.com, wat
-    # "Premature close" / "Failed to authenticate" geeft bij het minten van het
-    # service-account-token. Node op IPv4-first dwingen lost dat op.
     env:
       NODE_OPTIONS: --dns-result-order=ipv4first
     steps:
@@ -39,26 +36,6 @@ jobs:
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > $HOME/firebase-service-account.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-service-account.json" >> $GITHUB_ENV
 
-      # Diagnose: bevestigt dat het token nu wél gemint kan worden (IPv4-fix).
-      - name: Diagnose service account token
-        env:
-          PROJ: ${{ secrets.FIREBASE_PROJECT_ID }}
-        run: |
-          cd "$HOME"
-          npm init -y >/dev/null 2>&1
-          npm i google-auth-library@9 >/dev/null 2>&1
-          node -e "
-            const c = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
-            console.log('project_id matches FIREBASE_PROJECT_ID:', c.project_id === process.env.PROJ);
-            const { GoogleAuth } = require('google-auth-library');
-            (async () => {
-              const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
-              const client = await auth.getClient();
-              const t = await client.getAccessToken();
-              console.log('TOKEN MINT OK, length', (t.token || '').length);
-            })().catch(e => { console.error('TOKEN MINT FAIL:', e.message); process.exit(1); });
-          "
-
       - name: Install Firebase CLI
         run: npm install -g firebase-tools@15.20.0
 
@@ -68,40 +45,40 @@ jobs:
 
       - name: Deploy Firestore rules
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only firestore:rules --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt (netwerk/auth), opnieuw na 45s..."; sleep 45
           done
 
       - name: Deploy Firestore indexes
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only firestore:indexes --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
           done
 
       - name: Deploy Storage rules
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only storage --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
           done
 
       - name: Deploy Cloud Functions
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }} --force && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
           done
 
       - name: Deploy Hosting
         run: |
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5 6; do
             firebase deploy --only hosting --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
-            if [ "$i" = "3" ]; then exit 1; fi
-            echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
+            if [ "$i" = "6" ]; then exit 1; fi
+            echo "Poging $i mislukt, opnieuw na 45s..."; sleep 45
           done
