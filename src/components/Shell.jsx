@@ -1,6 +1,9 @@
+import { useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { APP_NAAM } from '../config/appConfig';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { luisterVoorgrond } from '../services/push';
 import { IcoHome, IcoAgenda, IcoCheck, IcoHeart, IcoCog, IcoLogout } from './Icons';
 
 const NAV = [
@@ -13,7 +16,18 @@ const NAV = [
 
 export default function Shell({ children }) {
   const { logout } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Voorgrondmeldingen: toon push als toast wanneer de app open staat.
+  useEffect(() => {
+    let stop = () => {};
+    luisterVoorgrond((payload) => {
+      const n = payload?.notification || {};
+      toast(`${n.title || 'Melding'}${n.body ? ' — ' + n.body : ''}`);
+    }).then((fn) => { stop = fn; });
+    return () => stop();
+  }, [toast]);
 
   return (
     <div className="shell">

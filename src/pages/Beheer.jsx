@@ -47,6 +47,11 @@ export default function Beheer() {
 
   if (!I) return <div className="empty">Instellingen laden…</div>;
 
+  const snoozeActief = I.push?.snoozeTot && Date.parse(I.push.snoozeTot) > Date.now();
+  const snoozeLabel = snoozeActief
+    ? new Date(I.push.snoozeTot).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }) : '';
+  const snooze = (uren) => bewaarMelding('push', { snoozeTot: new Date(Date.now() + uren * 3600000).toISOString() });
+
   return (
     <div className="stack">
       <h1 style={{ margin: 0 }}>Beheer</h1>
@@ -84,6 +89,37 @@ export default function Beheer() {
           <input type="checkbox" checked={!!I.push.antiScrollNudges}
             onChange={(e) => bewaarMelding('push', { antiScrollNudges: e.target.checked })} style={{ width: 22, height: 22 }} />
         </label>
+
+        <div className="divider" />
+        <div className="card-title" style={{ margin: 0 }}>Welke meldingen?</div>
+        {[
+          ['ochtend', 'Ochtendbriefing'],
+          ['readiness', 'Readiness-check'],
+          ['slot', 'Herinnering per tijdslot'],
+          ['avond', 'Avondvooruitblik'],
+          ['antiscroll', 'Anti-scroll nudges'],
+        ].map(([key, label]) => (
+          <label className="row between" key={key}>
+            <span>{label}</span>
+            <input type="checkbox" checked={I.push.categorieen?.[key] !== false}
+              onChange={(e) => bewaar('push', { categorieen: { ...(I.push.categorieen || {}), [key]: e.target.checked } })}
+              style={{ width: 22, height: 22 }} />
+          </label>
+        ))}
+
+        <div className="divider" />
+        <div className="row between">
+          <span className="small">{snoozeActief ? `Gepauzeerd tot ${snoozeLabel}` : 'Meldingen pauzeren (snooze)'}</span>
+          <div className="row" style={{ gap: 6 }}>
+            {snoozeActief
+              ? <button className="btn sm" onClick={() => bewaarMelding('push', { snoozeTot: null })}>Hervat</button>
+              : <>
+                  <button className="btn sm" onClick={() => snooze(1)}>1u</button>
+                  <button className="btn sm" onClick={() => snooze(3)}>3u</button>
+                </>}
+          </div>
+        </div>
+
         <p className="small dim" style={{ margin: 0 }}>Tip: voeg de app toe aan je iPhone-beginscherm — anders kan iOS geen push tonen.</p>
       </Sectie>
 
