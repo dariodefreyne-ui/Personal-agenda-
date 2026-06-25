@@ -96,6 +96,7 @@ export const DEFAULT_INSTELLINGEN = {
     waterDoelL: 2.5,
     schermtijdDoelMin: 120,
     voedingTips: true,
+    doel: 'algemeen',   // coach-doel: afvallen|kracht|uithouding|herstel|algemeen
   },
 };
 

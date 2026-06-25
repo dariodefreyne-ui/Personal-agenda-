@@ -139,7 +139,7 @@ export default function Week() {
                 </div>
               </div>
               <select className="select" style={{ width: 'auto', minWidth: 140 }}
-                value={data.dagen[dk] || ((dk === 'za' || dk === 'zo') ? 'vrij' : '')}
+                value={data.dagen[dk] || (per?.verlof ? 'verlof' : ((dk === 'za' || dk === 'zo') ? 'vrij' : ''))}
                 onChange={(e) => zetModus(dk, e.target.value)}>
                 <option value="">— kies —</option>
                 {Object.entries(WERK_MODI).map(([k, v]) => (

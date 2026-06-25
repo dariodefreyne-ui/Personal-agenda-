@@ -4,11 +4,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   getGarminDag, getDocById, saveDag, subscribeCollection,
-  addItem, updateItem, deleteItem,
+  addItem, updateItem, deleteItem, getInstellingen, saveInstellingen,
 } from '../services/data';
 import { garminSamenvatting } from '../services/garmin';
+import { coachAdvies, DOELEN } from '../services/coach';
 import { datumKey } from '../services/tijd';
-import { IcoPlus, IcoTrash, IcoBolt, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
+import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
+import Gauge from '../components/Gauge';
+import CoachKaart from '../components/CoachKaart';
 
 export default function Gezondheid() {
   const { user } = useAuth();
@@ -18,13 +21,23 @@ export default function Gezondheid() {
   const [checkin, setCheckin] = useState({ slaapGevoel: 3, energie: 3, pijn: 0, notitie: '' });
   const [reva, setReva] = useState([]);
   const [nieuwReva, setNieuwReva] = useState('');
+  const [doel, setDoel] = useState('algemeen');
 
   useEffect(() => {
     if (!user) return;
     getGarminDag(user.uid, datum).then((g) => setGarmin(garminSamenvatting(g)));
     getDocById(user.uid, 'dagen', datum).then((d) => { if (d?.checkin) setCheckin(d.checkin); });
+    getInstellingen(user.uid).then((I) => setDoel(I.gezondheid?.doel || 'algemeen'));
     return subscribeCollection(user.uid, 'reva', setReva);
   }, [user, datum]);
+
+  const blessureActief = (reva || []).some((r) => r.blessureActief);
+  const kiesDoel = async (d) => {
+    setDoel(d);
+    await saveInstellingen(user.uid, 'gezondheid', { doel: d });
+    toast('Doel bewaard — de coach past zijn advies aan.');
+  };
+  const readinessKleur = (r) => (r == null ? 'var(--text-dim)' : r >= 65 ? 'var(--success)' : r >= 40 ? 'var(--warning)' : 'var(--danger)');
 
   const bewaarCheckin = async () => {
     await saveDag(user.uid, datum, { checkin });
@@ -46,20 +59,53 @@ export default function Gezondheid() {
         <Link to="/maaltijden" className="btn grow">Maaltijden & voeding</Link>
       </div>
 
-      {/* Garmin vandaag */}
-      <section className="card">
+      {/* Doel (stuurt de coach) */}
+      <section className="card stack">
+        <div className="card-title">Mijn doel</div>
+        <div className="row wrap" style={{ gap: 8 }}>
+          {Object.entries(DOELEN).map(([k, v]) => (
+            <button key={k} className={'btn sm' + (doel === k ? ' primary' : '')} onClick={() => kiesDoel(k)}>{v}</button>
+          ))}
+        </div>
+      </section>
+
+      {/* Coach-advies */}
+      {(garmin || blessureActief) && (
+        <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief} />
+      )}
+
+      {/* Garmin: gauges + profiel */}
+      <section className="card stack">
         <div className="card-title">Garmin — vandaag</div>
         {garmin ? (
-          <div className="kpi" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-            <Kpi Icon={IcoBolt} l="Readiness" v={garmin.readiness ?? '—'} />
-            <Kpi Icon={IcoMoon} l="Slaap" v={garmin.slaapUren != null ? garmin.slaapUren.toFixed(1) + 'u' : '—'} />
-            <Kpi Icon={IcoHeart} l="Rust-HR" v={garmin.rustHr ?? '—'} />
-            <Kpi Icon={IcoFlame} l="Stappen" v={garmin.stappen != null ? (garmin.stappen / 1000).toFixed(1) + 'k' : '—'} />
-          </div>
+          <>
+            <div className="row wrap" style={{ gap: 18, justifyContent: 'center' }}>
+              <Gauge val={garmin.readiness ?? 0} label="readiness" size={92}
+                sub={garmin.readiness ?? '—'} kleur={readinessKleur(garmin.readiness)} />
+              <Gauge val={garmin.bodyBattery ?? 0} label="battery" size={92}
+                sub={garmin.bodyBattery ?? '—'} kleur="var(--primary-2)" />
+              <div className="statline" style={{ justifyContent: 'center' }}>
+                <div className="stat"><IcoMoon className="si" width={16} height={16} />
+                  <span className="sv">{garmin.slaapUren != null ? garmin.slaapUren.toFixed(1) + 'u' : '—'}</span><span className="sl">slaap</span></div>
+                <div className="stat"><IcoHeart className="si" width={16} height={16} />
+                  <span className="sv">{garmin.rustHr ?? '—'}</span><span className="sl">rust-HR</span></div>
+                <div className="stat"><IcoFlame className="si" width={16} height={16} />
+                  <span className="sv">{garmin.stappen != null ? (garmin.stappen / 1000).toFixed(1) + 'k' : '—'}</span><span className="sl">stappen</span></div>
+              </div>
+            </div>
+            <div className="divider" />
+            <div className="row wrap" style={{ gap: 8 }}>
+              {garmin.vo2max != null && <span className="badge">VO₂max {Math.round(garmin.vo2max)}</span>}
+              {garmin.gewichtKg != null && <span className="badge">{garmin.gewichtKg} kg</span>}
+              {garmin.vetPct != null && <span className="badge">{Math.round(garmin.vetPct)}% vet</span>}
+              {garmin.leeftijd != null && <span className="badge">{garmin.leeftijd} jaar</span>}
+              {garmin.lengteCm != null && <span className="badge">{Math.round(garmin.lengteCm)} cm</span>}
+              {garmin.trainingStatus && <span className="badge accent">{garmin.trainingStatus}</span>}
+            </div>
+          </>
         ) : (
           <p className="small muted" style={{ margin: 0 }}>Nog geen Garmin-data vandaag (sync draait elke ochtend).</p>
         )}
-        {garmin?.trainingStatus && <p className="small dim" style={{ marginTop: 10, marginBottom: 0 }}>Trainingsstatus: {garmin.trainingStatus}</p>}
       </section>
 
       {/* Dagelijkse check-in */}

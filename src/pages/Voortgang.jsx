@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getGarminDag, getCollection } from '../services/data';
+import { useToast } from '../contexts/ToastContext';
+import { getGarminDag, getCollection, subscribeCollection, addItem, updateItem, deleteItem } from '../services/data';
 import { garminSamenvatting } from '../services/garmin';
+import { doelProgress, doelKleur, huidigeWaarde, METRIEKEN } from '../services/doelen';
 import { datumKey } from '../services/tijd';
-import { IcoFlame, IcoBolt, IcoMoon } from '../components/Icons';
+import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash } from '../components/Icons';
+import Gauge from '../components/Gauge';
 
 function laatsteDagen(n) {
   const out = [];
@@ -14,11 +17,17 @@ function laatsteDagen(n) {
   }
   return out;
 }
+const LEEG = { titel: '', metric: 'vo2max', start: '', naar: '', huidige: '' };
 
 export default function Voortgang() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [reeks, setReeks] = useState([]);
   const [taken, setTaken] = useState([]);
+  const [doelen, setDoelen] = useState([]);
+  const [garminVandaag, setGarminVandaag] = useState(null);
+  const [form, setForm] = useState(LEEG);
+  const [open, setOpen] = useState(false);
   const [laden, setLaden] = useState(true);
 
   useEffect(() => {
@@ -26,24 +35,102 @@ export default function Voortgang() {
     (async () => {
       const dagen = laatsteDagen(7);
       const garmin = await Promise.all(dagen.map((d) => getGarminDag(user.uid, datumKey(d))));
-      setReeks(dagen.map((d, i) => ({
-        datum: d, label: d.toLocaleDateString('nl-BE', { weekday: 'short' }),
-        g: garminSamenvatting(garmin[i]),
-      })));
+      const r = dagen.map((d, i) => ({ datum: d, label: d.toLocaleDateString('nl-BE', { weekday: 'short' }), g: garminSamenvatting(garmin[i]) }));
+      setReeks(r);
+      setGarminVandaag(r[r.length - 1]?.g || null);
       setTaken((await getCollection(user.uid, 'taken')).filter((t) => t.type === 'gewoonte'));
       setLaden(false);
     })();
+    return subscribeCollection(user.uid, 'doelen', setDoelen);
   }, [user]);
+
+  const bewaarDoel = async () => {
+    if (!form.titel.trim()) return toast('Geef je doel een naam.');
+    if (form.start === '' || form.naar === '') return toast('Vul start- en doelwaarde in.');
+    await addItem(user.uid, 'doelen', {
+      titel: form.titel.trim(), metric: form.metric,
+      start: Number(form.start), naar: Number(form.naar),
+      huidige: form.huidige === '' ? null : Number(form.huidige),
+      eenheid: METRIEKEN[form.metric]?.eenheid || '',
+    });
+    setForm(LEEG); setOpen(false); toast('Doel toegevoegd 🎯');
+  };
 
   if (laden) return <div className="empty">Statistieken laden…</div>;
 
   const readinessReeks = reeks.map((r) => r.g?.readiness ?? null);
   const slaapReeks = reeks.map((r) => r.g?.slaapUren ?? null);
   const topStreaks = [...taken].sort((a, b) => (b.streak || 0) - (a.streak || 0)).slice(0, 6);
+  const autoMetric = ['vo2max', 'gewicht', 'rusthr'].includes(form.metric);
 
   return (
     <div className="stack reveal">
       <h1 style={{ margin: 0 }}>Voortgang</h1>
+
+      {/* Doelen */}
+      <section className="card stack">
+        <div className="row between">
+          <div className="card-title" style={{ margin: 0 }}>Mijn doelen</div>
+          <button className="btn sm" onClick={() => setOpen((o) => !o)}><IcoPlus width={16} height={16} /> Doel</button>
+        </div>
+
+        {doelen.length === 0 && !open && (
+          <p className="small muted" style={{ margin: 0 }}>
+            Zet één concreet doel (bv. VO₂max 45→55, of gewicht 85→78 kg). De ring vult zich automatisch
+            mee met je Garmin-data.
+          </p>
+        )}
+
+        {doelen.map((d) => {
+          const p = doelProgress(d, garminVandaag);
+          const m = METRIEKEN[d.metric] || {};
+          return (
+            <div className="row" key={d.id} style={{ gap: 14, alignItems: 'center' }}>
+              <Gauge val={p.pct} size={72} label="" sub={`${p.pct}%`} kleur={doelKleur(p.pct)} />
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>{d.titel}</span>
+                  {p.klaar && <span className="badge ok small">behaald 🎉</span>}
+                </div>
+                <div className="small dim">
+                  {m.label}: {p.huidige ?? '—'}{d.eenheid} → {d.naar}{d.eenheid}
+                  {p.rest != null && !p.klaar ? ` · nog ${Math.abs(p.rest)}${d.eenheid}` : ''}
+                </div>
+              </div>
+              <button className="icon-btn" onClick={() => deleteItem(user.uid, 'doelen', d.id)} aria-label="Verwijderen">
+                <IcoTrash width={18} height={18} />
+              </button>
+            </div>
+          );
+        })}
+
+        {open && (
+          <div className="stack" style={{ gap: 10, marginTop: 4 }}>
+            <div className="field"><label>Naam</label>
+              <input className="input" value={form.titel} placeholder="bv. VO₂max omhoog"
+                onChange={(e) => setForm({ ...form, titel: e.target.value })} /></div>
+            <div className="field"><label>Wat meet je?</label>
+              <select className="select" value={form.metric} onChange={(e) => setForm({ ...form, metric: e.target.value })}>
+                {Object.entries(METRIEKEN).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select></div>
+            <div className="row wrap" style={{ gap: 12 }}>
+              <div className="field grow"><label>Start</label>
+                <input className="input" type="number" value={form.start} onChange={(e) => setForm({ ...form, start: e.target.value })} /></div>
+              <div className="field grow"><label>Doel</label>
+                <input className="input" type="number" value={form.naar} onChange={(e) => setForm({ ...form, naar: e.target.value })} /></div>
+              {!autoMetric && (
+                <div className="field grow"><label>Huidige</label>
+                  <input className="input" type="number" value={form.huidige} onChange={(e) => setForm({ ...form, huidige: e.target.value })} /></div>
+              )}
+            </div>
+            {autoMetric && <p className="small dim" style={{ margin: 0 }}>Huidige waarde komt automatisch uit Garmin.</p>}
+            <div className="row between">
+              <button className="btn ghost" onClick={() => { setOpen(false); setForm(LEEG); }}>Annuleren</button>
+              <button className="btn primary" onClick={bewaarDoel}>Doel bewaren</button>
+            </div>
+          </div>
+        )}
+      </section>
 
       <section className="card">
         <div className="card-title"><IcoBolt width={14} height={14} /> Training readiness (7 dagen)</div>

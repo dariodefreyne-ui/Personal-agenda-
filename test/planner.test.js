@@ -44,6 +44,11 @@ describe('genereerDagPlan', () => {
     expect(fiets.every((b) => b.type === 'sport')).toBe(true);
   });
 
+  it('plant geen werk op een verlofdag (ziekte/vakantie)', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-25', dagKort: 'do', instellingen: I, werkModus: 'verlof', isVakantie: true });
+    expect(plan.blokken.some((b) => /werk|thuiswerk/i.test(b.titel))).toBe(false);
+  });
+
   it('gebruikt het vrije-dag-ritme (later opstaan) op een vrije dag', () => {
     const werk = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis' });
     const vrij = genereerDagPlan({ datum: '2026-06-27', dagKort: 'za', instellingen: I, werkModus: 'vrij' });
