@@ -68,7 +68,7 @@ jobs:
       - name: Deploy Cloud Functions
         run: |
           for i in 1 2 3; do
-            firebase deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }} && break
+            firebase deploy --only functions --project ${{ secrets.FIREBASE_PROJECT_ID }} --force && break
             if [ "$i" = "3" ]; then exit 1; fi
             echo "Deploy mislukt (poging $i/3), opnieuw na 60s..."; sleep 60
           done
