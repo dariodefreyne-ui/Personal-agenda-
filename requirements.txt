@@ -1,4 +1,6 @@
 # Garmin -> Firestore sync pipeline
-garminconnect>=0.2.25
+garminconnect>=0.3.6
+curl_cffi
+ua-generator
 firebase-admin>=6.5.0
 python-dotenv>=1.0.1
