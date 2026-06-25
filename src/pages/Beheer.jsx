@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { getInstellingen, saveInstellingen } from '../services/data';
 import { activeerPush } from '../services/push';
+import { syncAgendaNu } from '../services/agenda';
 import { PUSH_INTENSITEIT, APP_NAAM, DAGEN, DAG_NAMEN } from '../config/appConfig';
 import { IcoBell, IcoLogout, IcoPlus, IcoTrash } from '../components/Icons';
 
@@ -29,6 +30,19 @@ export default function Beheer() {
   const zetPush = async () => {
     try { await activeerPush(user.uid); toast('Meldingen geactiveerd op dit toestel.'); }
     catch (e) { toast(e.message); }
+  };
+
+  const [agenda, setAgenda] = useState(null);
+  const testAgenda = async () => {
+    setAgenda({ laden: true });
+    try {
+      const r = await syncAgendaNu();
+      setAgenda(r);
+      toast(`✓ ${r.aantal} afspraken ingelezen.`);
+    } catch (e) {
+      setAgenda(null);
+      toast('Inlezen mislukt: ' + (e?.message || 'onbekende fout'));
+    }
   };
 
   // --- Sportschema (in-app beheer) ---
@@ -143,6 +157,23 @@ export default function Beheer() {
           <br />Zo maak je de link op je iPhone: Agenda-app → tabblad <b>Agenda’s</b> → tik op de
           <b> ⓘ</b> naast je agenda → zet <b>Openbare agenda</b> aan → <b>Deel link / Kopieer</b>.
         </p>
+        <button className="btn block" onClick={testAgenda} disabled={agenda?.laden}>
+          {agenda?.laden ? 'Inlezen…' : 'Agenda nu inlezen & testen'}
+        </button>
+        {agenda && !agenda.laden && (
+          <div className="stack" style={{ gap: 4 }}>
+            <div className="small" style={{ fontWeight: 600 }}>
+              {agenda.aantal} toekomstige afspraken ingelezen uit {agenda.links} link(s)
+            </div>
+            {(agenda.perLink || []).map((p, i) => (
+              <div key={i} className="small dim">
+                {p.fout
+                  ? `⚠️ ${p.link} — ${p.fout}`
+                  : `✓ ${p.link} — ${p.aantal} afspraken`}
+              </div>
+            ))}
+          </div>
+        )}
       </Sectie>
 
       {/* Werk */}

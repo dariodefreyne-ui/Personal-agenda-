@@ -8,6 +8,7 @@
 //  Alles draait per gebruiker (meervoudig veilig, ook al ben jij de enige).
 // =========================================================================
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { parseIcs } = require('./lib/ics');
 
@@ -193,49 +194,74 @@ async function garminVan(uid, datum) {
   };
 }
 
+// Leest alle ICS-links van één gebruiker in en schrijft agendaEvents.
+// Geeft een status terug (per link het aantal of de fout) + bewaart die status.
+async function syncGebruikerAgenda(userRef) {
+  const alg = (await userRef.collection('instellingen').doc('algemeen').get()).data() || {};
+  const urls = String(alg.icsUrl || '')
+    .split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+    .map((u) => u.replace(/^webcal:\/\//i, 'https://'));
+
+  const perLink = [];
+  let events = [];
+  for (const url of urls) {
+    const kort = url.replace(/^https?:\/\//, '').slice(0, 40);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) { perLink.push({ link: kort, fout: `HTTP ${res.status}` }); continue; }
+      const n = parseIcs(await res.text());
+      events.push(...n);
+      perLink.push({ link: kort, aantal: n.length });
+    } catch (e) {
+      perLink.push({ link: kort, fout: e.message });
+    }
+  }
+
+  // Ontdubbel op uid.
+  const gezien = new Set();
+  events = events.filter((e) => (gezien.has(e.uid) ? false : gezien.add(e.uid)));
+
+  const col = userRef.collection('agendaEvents');
+  const vandaag = brussel().datum;
+  const toekomst = events.filter((e) => e.datum >= vandaag).slice(0, 300);
+  const oud = await col.where('datum', '>=', vandaag).get();
+  const batch = db.batch();
+  oud.forEach((d) => batch.delete(d.ref));
+  toekomst.forEach((e) => batch.set(col.doc(e.uid.replace(/[^A-Za-z0-9_-]/g, '_')), e));
+  await batch.commit();
+
+  const status = {
+    aantal: toekomst.length, perLink, links: urls.length,
+    op: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  await userRef.collection('instellingen').doc('agendaStatus').set(status, { merge: true });
+  return { aantal: toekomst.length, perLink, links: urls.length };
+}
+
 // =========================================================================
-//  ICS-SYNC — elke 3 uur
+//  ICS-SYNC — elke 3 uur (alle gebruikers)
 // =========================================================================
 exports.icsSync = onSchedule(
   { schedule: 'every 3 hours', timeZone: 'Europe/Brussels', region: REGIO },
   async () => {
     const snap = await db.collection('users').get();
     for (const userDoc of snap.docs) {
-      const alg = (await userDoc.ref.collection('instellingen').doc('algemeen').get()).data() || {};
-      // Eén of meerdere links (gescheiden door nieuwe regels of komma's).
-      const urls = String(alg.icsUrl || '')
-        .split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
-        .map((u) => u.replace(/^webcal:\/\//i, 'https://'));
-      if (!urls.length) continue;
       try {
-        let events = [];
-        for (const url of urls) {
-          try {
-            const res = await fetch(url);
-            if (!res.ok) { console.warn('ICS-fetch faalde', userDoc.id, url, res.status); continue; }
-            events.push(...parseIcs(await res.text()));
-          } catch (e) { console.warn('ICS-link fout', userDoc.id, e.message); }
-        }
-        // Ontdubbel op uid.
-        const gezien = new Set();
-        events = events.filter((e) => (gezien.has(e.uid) ? false : gezien.add(e.uid)));
-        const col = userDoc.ref.collection('agendaEvents');
-        // Verwijder oude toekomstige events en herschrijf (eenvoudig + correct).
-        const vandaag = brussel().datum;
-        const oud = await col.where('datum', '>=', vandaag).get();
-        const batch = db.batch();
-        oud.forEach((d) => batch.delete(d.ref));
-        events.filter((e) => e.datum >= vandaag).slice(0, 300).forEach((e) => {
-          batch.set(col.doc(e.uid.replace(/[^A-Za-z0-9_-]/g, '_')), e);
-        });
-        await batch.commit();
-        console.log('ICS gesynct', userDoc.id, events.length, 'events');
+        const r = await syncGebruikerAgenda(userDoc.ref);
+        if (r.links) console.log('ICS gesynct', userDoc.id, r.aantal, 'events');
       } catch (e) {
         console.warn('ICS-sync fout', userDoc.id, e.message);
       }
     }
   }
 );
+
+// Directe sync op verzoek vanuit de app ("Agenda nu inlezen").
+exports.syncAgendaNu = onCall({ region: REGIO }, async (request) => {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Aanmelden vereist.');
+  return await syncGebruikerAgenda(db.collection('users').doc(uid));
+});
 
 // =========================================================================
 //  WEER-SYNC — dagelijks 05:30 (Open-Meteo, geen sleutel nodig)
