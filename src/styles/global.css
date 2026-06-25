@@ -222,11 +222,15 @@ textarea.input { min-height: 80px; resize: vertical; }
 @keyframes auraDrift { 0% { transform: translate(-12%, -8%) scale(1); } 50% { transform: translate(10%, 6%) scale(1.15); } 100% { transform: translate(-12%, -8%) scale(1); } }
 @keyframes ringSweep { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
 
-/* Staggerde binnenkomst: zet --i op kinderen voor de cascade */
-.reveal > * {
-  animation: fadeUp .55s cubic-bezier(.16,1,.3,1) backwards;
-  animation-delay: calc(var(--i, 0) * 60ms + 40ms);
-}
+/* Staggerde binnenkomst voor directe kinderen van .reveal */
+.reveal > * { animation: fadeUp .5s cubic-bezier(.16,1,.3,1) backwards; }
+.reveal > *:nth-child(1) { animation-delay: 40ms; }
+.reveal > *:nth-child(2) { animation-delay: 100ms; }
+.reveal > *:nth-child(3) { animation-delay: 160ms; }
+.reveal > *:nth-child(4) { animation-delay: 220ms; }
+.reveal > *:nth-child(5) { animation-delay: 280ms; }
+.reveal > *:nth-child(6) { animation-delay: 340ms; }
+.reveal > *:nth-child(n+7) { animation-delay: 400ms; }
 
 /* Tijd-van-dag aura achter de hero */
 .hero { position: relative; isolation: isolate; padding: 8px 0 2px; }
@@ -279,7 +283,30 @@ textarea.input { min-height: 80px; resize: vertical; }
 
 .fab-press:active { transform: scale(.92); }
 
+/* App-brede ambient aurora: trage, zachte gloed-blobs in themakleuren */
+@keyframes auroraA { 0% { transform: translate(0,0) scale(1); } 50% { transform: translate(14vw,8vh) scale(1.25); } 100% { transform: translate(0,0) scale(1); } }
+@keyframes auroraB { 0% { transform: translate(0,0) scale(1.1); } 50% { transform: translate(-12vw,-6vh) scale(1); } 100% { transform: translate(0,0) scale(1.1); } }
+.aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.aurora::before, .aurora::after {
+  content: ''; position: absolute; width: 62vmax; height: 62vmax; border-radius: 50%;
+  filter: blur(90px); opacity: .15;
+}
+.aurora::before { top: -22vmax; left: -16vmax; background: radial-gradient(closest-side, var(--primary), transparent 70%); animation: auroraA 28s ease-in-out infinite; }
+.aurora::after { bottom: -26vmax; right: -16vmax; background: radial-gradient(closest-side, var(--primary-2), transparent 70%); animation: auroraB 34s ease-in-out infinite; }
+.aurora.rich::before { opacity: .22; }
+.aurora.rich::after { opacity: .2; }
+
+/* Content boven de aurora */
+.content, .sidebar { position: relative; z-index: 1; }
+
+/* Consistente paginakop */
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.page-head h1 { font-size: clamp(1.5rem, 6vw, 2rem); letter-spacing: -.02em; margin: 0; }
+
+h1, h2, h3 { text-wrap: balance; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
   .hero::before { opacity: .35; }
+  .aurora::before, .aurora::after { opacity: .12; }
 }

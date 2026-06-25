@@ -42,7 +42,8 @@ export default function Login() {
 
   return (
     <div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 16 }}>
-      <div className="card stack" style={{ width: '100%', maxWidth: 380 }}>
+      <div className="aurora rich" aria-hidden />
+      <div className="card stack" style={{ width: '100%', maxWidth: 380, position: 'relative', zIndex: 1 }}>
         <div className="center stack" style={{ gap: 4 }}>
           <img src="/icon.svg" alt="" width="56" height="56" style={{ margin: '0 auto 6px' }} />
           <h1>{APP_NAAM}</h1>

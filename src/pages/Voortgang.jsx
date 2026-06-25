@@ -42,7 +42,7 @@ export default function Voortgang() {
   const topStreaks = [...taken].sort((a, b) => (b.streak || 0) - (a.streak || 0)).slice(0, 6);
 
   return (
-    <div className="stack">
+    <div className="stack reveal">
       <h1 style={{ margin: 0 }}>Voortgang</h1>
 
       <section className="card">

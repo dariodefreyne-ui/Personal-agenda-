@@ -52,7 +52,7 @@ export default function Maaltijden() {
   const waterPct = Math.min(100, Math.round((voeding.waterL / (doelen.waterDoelL || 2.5)) * 100));
 
   return (
-    <div className="stack">
+    <div className="stack reveal">
       <h1 style={{ margin: 0 }}>Maaltijden & voeding</h1>
 
       {/* Dagtracking */}

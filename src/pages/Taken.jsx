@@ -49,7 +49,7 @@ export default function Taken() {
     setForm((f) => ({ ...f, dagen: f.dagen.includes(d) ? f.dagen.filter((x) => x !== d) : [...f.dagen, d] }));
 
   return (
-    <div className="stack">
+    <div className="stack reveal">
       <div className="row between">
         <h1 style={{ margin: 0 }}>Taken & gewoontes</h1>
         <button className="btn primary sm" onClick={() => start(null)}><IcoPlus width={18} height={18} /> Nieuw</button>

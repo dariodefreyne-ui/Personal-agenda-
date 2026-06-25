@@ -53,7 +53,7 @@ export default function Beheer() {
   const snooze = (uren) => bewaarMelding('push', { snoozeTot: new Date(Date.now() + uren * 3600000).toISOString() });
 
   return (
-    <div className="stack">
+    <div className="stack reveal">
       <h1 style={{ margin: 0 }}>Beheer</h1>
 
       {/* Thema */}

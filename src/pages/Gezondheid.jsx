@@ -38,7 +38,7 @@ export default function Gezondheid() {
   };
 
   return (
-    <div className="stack">
+    <div className="stack reveal">
       <h1 style={{ margin: 0 }}>Gezondheid</h1>
 
       <div className="row" style={{ gap: 10 }}>

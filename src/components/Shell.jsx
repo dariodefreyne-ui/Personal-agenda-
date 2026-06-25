@@ -31,6 +31,7 @@ export default function Shell({ children }) {
 
   return (
     <div className="shell">
+      <div className="aurora rich" aria-hidden />
       <nav className="sidebar" aria-label="Hoofdnavigatie">
         <div className="title" style={{ padding: '8px 12px 16px', fontWeight: 700 }}>{APP_NAAM}</div>
         {NAV.map(({ to, label, Icon, end }) => (

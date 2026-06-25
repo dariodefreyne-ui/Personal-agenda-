@@ -59,7 +59,7 @@ export default function Week() {
   const weekLabel = `${dagen[0].toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – ${dagen[6].toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}`;
 
   return (
-    <div className="stack">
+    <div className="stack reveal">
       <div className="row between">
         <h1 style={{ margin: 0 }}>Mijn week</h1>
         <div className="row" style={{ gap: 4 }}>
