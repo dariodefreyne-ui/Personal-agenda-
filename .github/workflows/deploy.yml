@@ -29,10 +29,13 @@ jobs:
       - name: Build app (genereert ook firebase-messaging-sw.js)
         run: npm run build
 
-      - name: Setup Firebase service account
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > $HOME/firebase-service-account.json
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-service-account.json" >> $GITHUB_ENV
+      # Officiële Google-auth: schrijft de service-account-credentials weg en
+      # exporteert GOOGLE_APPLICATION_CREDENTIALS voor alle volgende stappen.
+      # Betrouwbaarder dan de handmatige echo-aanpak (geen flaky auth meer).
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools@15.20.0
