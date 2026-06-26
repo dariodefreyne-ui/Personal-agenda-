@@ -200,6 +200,36 @@ function SubRitme() {
             {(agenda.perLink || []).map((p, i) => (
               <div key={i} className="small dim">{p.fout ? `⚠️ ${p.link} — ${p.fout}` : `✓ ${p.link} — ${p.aantal} afspraken`}</div>
             ))}
+            {agenda.serverTijd && <div className="small dim">Serverklok (Brussel): {agenda.serverTijd}</div>}
+
+            {(agenda.diagnose || []).length > 0 && (
+              <details style={{ marginTop: 6 }}>
+                <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>🔍 Tijd-diagnose ({agenda.diagnose.length})</summary>
+                <div className="stack" style={{ gap: 8, marginTop: 8 }}>
+                  {agenda.diagnose.map((d, i) => (
+                    <div key={i} className="card tight stack" style={{ gap: 2 }}>
+                      <div className="small" style={{ fontWeight: 600 }}>{d.titel || '(geen titel)'}</div>
+                      <div className="small dim" style={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>{d.ruw}</div>
+                      <div className="small">
+                        → wordt <b>{d.heleDag ? 'hele dag' : d.start}</b> op {d.datum}
+                        {' · '}{d.heeftZ ? 'UTC (Z)→Brussel' : d.wandklok ? 'wandklok (zoals bron)' : 'onbekend'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
+            {(agenda.opgeslagen || []).length > 0 && (
+              <details>
+                <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>💾 Opgeslagen ({agenda.opgeslagen.length})</summary>
+                <div className="stack" style={{ gap: 2, marginTop: 8 }}>
+                  {agenda.opgeslagen.map((e, i) => (
+                    <div key={i} className="small dim">{e.datum} · <b>{e.start}{e.eind ? `–${e.eind}` : ''}</b> · {e.titel}</div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
         {agenda?.fout && <div className="small" style={{ color: 'var(--danger)' }}>Inlezen mislukt: {agenda.fout}</div>}
