@@ -51,7 +51,7 @@ const MATRIX = {
   },
 };
 
-function bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief, overbelast }) {
+function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast }) {
   if (blessureActief || overbelast) return 'herstel';
   const r = readiness ?? 55;
   const bb = bodyBattery ?? 60;
@@ -60,6 +60,9 @@ function bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief, overb
     if (slaapUren < 6) score -= 12;
     else if (slaapUren >= 8) score += 6;
   }
+  if (typeof energie === 'number') {
+    score += { 1: -16, 2: -8, 3: 0, 4: 6, 5: 10 }[energie] ?? 0;
+  }
   if (score >= 65) return 'hard';
   if (score >= 45) return 'matig';
   if (score >= 30) return 'rustig';
@@ -67,11 +70,11 @@ function bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief, overb
 }
 
 export function coachAdvies({
-  readiness = null, bodyBattery = null, slaapUren = null,
+  readiness = null, bodyBattery = null, slaapUren = null, energie = null,
   goal = 'algemeen', blessureActief = false, overbelast = false,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
-  const niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, blessureActief, overbelast });
+  const niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast });
   const advies = MATRIX[doel][niveau];
 
   const redenen = [];
@@ -80,6 +83,7 @@ export function coachAdvies({
   if (readiness != null) redenen.push(`readiness ${Math.round(readiness)}/100`);
   if (bodyBattery != null) redenen.push(`body battery ${Math.round(bodyBattery)}`);
   if (typeof slaapUren === 'number') redenen.push(`${slaapUren.toFixed(1)}u slaap`);
+  if (typeof energie === 'number') redenen.push(`energie ${energie}/5 (zelf)`);
 
   const titel = {
     hard: 'Goeie dag om er vol voor te gaan',
