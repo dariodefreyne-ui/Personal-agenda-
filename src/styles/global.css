@@ -212,6 +212,11 @@ textarea.input { min-height: 80px; resize: vertical; }
   z-index: 60; background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
   padding: 12px 16px; border-radius: 12px; box-shadow: var(--shadow); max-width: 90%; }
 
+.update-banner { position: fixed; left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom));
+  z-index: 55; display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+@media (min-width: 900px) { .update-banner { left: auto; right: 24px; bottom: 24px; max-width: 340px; } }
+
 /* =========================================================================
    Beweging, diepte & persoonlijkheid
    ========================================================================= */
