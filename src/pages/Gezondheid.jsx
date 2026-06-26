@@ -4,9 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   getGarminDag, getDocById, saveDag, subscribeCollection,
-  addItem, updateItem, deleteItem, getInstellingen, saveInstellingen,
+  addItem, updateItem, deleteItem, getInstellingen, saveInstellingen, getLaatsteGarminSync,
 } from '../services/data';
-import { garminSamenvatting } from '../services/garmin';
+import { garminSamenvatting, syncStatus } from '../services/garmin';
 import { coachAdvies, DOELEN } from '../services/coach';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
@@ -22,10 +22,12 @@ export default function Gezondheid() {
   const [reva, setReva] = useState([]);
   const [nieuwReva, setNieuwReva] = useState('');
   const [doel, setDoel] = useState('algemeen');
+  const [sync, setSync] = useState(null);
 
   useEffect(() => {
     if (!user) return;
     getGarminDag(user.uid, datum).then((g) => setGarmin(garminSamenvatting(g)));
+    getLaatsteGarminSync(user.uid).then(setSync);
     getDocById(user.uid, 'dagen', datum).then((d) => { if (d?.checkin) setCheckin(d.checkin); });
     getInstellingen(user.uid).then((I) => setDoel(I.gezondheid?.doel || 'algemeen'));
     return subscribeCollection(user.uid, 'reva', setReva);
@@ -102,9 +104,16 @@ export default function Gezondheid() {
               {garmin.lengteCm != null && <span className="badge">{Math.round(garmin.lengteCm)} cm</span>}
               {garmin.trainingStatus && <span className="badge accent">{garmin.trainingStatus}</span>}
             </div>
+            {syncStatus(sync).stale && (
+              <div className="small" style={{ color: 'var(--warning)', margin: 0 }}>⚠ {syncStatus(sync).tekst} — Garmin-sync hapert mogelijk.</div>
+            )}
           </>
         ) : (
-          <p className="small muted" style={{ margin: 0 }}>Nog geen Garmin-data vandaag (sync draait elke ochtend).</p>
+          <p className="small muted" style={{ margin: 0 }}>
+            {syncStatus(sync).leeg
+              ? 'Nog geen Garmin-data. Koppel Garmin (zie README); de ochtendsync vult dit vanzelf in.'
+              : `Geen verse data voor vandaag. ${syncStatus(sync).tekst}.`}
+          </p>
         )}
       </section>
 

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useDagPlan } from '../hooks/useDagPlan';
 import { BLOK_TYPES } from '../config/appConfig';
 import { toMin, nuMin, toHHMM } from '../services/tijd';
+import { syncStatus } from '../services/garmin';
 import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
@@ -17,7 +18,7 @@ const datumLabel = () =>
   new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default function Dashboard() {
-  const { laden, plan, garmin, gedaan, toggleBlok, instellingen, blessureActief } = useDagPlan();
+  const { laden, plan, garmin, gedaan, toggleBlok, instellingen, blessureActief, garminSync } = useDagPlan();
   const [popId, setPopId] = useState(null);
 
   const checkbare = useMemo(
@@ -41,7 +42,7 @@ export default function Dashboard() {
       </header>
 
       {/* Gezondheid: ring + inline stats (geen 4 identieke kaartjes) */}
-      <GezondheidKaart garmin={garmin} i={1} />
+      <GezondheidKaart garmin={garmin} garminSync={garminSync} i={1} />
 
       {/* Coach-advies van de dag */}
       {garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (
@@ -146,13 +147,16 @@ export default function Dashboard() {
   );
 }
 
-function GezondheidKaart({ garmin, i }) {
+function GezondheidKaart({ garmin, garminSync, i }) {
+  const s = syncStatus(garminSync);
   if (!garmin || (garmin.readiness == null && garmin.slaapUren == null)) {
     return (
       <section className="card" style={{ '--i': i }}>
         <div className="card-title">Gezondheid</div>
         <p className="small muted" style={{ margin: 0 }}>
-          Nog geen Garmin-data vandaag. De ochtendsync vult readiness, slaap en stappen vanzelf in.
+          {s.leeg
+            ? 'Nog geen Garmin-data. Koppel Garmin (zie README); de ochtendsync vult readiness, slaap en stappen vanzelf in.'
+            : `Geen verse data voor vandaag. ${s.tekst}.`}
         </p>
       </section>
     );
@@ -160,23 +164,28 @@ function GezondheidKaart({ garmin, i }) {
   const r = garmin.readiness;
   const kleur = r == null ? 'var(--text-dim)' : r >= 65 ? 'var(--success)' : r >= 40 ? 'var(--warning)' : 'var(--danger)';
   return (
-    <section className="card row" style={{ '--i': i, gap: 18, alignItems: 'center' }}>
-      <div className="ring anim" style={{ '--val': r ?? 0, '--primary': kleur }}>
-        <div style={{ display: 'grid', placeItems: 'center', gap: 1 }}>
-          <span className="ring-v">{r ?? '—'}</span>
-          <span className="ring-l">readiness</span>
+    <section className="card stack" style={{ '--i': i, gap: 12 }}>
+      <div className="row" style={{ gap: 18, alignItems: 'center' }}>
+        <div className="ring anim" style={{ '--val': r ?? 0, '--primary': kleur }}>
+          <div style={{ display: 'grid', placeItems: 'center', gap: 1 }}>
+            <span className="ring-v">{r ?? '—'}</span>
+            <span className="ring-l">readiness</span>
+          </div>
+        </div>
+        <div className="statline grow">
+          <div className="stat"><IcoMoon className="si" width={16} height={16} />
+            <span className="sv">{garmin.slaapUren != null ? garmin.slaapUren.toFixed(1) + 'u' : '—'}</span>
+            <span className="sl">slaap</span></div>
+          <div className="stat"><IcoHeart className="si" width={16} height={16} />
+            <span className="sv">{garmin.rustHr ?? '—'}</span><span className="sl">rust-HR</span></div>
+          <div className="stat"><IcoFlame className="si" width={16} height={16} />
+            <span className="sv">{garmin.stappen != null ? (garmin.stappen / 1000).toFixed(1) + 'k' : '—'}</span>
+            <span className="sl">stappen</span></div>
         </div>
       </div>
-      <div className="statline grow">
-        <div className="stat"><IcoMoon className="si" width={16} height={16} />
-          <span className="sv">{garmin.slaapUren != null ? garmin.slaapUren.toFixed(1) + 'u' : '—'}</span>
-          <span className="sl">slaap</span></div>
-        <div className="stat"><IcoHeart className="si" width={16} height={16} />
-          <span className="sv">{garmin.rustHr ?? '—'}</span><span className="sl">rust-HR</span></div>
-        <div className="stat"><IcoFlame className="si" width={16} height={16} />
-          <span className="sv">{garmin.stappen != null ? (garmin.stappen / 1000).toFixed(1) + 'k' : '—'}</span>
-          <span className="sl">stappen</span></div>
-      </div>
+      {s.stale && !s.leeg && (
+        <div className="small" style={{ color: 'var(--warning)', margin: 0 }}>⚠ {s.tekst} — Garmin-sync hapert mogelijk.</div>
+      )}
     </section>
   );
 }

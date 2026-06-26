@@ -10,6 +10,15 @@ function eersteGetal(...kandidaten) {
   return null;
 }
 
+// Vertaalt de laatste-sync-info naar leesbare status + staleness-vlag.
+export function syncStatus(laatsteSync) {
+  if (!laatsteSync || !laatsteSync.datum) return { tekst: 'Nog niet gesynct', stale: true, leeg: true };
+  const d = new Date(laatsteSync.datum + 'T12:00:00');
+  const dagen = Math.floor((Date.now() - d.getTime()) / 864e5);
+  const rel = dagen <= 0 ? 'vandaag' : dagen === 1 ? 'gisteren' : `${dagen} dagen geleden`;
+  return { tekst: `Laatst gesynct: ${rel}`, stale: dagen >= 2, leeg: false, dagen };
+}
+
 export function garminSamenvatting(g) {
   if (!g) return null;
 

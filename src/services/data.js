@@ -1,7 +1,7 @@
 // Firestore-datalaag. Alles leeft onder users/{uid}/...
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs,
-  query, where, onSnapshot, serverTimestamp, writeBatch,
+  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { DEFAULT_INSTELLINGEN } from '../config/appConfig';
@@ -104,6 +104,23 @@ export async function saveDag(uid, datum, data) {
 // ---- Garmin (alleen-lezen) ----
 export async function getGarminDag(uid, datum) {
   return getDocById(uid, 'garminDaily', datum);
+}
+
+// Meest recente Garmin-dag + tijdstip van laatste sync (voor "laatst gesynct").
+export async function getLaatsteGarminSync(uid) {
+  try {
+    const snap = await getDocs(query(
+      collection(db, ...u(uid, 'garminDaily')), orderBy('date', 'desc'), limit(1),
+    ));
+    if (snap.empty) return null;
+    const d = snap.docs[0].data();
+    return {
+      datum: d.date || snap.docs[0].id,
+      syncedAt: d.syncedAt?.toDate ? d.syncedAt.toDate() : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ---- Agenda-events uit ICS (alleen-lezen) ----
