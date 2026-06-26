@@ -141,7 +141,9 @@ export default function Gezondheid() {
         {reva.map((r) => (
           <div className="list-row" key={r.id}>
             <div className="grow">
-              <div style={{ fontWeight: 600 }}>{r.naam}</div>
+              <input className="input sm" style={{ minHeight: 32, fontWeight: 600 }}
+                defaultValue={r.naam || ''} aria-label="Naam oefening"
+                onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== r.naam && updateItem(user.uid, 'reva', r.id, { naam: e.target.value.trim() })} />
               <input className="input sm" style={{ minHeight: 32, marginTop: 4, maxWidth: 140 }}
                 value={r.sets || ''} onChange={(e) => updateItem(user.uid, 'reva', r.id, { sets: e.target.value })} />
             </div>

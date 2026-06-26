@@ -5,7 +5,7 @@ import { getDocById, setItem, subscribeCollection, addItem, deleteItem, getAgend
 import { vakantieVoorDatum, vakantieInWeek, vakantieLabel } from '../services/vakanties';
 import { WERK_MODI, DAG_NAMEN } from '../config/appConfig';
 import { datumKey, weekKey, DAG_KORT } from '../services/tijd';
-import { IcoPlus, IcoTrash } from '../components/Icons';
+import { IcoPlus, IcoTrash, IcoEdit } from '../components/Icons';
 
 function maandagVan(d) {
   const x = new Date(d);
@@ -23,6 +23,7 @@ export default function Week() {
   const [vakanties, setVakanties] = useState([]);
   const [nieuw, setNieuw] = useState(LEEG_PERIODE);
   const [formOpen, setFormOpen] = useState(false);
+  const [editId, setEditId] = useState(null); // null = nieuwe periode, anders bewerken
 
   const maandag = useMemo(() => {
     const m = maandagVan(new Date());
@@ -75,11 +76,27 @@ export default function Week() {
     toast(v ? 'Week op vakantie — judoles geven valt weg.' : 'Vakantie uit.');
   };
 
-  const voegPeriodeToe = async () => {
+  const startBewerken = (v) => {
+    setEditId(v.id);
+    setNieuw({ naam: v.naam || '', van: v.van || '', tot: v.tot || '',
+      geenJudo: v.geenJudo !== false, verlof: v.verlof !== false });
+    setFormOpen(true);
+  };
+
+  const sluitForm = () => { setFormOpen(false); setEditId(null); setNieuw(LEEG_PERIODE); };
+
+  const bewaarPeriode = async () => {
     if (!nieuw.naam.trim() || !nieuw.van || !nieuw.tot) return toast('Vul naam, van én tot in.');
     if (nieuw.tot < nieuw.van) return toast('“Tot” ligt vóór “van”.');
-    await addItem(user.uid, 'vakanties', { ...nieuw, naam: nieuw.naam.trim() });
-    setNieuw(LEEG_PERIODE); setFormOpen(false); toast('Vakantieperiode toegevoegd.');
+    const payload = { ...nieuw, naam: nieuw.naam.trim() };
+    if (editId) {
+      await setItem(user.uid, 'vakanties', editId, payload);
+      toast('Vakantieperiode bijgewerkt.');
+    } else {
+      await addItem(user.uid, 'vakanties', payload);
+      toast('Vakantieperiode toegevoegd.');
+    }
+    sluitForm();
   };
 
   const weekPeriode = vakantieInWeek(vakanties, dagDatums);
@@ -185,7 +202,7 @@ export default function Week() {
       <section className="card stack">
         <div className="row between">
           <div className="card-title" style={{ margin: 0 }}>Vakantieperiodes</div>
-          <button className="btn sm" onClick={() => setFormOpen((o) => !o)}>
+          <button className="btn sm" onClick={() => (formOpen ? sluitForm() : setFormOpen(true))}>
             <IcoPlus width={16} height={16} /> Periode
           </button>
         </div>
@@ -198,11 +215,14 @@ export default function Week() {
         )}
 
         {vakanties.map((v) => (
-          <div className="list-row" key={v.id}>
+          <div className="list-row" key={v.id} style={editId === v.id ? { opacity: 0.6 } : undefined}>
             <div className="grow">
               <div style={{ fontWeight: 600 }}>{v.naam}</div>
               <div className="small dim">{fmt(v.van)} – {fmt(v.tot)} · {vakantieLabel(v)}</div>
             </div>
+            <button className="icon-btn" onClick={() => startBewerken(v)} aria-label="Bewerken">
+              <IcoEdit width={18} height={18} />
+            </button>
             <button className="icon-btn" onClick={() => deleteItem(user.uid, 'vakanties', v.id)} aria-label="Verwijderen">
               <IcoTrash width={18} height={18} />
             </button>
@@ -211,6 +231,9 @@ export default function Week() {
 
         {formOpen && (
           <div className="stack" style={{ gap: 10, marginTop: 4 }}>
+            <div className="small" style={{ fontWeight: 600 }}>
+              {editId ? 'Periode bewerken' : 'Nieuwe periode'}
+            </div>
             <div className="field">
               <label>Naam</label>
               <input className="input" value={nieuw.naam} placeholder="bv. Zomervakantie"
@@ -233,8 +256,8 @@ export default function Week() {
                 onChange={(e) => setNieuw({ ...nieuw, verlof: e.target.checked })} style={{ width: 22, height: 22 }} />
             </label>
             <div className="row between">
-              <button className="btn ghost" onClick={() => { setFormOpen(false); setNieuw(LEEG_PERIODE); }}>Annuleren</button>
-              <button className="btn primary" onClick={voegPeriodeToe}>Toevoegen</button>
+              <button className="btn ghost" onClick={sluitForm}>Annuleren</button>
+              <button className="btn primary" onClick={bewaarPeriode}>{editId ? 'Bewaren' : 'Toevoegen'}</button>
             </div>
           </div>
         )}
