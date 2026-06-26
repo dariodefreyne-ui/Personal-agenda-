@@ -58,6 +58,7 @@ function Hub() {
           </Link>
         ))}
       </section>
+      <p className="small dim center" style={{ margin: 0 }}>App-versie: {__BUILD_TIME__}</p>
     </div>
   );
 }
