@@ -4,6 +4,7 @@ import { APP_NAAM } from '../config/appConfig';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { luisterVoorgrond } from '../services/push';
+import UpdateBanner from './UpdateBanner';
 import { IcoHome, IcoAgenda, IcoCheck, IcoHeart, IcoCog, IcoLogout } from './Icons';
 
 const NAV = [
@@ -32,6 +33,7 @@ export default function Shell({ children }) {
   return (
     <div className="shell">
       <div className="aurora rich" aria-hidden />
+      <UpdateBanner />
       <nav className="sidebar" aria-label="Hoofdnavigatie">
         <div className="title" style={{ padding: '8px 12px 16px', fontWeight: 700 }}>{APP_NAAM}</div>
         {NAV.map(({ to, label, Icon, end }) => (

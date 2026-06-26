@@ -11,7 +11,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
       // Wij leveren zelf de firebase-messaging service worker; de PWA-SW draait
       // los daarvan voor offline caching van de app-schil.

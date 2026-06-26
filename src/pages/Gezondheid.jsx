@@ -4,8 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   getGarminDag, getDocById, saveDag, subscribeCollection,
-  addItem, updateItem, deleteItem, getInstellingen, saveInstellingen, getLaatsteGarminSync,
+  addItem, updateItem, deleteItem, getLaatsteGarminSync,
 } from '../services/data';
+import { useSettings } from '../contexts/SettingsContext';
 import { garminSamenvatting, syncStatus } from '../services/garmin';
 import { coachAdvies, DOELEN } from '../services/coach';
 import { datumKey } from '../services/tijd';
@@ -15,28 +16,27 @@ import CoachKaart from '../components/CoachKaart';
 
 export default function Gezondheid() {
   const { user } = useAuth();
+  const { instellingen, opslaan } = useSettings();
   const { toast } = useToast();
   const datum = datumKey(new Date());
   const [garmin, setGarmin] = useState(null);
   const [checkin, setCheckin] = useState({ slaapGevoel: 3, energie: 3, pijn: 0, notitie: '' });
   const [reva, setReva] = useState([]);
   const [nieuwReva, setNieuwReva] = useState('');
-  const [doel, setDoel] = useState('algemeen');
   const [sync, setSync] = useState(null);
+  const doel = instellingen?.gezondheid?.doel || 'algemeen';
 
   useEffect(() => {
     if (!user) return;
     getGarminDag(user.uid, datum).then((g) => setGarmin(garminSamenvatting(g)));
     getLaatsteGarminSync(user.uid).then(setSync);
     getDocById(user.uid, 'dagen', datum).then((d) => { if (d?.checkin) setCheckin(d.checkin); });
-    getInstellingen(user.uid).then((I) => setDoel(I.gezondheid?.doel || 'algemeen'));
     return subscribeCollection(user.uid, 'reva', setReva);
   }, [user, datum]);
 
   const blessureActief = (reva || []).some((r) => r.blessureActief);
   const kiesDoel = async (d) => {
-    setDoel(d);
-    await saveInstellingen(user.uid, 'gezondheid', { doel: d });
+    await opslaan('gezondheid', { doel: d });
     toast('Doel bewaard — de coach past zijn advies aan.');
   };
   const readinessKleur = (r) => (r == null ? 'var(--text-dim)' : r >= 65 ? 'var(--success)' : r >= 40 ? 'var(--warning)' : 'var(--danger)');

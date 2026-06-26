@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   subscribeCollection, addItem, updateItem, deleteItem,
-  getInstellingen, getDocById, saveDag,
+  getDocById, saveDag,
 } from '../services/data';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoEdit, IcoFork } from '../components/Icons';
@@ -13,10 +14,11 @@ const LEEG = { naam: '', type: 'lunch', eiwitG: 25, kcal: 500 };
 
 export default function Maaltijden() {
   const { user } = useAuth();
+  const { instellingen } = useSettings();
   const { toast } = useToast();
   const datum = datumKey(new Date());
   const [maaltijden, setMaaltijden] = useState([]);
-  const [doelen, setDoelen] = useState({ eiwitDoelG: 110, waterDoelL: 2.5 });
+  const doelen = instellingen?.gezondheid || { eiwitDoelG: 110, waterDoelL: 2.5 };
   const [voeding, setVoeding] = useState({ eiwitG: 0, waterL: 0 });
   const [form, setForm] = useState(LEEG);
   const [editId, setEditId] = useState(null);
@@ -24,7 +26,6 @@ export default function Maaltijden() {
 
   useEffect(() => {
     if (!user) return;
-    getInstellingen(user.uid).then((I) => setDoelen(I.gezondheid));
     getDocById(user.uid, 'dagen', datum).then((d) => { if (d?.voeding) setVoeding(d.voeding); });
     return subscribeCollection(user.uid, 'maaltijden', setMaaltijden);
   }, [user, datum]);

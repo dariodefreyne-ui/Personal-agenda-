@@ -1,6 +1,6 @@
 // Firestore-datalaag. Alles leeft onder users/{uid}/...
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs,
+  doc, getDoc, getDocFromCache, setDoc, updateDoc, deleteDoc, collection, getDocs,
   query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -104,6 +104,17 @@ export async function saveDag(uid, datum, data) {
 // ---- Garmin (alleen-lezen) ----
 export async function getGarminDag(uid, datum) {
   return getDocById(uid, 'garminDaily', datum);
+}
+
+// Garmin-dag uit cache eerst (historische dagen wijzigen nooit → bespaart reads).
+export async function getGarminDagCached(uid, datum) {
+  const ref = doc(db, ...u(uid, 'garminDaily', datum));
+  try {
+    const c = await getDocFromCache(ref);
+    if (c.exists()) return { id: c.id, ...c.data() };
+  } catch { /* nog niet in cache */ }
+  const s = await getDoc(ref);
+  return s.exists() ? { id: s.id, ...s.data() } : null;
 }
 
 // Meest recente Garmin-dag + tijdstip van laatste sync (voor "laatst gesynct").
