@@ -73,7 +73,10 @@ export function useDagPlan(datumObj = new Date()) {
           id: b.id, start: b.start, eind: b.eind, titel: b.titel, type: b.type,
           push: b.push !== false, detail: b.detail || null, sleutel: sleutelTypes.has(b.type),
         }));
-        saveDag(uid, datum, { plan: minimaal, planOp: new Date().toISOString() }).catch(() => {});
+        // Alleen schrijven als het plan echt veranderd is — bespaart Firestore-writes.
+        if (JSON.stringify(minimaal) !== JSON.stringify(dag?.plan || null)) {
+          saveDag(uid, datum, { plan: minimaal, planOp: new Date().toISOString() }).catch(() => {});
+        }
       }
     })();
     return () => { actief = false; };
