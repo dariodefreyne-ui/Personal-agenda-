@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getInstellingen, getCollection, getDocById, getGarminDag,
-  getAgendaEventsVoorDag, saveDag,
+  getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync,
 } from '../services/data';
 import { genereerDagPlan } from '../services/planner';
 import { garminSamenvatting } from '../services/garmin';
@@ -25,7 +25,7 @@ export function useDagPlan(datumObj = new Date()) {
     let actief = true;
     (async () => {
       setStaat((s) => ({ ...s, laden: true }));
-      const [instellingen, taken, reva, maaltijden, garmin, agendaEvents, dag, week, vakanties] = await Promise.all([
+      const [instellingen, taken, reva, maaltijden, garmin, agendaEvents, dag, week, vakanties, garminSync] = await Promise.all([
         getInstellingen(uid),
         getCollection(uid, 'taken'),
         getCollection(uid, 'reva'),
@@ -35,6 +35,7 @@ export function useDagPlan(datumObj = new Date()) {
         getDocById(uid, 'dagen', datum),
         getDocById(uid, 'weken', weekKey(datumObj)),
         getCollection(uid, 'vakanties'),
+        getLaatsteGarminSync(uid),
       ]);
 
       const periode = vakantieVoorDatum(vakanties, datum);
@@ -60,7 +61,7 @@ export function useDagPlan(datumObj = new Date()) {
       if (!actief) return;
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
-        gedaan: dag?.gedaan || {}, werkModus, datum, dagKort, blessureActief,
+        gedaan: dag?.gedaan || {}, werkModus, datum, dagKort, blessureActief, garminSync,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen
