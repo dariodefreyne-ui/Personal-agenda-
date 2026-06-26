@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getGarminDag, getCollection, subscribeCollection, addItem, setItem, deleteItem } from '../services/data';
+import { getGarminDagCached, getCollection, subscribeCollection, addItem, setItem, deleteItem } from '../services/data';
 import { garminSamenvatting } from '../services/garmin';
 import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
 import { datumKey } from '../services/tijd';
@@ -52,7 +52,7 @@ export default function Voortgang() {
     if (!user) return;
     (async () => {
       const dagen = laatsteDagen(28);
-      const garmin = await Promise.all(dagen.map((d) => getGarminDag(user.uid, datumKey(d))));
+      const garmin = await Promise.all(dagen.map((d) => getGarminDagCached(user.uid, datumKey(d))));
       const r = dagen.map((d, i) => ({ datum: d, label: d.toLocaleDateString('nl-BE', { weekday: 'short' }), g: garminSamenvatting(garmin[i]) }));
       setReeks(r);
       setGarminVandaag(r[r.length - 1]?.g || null);

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 import {
-  getInstellingen, getCollection, getDocById, getGarminDag,
+  getCollection, getDocById, getGarminDag,
   getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync,
 } from '../services/data';
 import { genereerDagPlan } from '../services/planner';
@@ -13,6 +14,7 @@ import { datumKey, dagKortVanDatum, weekKey } from '../services/tijd';
 // Laadt alle dagdata, berekent het plan en biedt afvink-acties.
 export function useDagPlan(datumObj = new Date()) {
   const { user } = useAuth();
+  const { instellingen, laden: instLaden } = useSettings();
   const uid = user?.uid;
   const datum = datumKey(datumObj);
   const dagKort = dagKortVanDatum(datumObj);
@@ -21,12 +23,11 @@ export function useDagPlan(datumObj = new Date()) {
   const [versie, setVersie] = useState(0);
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || instLaden || !instellingen) return;
     let actief = true;
     (async () => {
       setStaat((s) => ({ ...s, laden: true }));
-      const [instellingen, taken, reva, maaltijden, garmin, agendaEvents, dag, week, vakanties, garminSync] = await Promise.all([
-        getInstellingen(uid),
+      const [taken, reva, maaltijden, garmin, agendaEvents, dag, week, vakanties, garminSync] = await Promise.all([
         getCollection(uid, 'taken'),
         getCollection(uid, 'reva'),
         getCollection(uid, 'maaltijden'),
@@ -76,7 +77,7 @@ export function useDagPlan(datumObj = new Date()) {
       }
     })();
     return () => { actief = false; };
-  }, [uid, datum, dagKort, versie]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [uid, datum, dagKort, versie, instellingen, instLaden]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Blok afvinken (opgeslagen in dagen/{datum}.gedaan) + streak voor taak-blokken.
   const toggleBlok = useCallback(async (blokId, taakId) => {
