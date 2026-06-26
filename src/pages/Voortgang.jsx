@@ -6,7 +6,7 @@ import { garminSamenvatting } from '../services/garmin';
 import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
 import { reflectieSamenvatting, stemmingInfo } from '../services/reflectie';
 import { datumKey } from '../services/tijd';
-import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash, IcoBike } from '../components/Icons';
+import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash, IcoBike, IcoEdit } from '../components/Icons';
 import Gauge from '../components/Gauge';
 import Sparkline from '../components/Sparkline';
 import BelastingKaart from '../components/BelastingKaart';
@@ -48,6 +48,7 @@ export default function Voortgang() {
   const [rpe, setRpe] = useState({});
   const [form, setForm] = useState(LEEG);
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [laden, setLaden] = useState(true);
 
   useEffect(() => {
@@ -79,16 +80,33 @@ export default function Voortgang() {
 
   const zetRpe = (id, val) => setItem(user.uid, 'activiteitLog', id, { rpe: val });
 
+  const startBewerken = (d) => {
+    setEditId(d.id);
+    setForm({
+      titel: d.titel || '', metric: d.metric || 'vo2max',
+      start: d.start ?? '', naar: d.naar ?? '', huidige: d.huidige ?? '',
+    });
+    setOpen(true);
+  };
+  const sluitForm = () => { setOpen(false); setEditId(null); setForm(LEEG); };
+
   const bewaarDoel = async () => {
     if (!form.titel.trim()) return toast('Geef je doel een naam.');
     if (form.start === '' || form.naar === '') return toast('Vul start- en doelwaarde in.');
-    await addItem(user.uid, 'doelen', {
+    const payload = {
       titel: form.titel.trim(), metric: form.metric,
       start: Number(form.start), naar: Number(form.naar),
       huidige: form.huidige === '' ? null : Number(form.huidige),
       eenheid: METRIEKEN[form.metric]?.eenheid || '',
-    });
-    setForm(LEEG); setOpen(false); toast('Doel toegevoegd 🎯');
+    };
+    if (editId) {
+      await setItem(user.uid, 'doelen', editId, payload);
+      toast('Doel bijgewerkt 🎯');
+    } else {
+      await addItem(user.uid, 'doelen', payload);
+      toast('Doel toegevoegd 🎯');
+    }
+    sluitForm();
   };
 
   if (laden) return <div className="empty">Statistieken laden…</div>;
@@ -137,7 +155,7 @@ export default function Voortgang() {
       <section className="card stack">
         <div className="row between">
           <div className="card-title" style={{ margin: 0 }}>Mijn doelen</div>
-          <button className="btn sm" onClick={() => setOpen((o) => !o)}><IcoPlus width={16} height={16} /> Doel</button>
+          <button className="btn sm" onClick={() => (open ? sluitForm() : setOpen(true))}><IcoPlus width={16} height={16} /> Doel</button>
         </div>
 
         {doelen.length === 0 && !open && (
@@ -163,6 +181,9 @@ export default function Voortgang() {
                   {p.rest != null && !p.klaar ? ` · nog ${Math.abs(p.rest)}${d.eenheid}` : ''}
                 </div>
               </div>
+              <button className="icon-btn" onClick={() => startBewerken(d)} aria-label="Bewerken">
+                <IcoEdit width={18} height={18} />
+              </button>
               <button className="icon-btn" onClick={() => deleteItem(user.uid, 'doelen', d.id)} aria-label="Verwijderen">
                 <IcoTrash width={18} height={18} />
               </button>
@@ -172,6 +193,7 @@ export default function Voortgang() {
 
         {open && (
           <div className="stack" style={{ gap: 10, marginTop: 4 }}>
+            <div className="small" style={{ fontWeight: 600 }}>{editId ? 'Doel bewerken' : 'Nieuw doel'}</div>
             <div className="field"><label>Naam</label>
               <input className="input" value={form.titel} placeholder="bv. VO₂max omhoog"
                 onChange={(e) => setForm({ ...form, titel: e.target.value })} /></div>
@@ -191,8 +213,8 @@ export default function Voortgang() {
             </div>
             {autoMetric && <p className="small dim" style={{ margin: 0 }}>Huidige waarde komt automatisch uit Garmin.</p>}
             <div className="row between">
-              <button className="btn ghost" onClick={() => { setOpen(false); setForm(LEEG); }}>Annuleren</button>
-              <button className="btn primary" onClick={bewaarDoel}>Doel bewaren</button>
+              <button className="btn ghost" onClick={sluitForm}>Annuleren</button>
+              <button className="btn primary" onClick={bewaarDoel}>{editId ? 'Wijzigingen bewaren' : 'Doel bewaren'}</button>
             </div>
           </div>
         )}
