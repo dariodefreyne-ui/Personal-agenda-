@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getDocById, setItem, subscribeCollection, addItem, deleteItem, getCollection } from '../services/data';
+import { getDocById, setItem, subscribeCollection, addItem, deleteItem, getAgendaEvents } from '../services/data';
 import { vakantieVoorDatum, vakantieInWeek, vakantieLabel } from '../services/vakanties';
 import { WERK_MODI, DAG_NAMEN } from '../config/appConfig';
 import { datumKey, weekKey, DAG_KORT } from '../services/tijd';
@@ -59,7 +59,7 @@ export default function Week() {
   const [agenda, setAgenda] = useState([]);
   useEffect(() => {
     if (!user) return;
-    getCollection(user.uid, 'agendaEvents').then(setAgenda);
+    getAgendaEvents(user.uid).then(setAgenda);
   }, [user]);
 
   const zetModus = async (dagKort, modus) => {

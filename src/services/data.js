@@ -1,7 +1,7 @@
 // Firestore-datalaag. Alles leeft onder users/{uid}/...
 import {
   doc, getDoc, getDocFromCache, setDoc, updateDoc, deleteDoc, collection, getDocs,
-  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
+  getDocsFromServer, query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { DEFAULT_INSTELLINGEN } from '../config/appConfig';
@@ -145,12 +145,30 @@ export async function getLaatsteGarminSync(uid) {
   }
 }
 
+// Server-eerst lezen met cache-fallback. Nodig voor agendaEvents: de server-sync
+// herschrijft die documenten, maar een eenmalige getDocs (zonder live listener)
+// kan oude/verwijderde docs uit de offline-cache blijven teruggeven. Server-eerst
+// haalt de gecorrigeerde tijden op; offline valt het terug op de cache.
+async function getDocsVers(q) {
+  try {
+    return await getDocsFromServer(q);
+  } catch {
+    return await getDocs(q);
+  }
+}
+
 // ---- Agenda-events uit ICS (alleen-lezen) ----
 export async function getAgendaEventsVoorDag(uid, datum) {
-  const snap = await getDocs(query(
+  const snap = await getDocsVers(query(
     collection(db, ...u(uid, 'agendaEvents')),
     where('datum', '==', datum),
   ));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+// Alle agenda-events (voor het weekoverzicht), server-eerst tegen stale cache.
+export async function getAgendaEvents(uid) {
+  const snap = await getDocsVers(collection(db, ...u(uid, 'agendaEvents')));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
