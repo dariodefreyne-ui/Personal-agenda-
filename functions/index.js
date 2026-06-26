@@ -10,7 +10,7 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
-const { parseIcs } = require('./lib/ics');
+const { parseIcs, icsDiagnose } = require('./lib/ics');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -204,18 +204,22 @@ async function syncGebruikerAgenda(userRef) {
 
   const perLink = [];
   let events = [];
+  let diagnose = [];
   for (const url of urls) {
     const kort = url.replace(/^https?:\/\//, '').slice(0, 40);
     try {
       const res = await fetch(url);
       if (!res.ok) { perLink.push({ link: kort, fout: `HTTP ${res.status}` }); continue; }
-      const n = parseIcs(await res.text());
+      const tekst = await res.text();
+      const n = parseIcs(tekst);
       events.push(...n);
+      if (diagnose.length < 6) diagnose.push(...icsDiagnose(tekst, 4));
       perLink.push({ link: kort, aantal: n.length });
     } catch (e) {
       perLink.push({ link: kort, fout: e.message });
     }
   }
+  diagnose = diagnose.slice(0, 6);
 
   // Ontdubbel op uid.
   const gezien = new Set();
@@ -230,12 +234,22 @@ async function syncGebruikerAgenda(userRef) {
   toekomst.forEach((e) => batch.set(col.doc(e.uid.replace(/[^A-Za-z0-9_-]/g, '_')), e));
   await batch.commit();
 
+  // Steekproef van wat er nét is weggeschreven (zo zien we de opgeslagen tijd).
+  const opgeslagen = toekomst.slice(0, 6).map((e) => ({
+    titel: (e.titel || '').slice(0, 40), datum: e.datum, start: e.start, eind: e.eind,
+  }));
+  // Serverklok (Brussel) ter controle of de functie-omgeving de juiste tijd heeft.
+  const nu = brussel();
+
   const status = {
     aantal: toekomst.length, perLink, links: urls.length,
     op: admin.firestore.FieldValue.serverTimestamp(),
   };
   await userRef.collection('instellingen').doc('agendaStatus').set(status, { merge: true });
-  return { aantal: toekomst.length, perLink, links: urls.length };
+  return {
+    aantal: toekomst.length, perLink, links: urls.length,
+    diagnose, opgeslagen, serverTijd: `${nu.datum} ${nu.hhmm}`,
+  };
 }
 
 // =========================================================================

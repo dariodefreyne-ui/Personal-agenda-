@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { parseIcs } = require('../functions/lib/ics.js');
+const { parseIcs, icsDiagnose } = require('../functions/lib/ics.js');
 
 const cal = (...vevents) => ['BEGIN:VCALENDAR', ...vevents, 'END:VCALENDAR'].join('\r\n');
 const ev = (lines) => ['BEGIN:VEVENT', ...lines, 'END:VEVENT'].join('\r\n');
@@ -52,6 +52,19 @@ describe('ICS-parser', () => {
     // unieke datums
     const datums = new Set(out.map((e) => e.datum));
     expect(datums.size).toBe(out.length);
+  });
+
+  it('icsDiagnose toont ruwe regel + omgezette tijd per type', () => {
+    const tz = parseIcs && icsDiagnose(cal(
+      ev(['UID:1', 'SUMMARY:TZID', 'DTSTART;TZID=Europe/Brussels:20260628T180000']),
+      ev(['UID:2', 'SUMMARY:UTC', 'DTSTART:20260628T160000Z']),
+      ev(['UID:3', 'SUMMARY:Dag', 'DTSTART;VALUE=DATE:20260628']),
+    ));
+    expect(tz).toHaveLength(3);
+    expect(tz[0]).toMatchObject({ start: '18:00', wandklok: true, heeftZ: false });
+    expect(tz[0].ruw).toContain('TZID=Europe/Brussels');
+    expect(tz[1]).toMatchObject({ start: '18:00', heeftZ: true });
+    expect(tz[2].heleDag).toBe(true);
   });
 
   it('respecteert COUNT zodat afgelopen reeksen leeg zijn', () => {

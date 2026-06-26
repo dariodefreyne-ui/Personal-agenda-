@@ -138,4 +138,39 @@ function expandRrule(base, rrule, winStart, winEnd) {
   return occ;
 }
 
-module.exports = { parseIcs };
+// Diagnose: toont per afspraak de ruwe DTSTART-regel + wat wij ervan maken.
+// Zo zien we meteen of de bron Z (UTC), TZID of een zwevende tijd geeft, en
+// welke datum/tijd wij opslaan. max beperkt het aantal voorbeelden.
+function icsDiagnose(text, max = 6) {
+  const uit = [];
+  const blocks = unfold(text).split('BEGIN:VEVENT').slice(1);
+  for (const b of blocks) {
+    if (uit.length >= max) break;
+    const body = b.split('END:VEVENT')[0];
+    const veld = (naam) => {
+      const re = new RegExp(`(?:^|\\n)${naam}(?:;[^:\\n]*)?:(.*)`);
+      const m = body.match(re);
+      return m ? m[1].trim() : null;
+    };
+    const ruweRegel = (naam) => {
+      const re = new RegExp(`(?:^|\\n)(${naam}(?:;[^:\\n]*)?:[^\\n\\r]*)`);
+      const m = body.match(re);
+      return m ? m[1].trim() : null;
+    };
+    const dtStart = parseDt(veld('DTSTART'));
+    if (!dtStart) continue;
+    const s = fmtDt(dtStart.date, dtStart.wallClock);
+    uit.push({
+      titel: (veld('SUMMARY') || '').slice(0, 40),
+      ruw: ruweRegel('DTSTART'),
+      heeftZ: /\d{6}Z/.test(veld('DTSTART') || ''),
+      wandklok: dtStart.wallClock,
+      heleDag: dtStart.allDay,
+      datum: s.datum,
+      start: dtStart.allDay ? '00:00' : s.tijd,
+    });
+  }
+  return uit;
+}
+
+module.exports = { parseIcs, icsDiagnose };
