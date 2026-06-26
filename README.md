@@ -10,6 +10,13 @@ te bepalen of je geplande sport haalbaar is.
 Alles is na de opzet **in de app zelf beheerbaar** — je hoeft nooit meer code te
 schrijven.
 
+> **Filosofie — vertrouwen boven slimheid.** Dit wil geen "zo slim mogelijke AI"
+> zijn, maar een **betrouwbare beslissingscoach**. Leidend principe: **elk advies is
+> uitlegbaar** (waarom, op basis van welke data, hoe zeker, hoe je succes meet). De
+> app is gemaakt voor de échte gebruiker die zijn schema ~60% uitvoert — een gemiste
+> dag is normaal, geen mislukking — en bij twijfel adviseert ze liever voorzichtig.
+> De volledige productprincipes staan in `CLAUDE.md`; ze gelden voor elke nieuwe build.
+
 > Draait op **Firebase** (zelfde aanpak als de clubapp): Firestore-database,
 > inloggen met e-mail, push via Firebase Cloud Messaging, automatische deploy via
 > GitHub Actions. De Garmin-data komt binnen via een dagelijks Python-script

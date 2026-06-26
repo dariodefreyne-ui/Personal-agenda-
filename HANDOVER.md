@@ -129,12 +129,47 @@ chat/repo; de repo is publiek.
 
 ---
 
+## 4b. Productrichting — premium = vertrouwen, niet intelligentie
+
+Externe review (LLM-council, juni 2026) legde de grootste blinde vlek bloot: het
+ontwerp dacht vanuit **intelligentie**, terwijl premium ontstaat uit **vertrouwen**.
+De volledige principes staan canoniek in `CLAUDE.md` → "Productprincipes" en zijn
+**de meetlat voor elke nieuwe build**. Kort:
+
+- **Kernprincipe: elke aanbeveling is uitlegbaar** — waarom, op basis van welke data,
+  hoe zeker, hoe succes gemeten wordt. (Niet om altijd gelezen te worden, maar omdat
+  de uitleg moet bestaan.)
+- **Vertrouwen > intelligentie** · **outcome-first, niet feature-first**.
+- **Bouw voor de échte gebruiker** (~50–70% therapietrouw), niet de perfecte; plannen
+  bewegen mee met gemiste blokken.
+- **Beoordeeld op je slechtste advies** → bij onzekerheid conservatief + onzekerheid
+  tonen.
+- **Adaptief met feedback-loops** · **minder cognitieve last** (de software denkt) ·
+  **één North Star-metric** (therapietrouw/consistentie).
+
+**Gevolg voor de planning:** vóór nieuwe coach-features komt **Fase 4.5 —
+Vertrouwenslaag** (zie §5): bestaande adviezen uitlegbaar maken + één North
+Star-score. Dat verhoogt de waargenomen kwaliteit méér dan welke losse feature ook.
+
 ## 5. To-do — concrete fases (volgorde = prioriteit)
 
 > Onthouden in `CLAUDE.md` onder "Roadmap". Onboarding staat bewust laatst.
+> **Alle fases: explainable-first.** Een advies zonder "waarom" is niet af.
 
-### Fase 5 — Periodisering & slimme coach (NU AAN DE BEURT)
-Van "plannen" naar echte sportopbouw:
+### Fase 4.5 — Vertrouwenslaag (NU AAN DE BEURT — vóór nieuwe features)
+Maak het bestaande uitlegbaar; dat is de grootste hefboom voor "premium":
+- [ ] **Advies-model met `waarom` + databronnen + `zekerheid`** in `services/coach.js`
+      (en planner-output). Elke kaart toont een korte "waarom"-regel; detail in een
+      uitklap. Voorbeeld: *"Volume −15% vandaag — want: laatste set vorige week
+      mislukt, HRV −9%, 6u42 slaap, RPE hoger dan normaal. Zekerheid: gemiddeld."*
+- [ ] **North Star-score** (therapietrouw/consistentie) berekenen uit afgevinkte
+      blokken + check-ins, tonen op Dashboard en Voortgang.
+- [ ] **Veilige terugval bij weinig/geen data** (conservatief advies + "weinig data"-
+      label) — nooit stellig op wankele basis.
+- [ ] **Plan beweegt mee met gemiste blokken** (inhalen/herschikken i.p.v. stil falen).
+
+### Fase 5 — Periodisering & slimme coach
+Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
 - [ ] **Acute:Chronic load-ratio** (ACWR) berekenen uit trainingsbelasting.
 - [ ] **RPE-gewogen belasting** (de RPE-invoer per activiteit bestaat al in Voortgang;
       koppel die aan een belastingsmodel).

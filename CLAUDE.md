@@ -5,6 +5,42 @@ FCM push, Cloud Functions) + **Garmin→Firestore** Python-pijplijn. Eén gebrui
 Alles na opzet **in-app beheerbaar** (geen code meer nodig). Zie `README.md` voor
 de babyproof setup.
 
+## Productprincipes (premium-coach) — ALTIJD toepassen
+
+> Komen uit een externe review (LLM-council, juni 2026). Dit is de meetlat voor
+> **elke** nieuwe build. Premium ontstaat niet doordat de AI méér weet, maar
+> doordat de gebruiker het systeem **durft te vertrouwen**.
+
+1. **Elke aanbeveling is uitlegbaar.** *(kernprincipe — "every recommendation must
+   be explainable")* Bij elk advies hoort: **waarom**, **op basis van welke data**,
+   **hoe zeker** en **hoe succes gemeten wordt**. Niet omdat de gebruiker het altijd
+   leest, maar omdat de uitleg moet *bestaan*. Concreet: coach-/planner-output draagt
+   een `waarom`, `databronnen`, `zekerheid` en (waar zinvol) `meetlat`. Toon minstens
+   een korte "waarom"-regel; detail achter een uitklap.
+2. **Vertrouwen > intelligentie.** De AI moet vooral *betrouwbaar en consistent*
+   zijn, niet zo slim mogelijk. Wees liever voorspelbaar dan verrassend.
+3. **Outcome-first, niet feature-first.** Elke feature moet bijdragen aan
+   **duidelijkheid, verantwoordelijkheid of consistentie**. Draagt ze aan geen van
+   die drie bij → niet bouwen.
+4. **Bouw voor de échte gebruiker (50–70% therapietrouw), niet de perfecte.** Plannen
+   moeten meebewegen met gemiste blokken (inhalen/herschikken), niet stilzwijgend
+   "mislukken". Een gemiste dag is normaal, geen fout.
+5. **Je wordt beoordeeld op je slechtste advies, niet je gemiddelde.** Bij
+   onzekerheid of dunne data → **conservatief en veilig** adviseren, en de onzekerheid
+   tonen. Nooit stellig advies op wankele basis.
+6. **Adaptief, met feedback-loops.** Elke beslissing past de volgende aan: uitgevoerd?
+   zo niet, waarom niet? Het systeem leert van uitvoering, niet van méér features.
+7. **Minder cognitieve last — de software denkt, de gebruiker niet.** Elke extra
+   instelling is belasting. Vraag enkel wat echt nodig is; leid de rest af. Goede
+   defaults boven keuzes.
+8. **Eén North Star-metric.** Eén score die "word ik beter?" samenvat (richting:
+   therapietrouw/consistentie/herstel). Onderdelen werken daar naartoe; we tonen ze.
+
+Praktische toetssteen per PR: *(a)* kan elk nieuw advies zijn **waarom** tonen?
+*(b)* werkt het bij een gebruiker die ~60% uitvoert? *(c)* wat doet het bij weinig/
+geen data (veilig terugvallen)? *(d)* voegt het iets toe aan duidelijkheid,
+verantwoordelijkheid of consistentie?
+
 ## Structuur
 ```
 src/
@@ -72,9 +108,18 @@ Gedaan (✓):
   weekreview-gemiddelden in Voortgang; energie voedt de coach (`energieNudge`).
 
 Volgende fases:
+> Alle volgende fases bouwen we **explainable-first** en met oog op de North
+> Star-metric (zie Productprincipes). Een advies zonder "waarom" is niet af.
+- **Fase 4.5 — Vertrouwenslaag (NIEUW, eerst):** maak bestaande adviezen
+  *uitlegbaar*. Coach/planner geven `waarom` + databronnen + zekerheid; UI toont een
+  korte "waarom"-regel met detail achter een uitklap. Introduceer één **North
+  Star-score** (richting: therapietrouw/consistentie) op het dashboard + Voortgang.
+  Veilige terugval bij weinig data. Dit raakt vrijwel elk onderdeel en verhoogt de
+  waargenomen kwaliteit méér dan een nieuwe feature.
 - **Fase 5 — Periodisering & slimme coach:** acute:chronic load-ratio,
   RPE-gewogen belasting, trainingsblokken/periodisering, blessure-preventie-advies,
-  slimme aanbevelingen op basis van Garmin + zelfgerapporteerd.
+  slimme aanbevelingen op basis van Garmin + zelfgerapporteerd — **elk met
+  uitlegbare onderbouwing en een zekerheidsindicatie**.
 - **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
 - **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —
