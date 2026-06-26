@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
-import { getGarminDagCached, getCollection, subscribeCollection, addItem, setItem, deleteItem } from '../services/data';
+import { getGarminDagCached, getDagCached, getCollection, subscribeCollection, addItem, setItem, deleteItem } from '../services/data';
 import { garminSamenvatting } from '../services/garmin';
 import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
+import { reflectieSamenvatting, stemmingInfo } from '../services/reflectie';
 import { datumKey } from '../services/tijd';
 import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash, IcoBike } from '../components/Icons';
 import Gauge from '../components/Gauge';
@@ -39,6 +40,7 @@ export default function Voortgang() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [reeks, setReeks] = useState([]);
+  const [mind, setMind] = useState(null);
   const [taken, setTaken] = useState([]);
   const [doelen, setDoelen] = useState([]);
   const [garminVandaag, setGarminVandaag] = useState(null);
@@ -56,6 +58,13 @@ export default function Voortgang() {
       const r = dagen.map((d, i) => ({ datum: d, label: d.toLocaleDateString('nl-BE', { weekday: 'short' }), g: garminSamenvatting(garmin[i]) }));
       setReeks(r);
       setGarminVandaag(r[r.length - 1]?.g || null);
+      // Weekreview mindset: laatste 7 dagen check-ins (cache-eerst).
+      const week = laatsteDagen(7);
+      const dagDocs = await Promise.all(week.map((d) => getDagCached(user.uid, datumKey(d))));
+      setMind(reflectieSamenvatting(week.map((d, i) => ({
+        datum: datumKey(d), label: d.toLocaleDateString('nl-BE', { weekday: 'short' }),
+        checkin: dagDocs[i]?.checkin,
+      }))));
       setTaken((await getCollection(user.uid, 'taken')).filter((t) => t.type === 'gewoonte'));
       const acts = (await getCollection(user.uid, 'garminActivities')).map(activiteitInfo)
         .filter((a) => a.datum).sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 8);
@@ -108,6 +117,21 @@ export default function Voortgang() {
       <h1 style={{ margin: 0 }}>Voortgang</h1>
 
       <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} />
+
+      {/* Mindset-weekreview */}
+      {mind && mind.aantal > 0 && (
+        <section className="card stack">
+          <div className="card-title">Mindset · deze week</div>
+          <div className="row wrap" style={{ gap: 10 }}>
+            <MindStat label="Stemming" val={mind.stemming} emoji={stemmingInfo(Math.round(mind.stemming || 0))?.emoji} />
+            <MindStat label="Energie" val={mind.energie} suffix="/5" />
+            <MindStat label="Tevreden" val={mind.tevreden} emoji={stemmingInfo(Math.round(mind.tevreden || 0))?.emoji} />
+          </div>
+          <p className="small dim" style={{ margin: 0 }}>
+            Gemiddelde over {mind.aantal} {mind.aantal === 1 ? 'dag' : 'dagen'} met een check-in.
+          </p>
+        </section>
+      )}
 
       {/* Doelen */}
       <section className="card stack">
@@ -247,6 +271,17 @@ export default function Voortgang() {
           </div>
         ))}
       </section>
+    </div>
+  );
+}
+
+function MindStat({ label, val, emoji, suffix = '' }) {
+  return (
+    <div className="card tight grow" style={{ textAlign: 'center', minWidth: 92 }}>
+      <div style={{ fontSize: '1.3rem', fontWeight: 700 }}>
+        {val != null ? val : '—'}{val != null ? suffix : ''} {emoji || ''}
+      </div>
+      <div className="small dim">{label}</div>
     </div>
   );
 }

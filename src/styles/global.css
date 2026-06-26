@@ -143,6 +143,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .input::placeholder { color: var(--text-dim); }
 textarea.input { min-height: 80px; resize: vertical; }
 
+/* ---- Segment-schaal (stemming/energie-keuze) ---- */
+.seg { display: flex; gap: 8px; }
+.seg-btn {
+  flex: 1; min-height: 48px; display: grid; place-items: center;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text-muted); cursor: pointer;
+  transition: transform .12s var(--ease-out-quart), border-color .15s ease, background .15s ease;
+}
+.seg-btn:hover { border-color: var(--text-dim); }
+.seg-btn:active { transform: scale(.94); }
+.seg-btn.on {
+  border-color: var(--primary); color: var(--text);
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface-2));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
 /* ---- Voortgangsbalk ---- */
 .progress { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .progress > span { display: block; height: 100%; border-radius: 999px;

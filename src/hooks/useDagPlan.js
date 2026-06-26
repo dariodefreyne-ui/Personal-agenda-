@@ -62,7 +62,8 @@ export function useDagPlan(datumObj = new Date()) {
       if (!actief) return;
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
-        gedaan: dag?.gedaan || {}, werkModus, datum, dagKort, blessureActief, garminSync,
+        gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null,
+        werkModus, datum, dagKort, blessureActief, garminSync,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen
@@ -96,7 +97,16 @@ export function useDagPlan(datumObj = new Date()) {
     }
   }, [uid, datum, staat.gedaan, staat.taken]);
 
+  // Check-in (stemming/energie 's ochtends, reflectie 's avonds) bewaren.
+  // `deel` is bv. { ochtend: {...} } of { avond: {...} }; wordt samengevoegd.
+  const bewaarCheckin = useCallback(async (deel) => {
+    if (!uid) return;
+    const nieuw = { ...(staat.checkin || {}), ...deel };
+    setStaat((s) => ({ ...s, checkin: nieuw }));
+    await saveDag(uid, datum, { checkin: nieuw });
+  }, [uid, datum, staat.checkin]);
+
   const herlaad = useCallback(() => setVersie((v) => v + 1), []);
 
-  return { ...staat, toggleBlok, herlaad };
+  return { ...staat, toggleBlok, bewaarCheckin, herlaad };
 }

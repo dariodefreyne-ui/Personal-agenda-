@@ -101,6 +101,17 @@ export async function saveDag(uid, datum, data) {
     { ...data, datum, bijgewerktOp: serverTimestamp() }, { merge: true });
 }
 
+// Dag-doc cache-eerst (historische dagen wijzigen niet meer → bespaart reads).
+export async function getDagCached(uid, datum) {
+  const ref = doc(db, ...u(uid, 'dagen', datum));
+  try {
+    const c = await getDocFromCache(ref);
+    if (c.exists()) return { id: c.id, ...c.data() };
+  } catch { /* nog niet in cache */ }
+  const s = await getDoc(ref);
+  return s.exists() ? { id: s.id, ...s.data() } : null;
+}
+
 // ---- Garmin (alleen-lezen) ----
 export async function getGarminDag(uid, datum) {
   return getDocById(uid, 'garminDaily', datum);

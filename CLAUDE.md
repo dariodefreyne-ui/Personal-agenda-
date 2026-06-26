@@ -15,6 +15,8 @@ src/
     planner.js            genereert dagindeling uit werkmodus + ankers + advies
     tijd.js               tijd/datum/week-helpers
     garmin.js             leest ruwe Garmin-dag uit tot samenvatting
+    coach.js              Garmin + zelfrapportage -> sportadvies (niveau/duur)
+    reflectie.js          stemming/energie/tevredenheid-schalen + trend-helpers
     push.js               FCM-token registreren (client)
     taken.js              afvinken + streaks
   hooks/useDagPlan.js     laadt dagdata, berekent + persisteert plan
@@ -36,7 +38,8 @@ taken/{id}                gewoonte/eenmalig + streak
 takenLog/{datum_taakId}
 reva/{id}                 oefening + blessureActief
 maaltijden/{id}
-dagen/{YYYY-MM-DD}        { gedaan{blokId}, checkin, plan[], pushLog{} }
+dagen/{YYYY-MM-DD}        { gedaan{blokId}, plan[], pushLog{},
+                           checkin: { ochtend{stemming,energie}, avond{tevreden,dankbaar,reflectie} } }
 garminDaily/{datum}       server-only (Admin SDK)
 agendaEvents/{id}         server-only (icsSync)
 weer/{datum}              server-only (weerSync)
@@ -52,20 +55,33 @@ Top-level `mail/` = Trigger-Email-extensie (afzendernaam = app-naam).
 - Per-slot push leest het door de app weggeschreven `dagen/{datum}.plan`.
 - Functions = CommonJS; gebruik Node 22 global `fetch`.
 
-## Roadmap (volgende fases)
-Fases 1-3 (skelet, beheer, push/functions) + audit-ronde zijn af. Onthouden:
-- **Fase 4 — Onboarding & personalisatie:** eerste-keer-wizard (naam, doelen,
-  ritme thuis/kantoor, sporttijden), profiel (leeftijd/gewicht/lengte) zodat
-  Garmin-analyse leeftijd/gewicht meeneemt; per-rubriek defaults vooraf invullen.
-- **Fase 5 — Mindset & reflectie:** dagelijkse journal + mood/energie-check-in,
-  korte avondreflectie, weekreview met trends; voedt de coach.
-- **Fase 6 — Periodisering & slimme coach:** acute:chronic load-ratio,
+## Roadmap
+Gedaan (✓):
+- **Fase 1 — Skelet:** Vite/React/Firebase/PWA, config (thema's, bloktypes,
+  werkmodi, DEFAULT_INSTELLINGEN).
+- **Fase 2 — Basis-app:** Auth (e-mail), 3 donkere thema's, app-shell + routing,
+  toasts.
+- **Fase 3 — Kern + beheer:** planning-engine + datamodel + Dashboard, no-code
+  in-app beheer (subpagina's), push (FCM) + Cloud Functions (dispatcher, icsSync,
+  weerSync, weekMail), babyproof README + deploy-workflow.
+- **Audit-ronde:** Firestore-reads beperkt (SettingsContext, cache-first Garmin),
+  "nieuwe versie"-banner, ErrorBoundary, motion-polish, ICS-tijdzone-fix,
+  plan alleen schrijven bij wijziging.
+- **Fase 4 — Mindset & reflectie:** ochtend-check-in (stemming + energie) en
+  avondreflectie (tevredenheid, dankbaarheid, journal) op het dashboard;
+  weekreview-gemiddelden in Voortgang; energie voedt de coach (`energieNudge`).
+
+Volgende fases:
+- **Fase 5 — Periodisering & slimme coach:** acute:chronic load-ratio,
   RPE-gewogen belasting, trainingsblokken/periodisering, blessure-preventie-advies,
   slimme aanbevelingen op basis van Garmin + zelfgerapporteerd.
-- **Fase 7 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
+- **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
-- **Fase 8 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —
+- **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —
   alleen als de kern stabiel is.
+- **Fase 8 — Onboarding & personalisatie (laatst):** eerste-keer-wizard (naam,
+  doelen, ritme thuis/kantoor, sporttijden), profiel (leeftijd/gewicht/lengte)
+  zodat Garmin-analyse die meeneemt. Lage prioriteit: app is voorlopig single-user.
 
 ## Build / deploy
 - `npm run dev` / `npm run build` (genereert `public/firebase-messaging-sw.js`).

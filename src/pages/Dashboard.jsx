@@ -6,6 +6,7 @@ import { syncStatus } from '../services/garmin';
 import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
+import CheckinKaart from '../components/CheckinKaart';
 
 function tijdvak() {
   const h = new Date().getHours();
@@ -18,7 +19,7 @@ const datumLabel = () =>
   new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default function Dashboard() {
-  const { laden, plan, garmin, gedaan, toggleBlok, instellingen, blessureActief, garminSync } = useDagPlan();
+  const { laden, plan, garmin, gedaan, toggleBlok, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan();
   const [popId, setPopId] = useState(null);
 
   const checkbare = useMemo(
@@ -44,9 +45,13 @@ export default function Dashboard() {
       {/* Gezondheid: ring + inline stats (geen 4 identieke kaartjes) */}
       <GezondheidKaart garmin={garmin} garminSync={garminSync} i={1} />
 
+      {/* Dagelijkse check-in (stemming/energie 's ochtends, reflectie 's avonds) */}
+      <CheckinKaart checkin={checkin} bewaar={bewaarCheckin} i={2} />
+
       {/* Coach-advies van de dag */}
       {garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (
-        <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel} blessureActief={blessureActief} />
+        <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel}
+          blessureActief={blessureActief} energie={checkin?.ochtend?.energie} />
       )}
 
       {/* Belasting & herstel */}
