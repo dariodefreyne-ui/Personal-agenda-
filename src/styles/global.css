@@ -119,7 +119,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--surface-2); color: var(--text);
   border: 1px solid var(--border); border-radius: 12px;
   cursor: pointer; font-weight: 500;
-  transition: transform .12s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
+  transition: transform .12s var(--ease-out-quart), background .15s ease, border-color .15s ease, opacity .15s ease;
 }
 .btn:hover { border-color: var(--text-dim); }
 .btn:active { transform: scale(.97); }
@@ -147,7 +147,7 @@ textarea.input { min-height: 80px; resize: vertical; }
 .progress { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .progress > span { display: block; height: 100%; border-radius: 999px;
   background: linear-gradient(90deg, var(--primary), var(--primary-2));
-  transition: width .4s cubic-bezier(.2,.8,.2,1); }
+  transition: width .35s var(--ease-out-quart); }
 
 /* ---- Badge / chip ---- */
 .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
@@ -215,22 +215,20 @@ textarea.input { min-height: 80px; resize: vertical; }
 /* =========================================================================
    Beweging, diepte & persoonlijkheid
    ========================================================================= */
-@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-@keyframes popIn { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
-@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-@keyframes nowPulse { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent); } 50% { box-shadow: 0 0 0 7px transparent; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes popIn { from { transform: scale(.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes nowPing { 0% { transform: scale(1); opacity: .5; } 70%, 100% { transform: scale(2.4); opacity: 0; } }
 @keyframes auraDrift { 0% { transform: translate(-12%, -8%) scale(1); } 50% { transform: translate(10%, 6%) scale(1.15); } 100% { transform: translate(-12%, -8%) scale(1); } }
-@keyframes ringSweep { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
 
 /* Staggerde binnenkomst voor directe kinderen van .reveal */
-.reveal > * { animation: fadeUp .5s cubic-bezier(.16,1,.3,1) backwards; }
-.reveal > *:nth-child(1) { animation-delay: 40ms; }
-.reveal > *:nth-child(2) { animation-delay: 100ms; }
-.reveal > *:nth-child(3) { animation-delay: 160ms; }
-.reveal > *:nth-child(4) { animation-delay: 220ms; }
-.reveal > *:nth-child(5) { animation-delay: 280ms; }
-.reveal > *:nth-child(6) { animation-delay: 340ms; }
-.reveal > *:nth-child(n+7) { animation-delay: 400ms; }
+.reveal > * { animation: fadeUp .26s var(--ease-out-quint) backwards; }
+.reveal > *:nth-child(1) { animation-delay: 30ms; }
+.reveal > *:nth-child(2) { animation-delay: 65ms; }
+.reveal > *:nth-child(3) { animation-delay: 100ms; }
+.reveal > *:nth-child(4) { animation-delay: 135ms; }
+.reveal > *:nth-child(5) { animation-delay: 170ms; }
+.reveal > *:nth-child(6) { animation-delay: 200ms; }
+.reveal > *:nth-child(n+7) { animation-delay: 220ms; }
 
 /* Tijd-van-dag aura achter de hero */
 .hero { position: relative; isolation: isolate; padding: 8px 0 2px; }
@@ -252,7 +250,7 @@ textarea.input { min-height: 80px; resize: vertical; }
     conic-gradient(from -90deg, var(--primary), var(--primary-2) calc(var(--val) * 1%), var(--surface-2) 0);
   display: grid; place-items: center;
 }
-.ring.anim { animation: popIn .5s cubic-bezier(.16,1,.3,1) backwards; }
+.ring.anim { animation: popIn .24s var(--ease-out-quint) backwards; }
 .ring .ring-v { font-size: 1.35rem; font-weight: 700; line-height: 1; }
 .ring .ring-l { font-size: .62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; }
 
@@ -263,23 +261,23 @@ textarea.input { min-height: 80px; resize: vertical; }
 .stat .sl { font-size: .8rem; color: var(--text-muted); }
 .stat .si { color: var(--primary); }
 
-/* Voortgangsbalk met shimmer */
+/* Voortgangsbalk: gloed + gradient (geen oneindige shimmer) */
 .progress.shine > span {
-  background-image: linear-gradient(90deg, var(--primary), var(--primary-2), var(--primary));
-  background-size: 200% 100%; animation: shimmer 2.4s linear infinite;
+  background-image: linear-gradient(90deg, var(--primary), var(--primary-2));
 }
 
 /* Tijdlijn-spine + levende nu-indicator */
 .timeline { position: relative; padding-left: 4px; }
-.tl-check.pop { animation: popIn .35s cubic-bezier(.16,1,.3,1); }
+.tl-check.pop { animation: popIn .2s var(--ease-out-quint); }
 .tl-body.now { position: relative; }
 .tl-body.now::after {
   content: 'nu'; position: absolute; top: -9px; right: 12px;
   font-size: .62rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
   color: var(--on-primary); background: var(--primary); padding: 1px 7px; border-radius: 999px;
 }
-.now-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--primary);
-  animation: nowPulse 2s ease-out infinite; flex: none; }
+.now-dot { position: relative; width: 12px; height: 12px; border-radius: 50%; background: var(--primary); flex: none; }
+.now-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: var(--primary);
+  animation: nowPing 2s var(--ease-out-quart) infinite; }
 
 .fab-press:active { transform: scale(.92); }
 
@@ -308,7 +306,13 @@ h1, h2, h3 { text-wrap: balance; }
 /* =========================================================================
    "Kosmos" look — gradient diepte, glas, gloeiende meters & orbs
    ========================================================================= */
-:root { --grad-cool: linear-gradient(135deg, #22d3ee, #6366f1); --grad-warm: linear-gradient(135deg, #a855f7, #ec4899); }
+:root {
+  --grad-cool: linear-gradient(135deg, #22d3ee, #6366f1);
+  --grad-warm: linear-gradient(135deg, #a855f7, #ec4899);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 body {
   background:
