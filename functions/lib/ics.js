@@ -6,21 +6,29 @@ function unfold(text) {
   return text.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '');
 }
 
-// "20240615T194500Z" / "20240615T194500" / "20240615" -> Date (UTC-benadering)
+const pad = (n) => String(n).padStart(2, '0');
+
+// "20240615T194500Z" (UTC) / "20240615T194500" (wandklok/TZID-lokaal) / "20240615" (hele dag).
+// De cijfers komen altijd in de UTC-velden; wallClock geeft aan of het al de
+// te tonen lokale tijd is (geen Z) of een echt UTC-instant (met Z).
 function parseDt(waarde) {
   if (!waarde) return null;
   const m = waarde.match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?(Z)?/);
   if (!m) return null;
   const [, y, mo, d, hh = '00', mm = '00', ss = '00', z] = m;
   const allDay = !waarde.includes('T');
-  if (z) return { date: new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0)), allDay };
-  // Geen Z: behandel als lokale tijd (Europe/Brussels-benadering via offset onbekend);
-  // we bewaren als "wandklok" door een Date in UTC met dezelfde cijfers te maken.
-  return { date: new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0)), allDay, floating: true };
+  const date = new Date(Date.UTC(+y, +mo - 1, +d, +hh, +mm, +ss || 0));
+  return { date, allDay, wallClock: !z };
 }
 
-// Format een Date naar lokale (Brussel) datum/uur strings.
-function lokaal(date) {
+// Naar te tonen datum/uur. Wandklok = cijfers zoals ze zijn; UTC-instant = naar Brussel.
+function fmtDt(date, wallClock) {
+  if (wallClock) {
+    return {
+      datum: `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`,
+      tijd: `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`,
+    };
+  }
   const fmt = new Intl.DateTimeFormat('nl-BE', {
     timeZone: 'Europe/Brussels', year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: false,
@@ -48,8 +56,8 @@ function parseIcs(text) {
     const rrule = veld('RRULE');
 
     const maakEvent = (startDate) => {
-      const s = lokaal(startDate);
-      const e = duurMs ? lokaal(new Date(startDate.getTime() + duurMs)) : null;
+      const s = fmtDt(startDate, dtStart.wallClock);
+      const e = duurMs ? fmtDt(new Date(startDate.getTime() + duurMs), dtStart.wallClock) : null;
       events.push({
         titel: summary,
         datum: s.datum,

@@ -15,6 +15,25 @@ describe('ICS-parser', () => {
     expect(out[0].eind).toBe('10:30');
   });
 
+  it('toont een TZID-lokale tijd als wandklok (18u blijft 18u, niet 20u)', () => {
+    const out = parseIcs(cal(ev([
+      'UID:tz', 'SUMMARY:Afspraak',
+      'DTSTART;TZID=Europe/Brussels:20260628T180000',
+      'DTEND;TZID=Europe/Brussels:20260628T190000',
+    ])));
+    expect(out).toHaveLength(1);
+    expect(out[0].start).toBe('18:00');
+    expect(out[0].eind).toBe('19:00');
+  });
+
+  it('toont een zwevende tijd (geen Z, geen TZID) als wandklok', () => {
+    const out = parseIcs(cal(ev([
+      'UID:fl', 'SUMMARY:Zwevend', 'DTSTART:20260628T180000', 'DTEND:20260628T193000',
+    ])));
+    expect(out[0].start).toBe('18:00');
+    expect(out[0].eind).toBe('19:30');
+  });
+
   it('herkent een hele-dag-afspraak', () => {
     const out = parseIcs(cal(ev(['UID:b', 'SUMMARY:Verlof', 'DTSTART;VALUE=DATE:20260705'])));
     expect(out[0].allDay).toBe(true);

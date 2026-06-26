@@ -52,6 +52,21 @@ Top-level `mail/` = Trigger-Email-extensie (afzendernaam = app-naam).
 - Per-slot push leest het door de app weggeschreven `dagen/{datum}.plan`.
 - Functions = CommonJS; gebruik Node 22 global `fetch`.
 
+## Roadmap (volgende fases)
+Fases 1-3 (skelet, beheer, push/functions) + audit-ronde zijn af. Onthouden:
+- **Fase 4 — Onboarding & personalisatie:** eerste-keer-wizard (naam, doelen,
+  ritme thuis/kantoor, sporttijden), profiel (leeftijd/gewicht/lengte) zodat
+  Garmin-analyse leeftijd/gewicht meeneemt; per-rubriek defaults vooraf invullen.
+- **Fase 5 — Mindset & reflectie:** dagelijkse journal + mood/energie-check-in,
+  korte avondreflectie, weekreview met trends; voedt de coach.
+- **Fase 6 — Periodisering & slimme coach:** acute:chronic load-ratio,
+  RPE-gewogen belasting, trainingsblokken/periodisering, blessure-preventie-advies,
+  slimme aanbevelingen op basis van Garmin + zelfgerapporteerd.
+- **Fase 7 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
+  (JSON/CSV), back-up/herstel, robuustere sync.
+- **Fase 8 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —
+  alleen als de kern stabiel is.
+
 ## Build / deploy
 - `npm run dev` / `npm run build` (genereert `public/firebase-messaging-sw.js`).
 - Deploy via GitHub Actions (`.github/workflows/deploy.yml`) op push naar `main`.
