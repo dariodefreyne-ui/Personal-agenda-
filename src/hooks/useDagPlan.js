@@ -42,13 +42,11 @@ export function useDagPlan(datumObj = new Date()) {
       // Vlaggen over ÁLLE overlappende vakantieperiodes (zie vakantieFlags).
       const { verlof, geenJudo } = vakantieFlags(vakanties, datum);
       const isWeekend = dagKort === 'za' || dagKort === 'zo';
-      // Effectief dagtype: expliciete keuze wint, anders verlofperiode -> 'verlof',
-      // anders weekend -> 'vrij'. Zo wordt er tijdens verlof geen werk gepland.
-      let werkModus = week?.dagen?.[dagKort] || null;
-      if (!werkModus) {
-        if (verlof) werkModus = 'verlof';
-        else if (isWeekend) werkModus = 'vrij';
-      }
+      // Effectief dagtype: verlofperiode wint altijd, ook over een eerder gezette
+      // expliciete dagmodus (retroactief verlof mag geen ingepland werk laten staan).
+      // Zonder verlof: expliciete keuze, anders weekend -> 'vrij'.
+      let werkModus = verlof ? 'verlof' : (week?.dagen?.[dagKort] || null);
+      if (!werkModus && isWeekend) werkModus = 'vrij';
       const blessureActief = (reva || []).some((r) => r.blessureActief);
       const isVakantie = !!week?.vakantie || verlof;
       const garminSam = garminSamenvatting(garmin);
