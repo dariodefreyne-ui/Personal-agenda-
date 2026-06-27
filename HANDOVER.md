@@ -5,7 +5,7 @@ Werkdocument voor wie verder bouwt. Geeft de **stand van zaken**, wat er onderwe
 valkuilen niet herhaalt) en een **concrete to-do per fase**. Lees ook `CLAUDE.md`
 (architectuur + datamodel) en `README.md` (babyproof setup/deploy).
 
-Laatst bijgewerkt: 27/06/2026.
+Laatst bijgewerkt: 27/06/2026 (avond).
 
 ---
 
@@ -53,8 +53,36 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
 - **Fase 5 — Periodisering (grotendeels):** **ACWR** uit RPE-gewogen belasting
   (`services/belasting.js`), uitlegbaar, voedt de coach (blessurepreventie) en
   toont in `BelastingKaart`.
+- **Garmin — HRV + stappen in de UI:** `services/garmin.js` leest nu ook
+  HRV-status/-gemiddelde uit; getoond op Dashboard en Gezondheid naast stappen
+  (die er al stonden). De coach (`services/coach.js`) neemt HRV mee in zowel
+  het niveau-advies (`hrvBijstelling`) als de zekerheid (`bepaalZekerheid`).
+- **Garmin-syncfrequentie:** `garmin-daily.yml` draait nu 6×/dag (elke 3u
+  tijdens wakkere uren) i.p.v. 1×/dag, zodat stappen/HR voelbaar bijschuiven
+  tijdens de dag. Een eerdere poging om dit met een **handmatige "Nu
+  synchroniseren"-knop** (Cloud Function `syncGarminNu` + GitHub-token-secret)
+  aan te vullen is **terug uitgerold** — het secret bleek niet in te stellen
+  vanuit Cloud Shell (geen werkende interactieve terminal-flow voor de
+  gebruiker). De cron-sync is en blijft de enige sync-methode; geen extra
+  secret nodig.
+- **Datumkiezer op het Dashboard (voor correcties op voorbije dagen):**
+  `pages/Dashboard.jsx` accepteert nu een gekozen datum (vorige/volgende dag +
+  `<input type="date">`, begrensd op vandaag — geen toekomst). `useDagPlan`
+  ondersteunde dit al via zijn `datumObj`-parameter; alleen de UI ontbrak.
+  Op een voorbije dag: Garmin-/voortgangskaarten en de tijdlijn blijven
+  werken (en blijven afvinkbaar — dat IS de correctie), maar dag-specifieke
+  "vandaag"-kaarten (check-in, North Star, coach-advies, belasting, "nu"-
+  markering in de tijdlijn, "Verzet") worden verborgen omdat ze ofwel
+  vandaag-gebonden state gebruiken (North Star/ACWR rekenen altijd vanaf de
+  *echte* huidige dag) ofwel betekenisloos zijn op een dag die al voorbij is
+  (Verzet schuift naar "later vandaag", wat op een oude datum fout zou zijn).
+  **Let op (niet opgelost):** `services/taken.js` → `zetTaakGedaan` telt
+  habit-streaks chronologisch (`laatsteGedaan` vs. "gisteren"); een
+  gewoonte-taak achteraf op een voorbije dag af- of uitvinken kan de streak
+  dus laten kloppen of net laten afwijken, afhankelijk van de volgorde. Geen
+  retroactieve streak-herrekening gebouwd — bewust uit scope gehouden.
 
-Tests: 64 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 70 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -173,6 +201,17 @@ Het bestaande uitlegbaar gemaakt — de grootste hefboom voor "premium":
       toont géén getal i.p.v. een misleidend cijfer).
 - [x] **Plan beweegt mee met gemiste blokken** — "Nog in te halen"-kaart met *Toch
       gedaan* / *Verzet* (`dagen/{datum}.verzet`, toegepast in `useDagPlan`).
+- [x] **Datumkiezer op het Dashboard** — voorbije dagen zijn nu navigeerbaar en
+      blokken blijven afvinkbaar (= de correctie), zonder dag-specifieke
+      "vandaag"-kaarten te tonen op een oude dag. Zie §2.
+- [ ] **Diepere dagcorrecties** (nog open, expliciet door gebruiker gevraagd):
+      exact tijdstip van ontbijt/maaltijd loggen, een niet-gepland ad-hoc-
+      activiteit toevoegen aan een (voorbije) dag, en Garmin-slaap/wektijd als
+      basis tonen met handmatige overschrijfmogelijkheid. De datumkiezer is de
+      voorwaarde hiervoor (gebouwd); de invoervelden zelf nog niet.
+- [ ] **Doelen + beloning** (nog open): dag-/maanddoelen (bv. stappen) met een
+      in-app badge/toast bij het behalen ervan — gebruiker koos expliciet voor
+      in-app i.p.v. push-notificatie.
 
 ### Fase 5 — Periodisering & slimme coach (grotendeels af)
 Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
