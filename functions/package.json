@@ -3,7 +3,7 @@
   "description": "Cloud Functions voor Personal Agenda (push, ICS, weer, mail)",
   "private": true,
   "main": "index.js",
-  "engines": { "node": "22" },
+  "engines": { "node": "22.22.0" },
   "scripts": {
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"

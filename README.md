@@ -274,15 +274,16 @@ merge naar `main`, en draai **Actions → Garmin Auth (token aanmaken)**. Downlo
 nadien het artifact `garmin-token`, kopieer de inhoud naar de secret
 `GARMIN_TOKENS_BASE64`.
 
-> **Krijg je `429 IP rate limited by Garmin`?** Garmin blokkeert datacenter-IP's
-> van GitHub. Wacht 30-60 min en probeer opnieuw, óf gebruik **Google Cloud Shell**
-> (<https://shell.cloud.google.com>, browser, gratis):
-> ```bash
-> pip install garminconnect
-> python3 -c "from garminconnect import Garmin; import base64,io,tarfile,os; g=Garmin('MAIL','WW'); g.login(); d=os.path.expanduser('~/.garminconnect'); os.makedirs(d,exist_ok=True); g.garth.dump(d); b=io.BytesIO(); t=tarfile.open(fileobj=b,mode='w'); t.add(d,arcname='.'); t.close(); print(base64.b64encode(b.getvalue()).decode())"
-> ```
-> De uitvoer is je `GARMIN_TOKENS_BASE64`. (Zet 2FA tijdelijk uit tijdens dit.)
-> De **dagelijkse sync** gebruikt de token (geen login-endpoint) en wordt niet 429't.
+> **Krijg je `429`/login mislukt?** `garmin.login()` doorloopt zelf een keten van
+> 5 strategieën (mobile/SSO-widget/portal, met TLS-impersonation) voor het opgeeft
+> — dat is **niet** louter een per-IP-rate-limit, Garmin's huidige rate-limit zit
+> per **account + clientId**. Wachten of vanaf een ander netwerk (Cloud Shell)
+> proberen helpt dus meestal niet. Test eerst of inloggen via de Garmin Connect-app
+> of garmin.com zelf nog probleemloos werkt — zo niet, dan is het account zelf
+> geblokkeerd (vaak op te lossen door het wachtwoord te wijzigen, wat de
+> serverside sessie reset) en niet iets dat dit script kan omzeilen.
+> De **dagelijkse sync** gebruikt enkel de opgeslagen token (geen login-endpoint)
+> en is hier dus niet door geraakt.
 
 Volledige geschiedenis inladen (optioneel, eenmalig):
 ```bash

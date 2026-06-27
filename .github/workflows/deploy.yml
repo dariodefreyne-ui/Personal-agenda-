@@ -19,7 +19,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Gepind (niet enkel "22"): een eerdere 22.x-patch brak node-fetch@2.
+          node-version: 22.22.0
           cache: npm
 
       - name: Install app dependencies
