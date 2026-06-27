@@ -7,7 +7,7 @@ import { syncStatus } from '../services/garmin';
 import { getDagCached, getCollection } from '../services/data';
 import { noordster } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
-import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock } from '../components/Icons';
+import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock, IcoPulse } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
 import CheckinKaart from '../components/CheckinKaart';
@@ -254,6 +254,8 @@ function GezondheidKaart({ garmin, garminSync, i }) {
           <div className="stat"><IcoFlame className="si" width={16} height={16} />
             <span className="sv">{garmin.stappen != null ? (garmin.stappen / 1000).toFixed(1) + 'k' : '—'}</span>
             <span className="sl">stappen</span></div>
+          <div className="stat"><IcoPulse className="si" width={16} height={16} />
+            <span className="sv">{garmin.hrvStatus || '—'}</span><span className="sl">HRV</span></div>
         </div>
       </div>
       {s.stale && !s.leeg && (
