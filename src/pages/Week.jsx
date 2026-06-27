@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { getDocById, setItem, subscribeCollection, addItem, deleteItem, getAgendaEvents } from '../services/data';
 import { vakantieVoorDatum, vakantieInWeek, vakantieLabel } from '../services/vakanties';
 import { WERK_MODI, DAG_NAMEN } from '../config/appConfig';
@@ -19,6 +20,8 @@ const LEEG_PERIODE = { naam: '', van: '', tot: '', geenJudo: true, verlof: true 
 export default function Week() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { instellingen } = useSettings();
+  const sport = instellingen?.sport || {};
   const [offset, setOffset] = useState(0);
   const [vakanties, setVakanties] = useState([]);
   const [nieuw, setNieuw] = useState(LEEG_PERIODE);
@@ -146,7 +149,13 @@ export default function Week() {
           const dDatum = datumKey(d);
           const isVandaag = dDatum === datumKey(new Date());
           const per = vakantieVoorDatum(vakanties, dDatum);
-          const judoDag = dk === 'wo' || dk === 'za';
+          // Judo voor deze dag uit je eigen instellingen (niet hardcoded), zodat de
+          // "judovrij"-status élke judo-dag dekt en live meegaat met de periode.
+          const lesgeven = (sport.judoLesgeven || []).filter((l) => l.dag === dk);
+          const eigenJudo = (sport.judoEigenClub || []).filter((t) => t.dag === dk);
+          const heeftJudo = lesgeven.length > 0 || eigenJudo.length > 0;
+          const judoTekst = lesgeven.length ? `judoles geven${lesgeven[0].start ? ' ' + lesgeven[0].start : ''}`
+            : eigenJudo.length ? `judotraining${eigenJudo[0].start ? ' ' + eigenJudo[0].start : ''}` : '';
           const dagEvents = agenda
             .filter((e) => e.datum === dDatum)
             .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
@@ -158,12 +167,12 @@ export default function Week() {
                   <div className="row" style={{ gap: 8 }}>
                     <span style={{ fontWeight: 600 }}>{DAG_NAMEN[dk]}</span>
                     {isVandaag && <span className="badge accent small">vandaag</span>}
-                    {per?.geenJudo && judoDag && <span className="badge warn small">judovrij</span>}
+                    {per?.geenJudo && heeftJudo && <span className="badge warn small">judovrij</span>}
                     {(per?.verlof || data.vakantie) && <span className="badge small">verlof</span>}
                   </div>
                   <div className="small dim">
                     {d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}
-                    {dk === 'wo' && (per?.geenJudo ? ' · geen les (vakantie)' : ' · judoles geven 18:30')}
+                    {heeftJudo && (per?.geenJudo ? ' · judovrij (vakantie)' : ` · ${judoTekst}`)}
                   </div>
                 </div>
                 <select className="select" style={{ width: 'auto', minWidth: 140 }}
