@@ -46,8 +46,15 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
   zelf-gerapporteerde **energie voedt de coach** (`services/reflectie.js` →
   `energieNudge`, verwerkt in `services/coach.js`). Opgeslagen in
   `dagen/{datum}.checkin`.
+- **Fase 4.5 — Vertrouwenslaag:** coach uitlegbaar (`waarom`/`databronnen`/
+  `zekerheid`/`meetlat` + UI-uitklap), veilige terugval, **North Star-consistentie-
+  score** (`services/noordster.js`) op Dashboard + Voortgang, en **adaptief inhalen**
+  van gemiste blokken (`dagen/{datum}.verzet`).
+- **Fase 5 — Periodisering (grotendeels):** **ACWR** uit RPE-gewogen belasting
+  (`services/belasting.js`), uitlegbaar, voedt de coach (blessurepreventie) en
+  toont in `BelastingKaart`.
 
-Tests: 49 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 64 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -156,27 +163,27 @@ Star-score. Dat verhoogt de waargenomen kwaliteit méér dan welke losse feature
 > Onthouden in `CLAUDE.md` onder "Roadmap". Onboarding staat bewust laatst.
 > **Alle fases: explainable-first.** Een advies zonder "waarom" is niet af.
 
-### Fase 4.5 — Vertrouwenslaag (NU AAN DE BEURT — vóór nieuwe features)
-Maak het bestaande uitlegbaar; dat is de grootste hefboom voor "premium":
-- [ ] **Advies-model met `waarom` + databronnen + `zekerheid`** in `services/coach.js`
-      (en planner-output). Elke kaart toont een korte "waarom"-regel; detail in een
-      uitklap. Voorbeeld: *"Volume −15% vandaag — want: laatste set vorige week
-      mislukt, HRV −9%, 6u42 slaap, RPE hoger dan normaal. Zekerheid: gemiddeld."*
-- [ ] **North Star-score** (therapietrouw/consistentie) berekenen uit afgevinkte
-      blokken + check-ins, tonen op Dashboard en Voortgang.
-- [ ] **Veilige terugval bij weinig/geen data** (conservatief advies + "weinig data"-
-      label) — nooit stellig op wankele basis.
-- [ ] **Plan beweegt mee met gemiste blokken** (inhalen/herschikken i.p.v. stil falen).
+### Fase 4.5 — Vertrouwenslaag ✓ (af)
+Het bestaande uitlegbaar gemaakt — de grootste hefboom voor "premium":
+- [x] **Advies-model met `waarom` + `databronnen` + `zekerheid` + `meetlat`** in
+      `services/coach.js`; `CoachKaart` toont een korte "waarom"-regel + uitklap.
+- [x] **North Star-score** (therapietrouw, `services/noordster.js`) op Dashboard +
+      Voortgang, met uitleg.
+- [x] **Veilige terugval bij weinig data** (lage zekerheid → geen 'hard'; North Star
+      toont géén getal i.p.v. een misleidend cijfer).
+- [x] **Plan beweegt mee met gemiste blokken** — "Nog in te halen"-kaart met *Toch
+      gedaan* / *Verzet* (`dagen/{datum}.verzet`, toegepast in `useDagPlan`).
 
-### Fase 5 — Periodisering & slimme coach
+### Fase 5 — Periodisering & slimme coach (grotendeels af)
 Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
-- [ ] **Acute:Chronic load-ratio** (ACWR) berekenen uit trainingsbelasting.
-- [ ] **RPE-gewogen belasting** (de RPE-invoer per activiteit bestaat al in Voortgang;
-      koppel die aan een belastingsmodel).
-- [ ] **Trainingsblokken / periodisering** (opbouw- vs herstelweken).
-- [ ] **Blessure-preventie-advies** op basis van belasting + zelfrapportage.
-- [ ] Coach-advies verfijnen met bovenstaande signalen (`services/coach.js`,
-      `services/belasting.js`).
+- [x] **Acute:Chronic load-ratio (ACWR)** — `services/belasting.js` → `acwrBerekenen`,
+      met zones (laag/optimaal/verhoogd/risico), zekerheid + uitleg.
+- [x] **RPE-gewogen belasting** — `sessieBelasting()` (sRPE = duur × RPE) uit de
+      RPE-invoer in Voortgang.
+- [x] **Blessure-preventie-advies** — ACWR voedt de coach (`acwrZone` → conservatiever
+      bij risico) en toont waarschuwing in `BelastingKaart`.
+- [ ] **Trainingsblokken / periodisering** (expliciete opbouw- vs deload-weken) — nog
+      open; ACWR geeft nu al de richting.
 
 ### Fase 6 — Veerkracht & data
 - [ ] **Strava-fallback** als Garmin faalt (zie §4.4).

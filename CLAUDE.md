@@ -75,7 +75,8 @@ taken/{id}                gewoonte/eenmalig + streak
 takenLog/{datum_taakId}
 reva/{id}                 oefening + blessureActief
 maaltijden/{id}
-dagen/{YYYY-MM-DD}        { gedaan{blokId}, plan[], pushLog{},
+dagen/{YYYY-MM-DD}        { gedaan{blokId}, plan[] (incl. checkbaar/sleutel),
+                           pushLog{}, verzet{blokId:{start,eind}} (ingehaalde blokken),
                            checkin: { ochtend{stemming,energie}, avond{tevreden,dankbaar,reflectie} } }
 garminDaily/{datum}       server-only (Admin SDK)
 agendaEvents/{id}         server-only (icsSync)
@@ -111,17 +112,19 @@ Gedaan (✓):
 Volgende fases:
 > Alle volgende fases bouwen we **explainable-first** en met oog op de North
 > Star-metric (zie Productprincipes). Een advies zonder "waarom" is niet af.
-- **Fase 4.5 — Vertrouwenslaag (grotendeels ✓):** coach-advies is nu *uitlegbaar*
+- **Fase 4.5 — Vertrouwenslaag (✓):** coach-advies is *uitlegbaar*
   (`waarom` + `databronnen` + `zekerheid` + `meetlat`; UI: korte "waarom"-regel +
   uitklap), met **veilige terugval** (lage zekerheid → geen 'hard'). **North
-  Star-score** (therapietrouw, `services/noordster.js`) staat op Dashboard +
-  Voortgang, met uitleg en veilige terugval bij weinig data.
-  Nog open: **plan laten meebewegen met gemiste blokken** (inhalen/herschikken
-  i.p.v. stil falen).
-- **Fase 5 — Periodisering & slimme coach:** acute:chronic load-ratio,
-  RPE-gewogen belasting, trainingsblokken/periodisering, blessure-preventie-advies,
-  slimme aanbevelingen op basis van Garmin + zelfgerapporteerd — **elk met
-  uitlegbare onderbouwing en een zekerheidsindicatie**.
+  Star-score** (therapietrouw, `services/noordster.js`) op Dashboard + Voortgang,
+  met uitleg en veilige terugval. **Plan beweegt mee met gemiste blokken**:
+  "Nog in te halen"-kaart met *Toch gedaan* / *Verzet* (→ `dagen/{datum}.verzet`,
+  toegepast in `useDagPlan`).
+- **Fase 5 — Periodisering & slimme coach (grotendeels ✓):** **ACWR**
+  (acute:chronic, `services/belasting.js` → `acwrBerekenen`) uit **RPE-gewogen
+  sRPE-belasting** (`sessieBelasting`), met zones (laag/optimaal/verhoogd/risico),
+  zekerheid en uitleg. Voedt de coach (`acwrZone` → conservatiever bij risico) en
+  toont blessurepreventie in `BelastingKaart`. Veilige terugval bij weinig data.
+  Nog open: expliciete **trainingsblokken/periodisering-weken** (opbouw vs deload).
 - **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
 - **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —

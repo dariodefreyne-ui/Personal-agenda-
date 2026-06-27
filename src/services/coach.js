@@ -89,7 +89,7 @@ const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
 
 export function coachAdvies({
   readiness = null, bodyBattery = null, slaapUren = null, energie = null,
-  goal = 'algemeen', blessureActief = false, overbelast = false,
+  goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
   let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast });
@@ -98,6 +98,14 @@ export function coachAdvies({
   // Beoordeeld op je slechtste advies: 'hard' enkel bij hoge zekerheid (≥2 signalen).
   let voorzichtig = false;
   if (zekerheid !== 'hoog' && niveau === 'hard') { niveau = 'matig'; voorzichtig = true; }
+
+  // Periodisering (ACWR): te snelle opbouw remt het advies af (blessurepreventie).
+  let acwrRem = null;
+  if (acwrZone === 'risico' && NIVEAU_RANG.indexOf(niveau) > NIVEAU_RANG.indexOf('rustig')) {
+    niveau = 'rustig'; acwrRem = 'risico';
+  } else if (acwrZone === 'verhoogd' && niveau === 'hard') {
+    niveau = 'matig'; acwrRem = 'verhoogd';
+  }
   const advies = MATRIX[doel][niveau];
 
   // "Waarom": de signalen die het advies dragen (mensbaar geformuleerd).
@@ -108,6 +116,8 @@ export function coachAdvies({
   if (bodyBattery != null) waarom.push(`Body battery ${Math.round(bodyBattery)}.`);
   if (typeof slaapUren === 'number') waarom.push(`${slaapUren.toFixed(1)}u slaap.`);
   if (typeof energie === 'number') waarom.push(`Je gaf energie ${energie}/5 op.`);
+  if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
+  if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
   if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
   if (!waarom.length) waarom.push('Nog geen meetdata vandaag — dit is een veilig algemeen advies.');
 

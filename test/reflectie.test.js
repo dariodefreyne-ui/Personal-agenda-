@@ -89,4 +89,12 @@ describe('coach — uitlegbaarheid & veilige terugval (Fase 4.5)', () => {
     expect(a.zekerheid).not.toBe('hoog');
     expect(a.niveau).not.toBe('hard');
   });
+
+  it('ACWR-risico tempert het advies en legt uit waarom', () => {
+    const vol = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht' });
+    const risico = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht', acwrZone: 'risico' });
+    const rang = { herstel: 0, rustig: 1, matig: 2, hard: 3 };
+    expect(rang[risico.niveau]).toBeLessThan(rang[vol.niveau]);
+    expect(risico.waarom.join(' ')).toMatch(/blessurerisico/i);
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getGarminDagCached, getDagCached, getCollection, subscribeCollection, addItem, setItem, deleteItem } from '../services/data';
@@ -6,6 +6,7 @@ import { garminSamenvatting } from '../services/garmin';
 import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
 import { reflectieSamenvatting, stemmingInfo } from '../services/reflectie';
 import { noordster } from '../services/noordster';
+import { acwrBerekenen, sessieBelasting } from '../services/belasting';
 import { datumKey } from '../services/tijd';
 import NoordsterKaart from '../components/NoordsterKaart';
 import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash, IcoBike, IcoEdit } from '../components/Icons';
@@ -72,7 +73,7 @@ export default function Voortgang() {
       setNs(noordster(dagDocs));
       setTaken((await getCollection(user.uid, 'taken')).filter((t) => t.type === 'gewoonte'));
       const acts = (await getCollection(user.uid, 'garminActivities')).map(activiteitInfo)
-        .filter((a) => a.datum).sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 8);
+        .filter((a) => a.datum).sort((a, b) => b.datum.localeCompare(a.datum));
       setActiviteiten(acts);
       setLaden(false);
     })();
@@ -83,6 +84,10 @@ export default function Voortgang() {
   }, [user]);
 
   const zetRpe = (id, val) => setItem(user.uid, 'activiteitLog', id, { rpe: val });
+
+  // ACWR (opbouw-ratio) uit sRPE-belasting van de activiteiten — herberekent als
+  // er RPE's bijkomen. Uitlegbaar + veilige terugval bij te weinig data.
+  const acwr = useMemo(() => acwrBerekenen(sessieBelasting(activiteiten, rpe)), [activiteiten, rpe]);
 
   const startBewerken = (d) => {
     setEditId(d.id);
@@ -140,7 +145,7 @@ export default function Voortgang() {
 
       <NoordsterKaart ns={ns} />
 
-      <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} />
+      <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} acwr={acwr} />
 
       {/* Mindset-weekreview */}
       {mind && mind.aantal > 0 && (
@@ -265,7 +270,7 @@ export default function Voortgang() {
         {activiteiten.length === 0 && (
           <p className="small muted" style={{ margin: 0 }}>Nog geen Garmin-activiteiten gesynct. Na een training verschijnen ze hier.</p>
         )}
-        {activiteiten.map((a) => (
+        {activiteiten.slice(0, 8).map((a) => (
           <div className="stack" key={a.id} style={{ gap: 6, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
             <div className="row between">
               <div style={{ minWidth: 0 }}>
