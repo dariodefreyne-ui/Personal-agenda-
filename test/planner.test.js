@@ -32,6 +32,14 @@ describe('genereerDagPlan', () => {
     expect(plan.advies.tekst.some((x) => /Judovrij/.test(x))).toBe(true);
   });
 
+  it('slaapblok loopt tot het opstaan-uur (geen 1-minuut-blok)', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis' });
+    const slaap = plan.blokken.find((b) => b.type === 'slaap');
+    expect(slaap).toBeTruthy();
+    expect(slaap.eind).toBe(I.algemeen.opstaan); // eindigt op het opstaan-uur
+    expect(slaap.eind).not.toBe(slaap.start);     // niet 1 minuut
+  });
+
   it('judoles geven vervalt tijdens vakantie', () => {
     const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'verlof', isVakantie: true });
     expect(titels(plan).some((x) => /Judoles geven/.test(x))).toBe(false);

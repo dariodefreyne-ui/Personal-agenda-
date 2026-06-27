@@ -164,9 +164,12 @@ export function genereerDagPlan({
     }
   }
 
-  // 8) Afbouwen + slaap
+  // 8) Afbouwen + slaap. Het slaapblok loopt van bedtijd tot het opstaan-uur
+  //    (over middernacht heen), niet een betekenisloos 1-minuut-blok.
+  const slaapDuurMin = ((toMin(opstaan) - toMin(slapen)) + 1440) % 1440 || 480;
   maakBlok(blok, addMin(slapen, -30), slapen, 'Afbouwen — scherm weg, klaarmaken', 'scherm', { bron: 'routine' });
-  maakBlok(blok, slapen, addMin(slapen, 1), 'Slapen', 'slaap', { bron: 'routine', push: true });
+  maakBlok(blok, slapen, opstaan, 'Slapen', 'slaap',
+    { bron: 'routine', push: true, detail: `±${(slaapDuurMin / 60).toFixed(1).replace('.0', '')}u tot ${opstaan}` });
 
   // Sorteer op starttijd
   blok.sort((a, b) => toMin(a.start) - toMin(b.start));
