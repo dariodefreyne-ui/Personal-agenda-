@@ -7,7 +7,7 @@ import { syncStatus } from '../services/garmin';
 import { getDagCached, getCollection } from '../services/data';
 import { noordster } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
-import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock, IcoPulse, IcoChevron } from '../components/Icons';
+import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock, IcoPulse, IcoChevron, IcoEdit } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
 import CheckinKaart from '../components/CheckinKaart';
@@ -29,11 +29,14 @@ export default function Dashboard() {
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
   const kiesDatum = (str) => str && setDatumObj(new Date(str + 'T12:00:00'));
 
-  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan(datumObj);
+  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan(datumObj);
   const { user } = useAuth();
   const [popId, setPopId] = useState(null);
   const [ns, setNs] = useState(null);
   const [acwr, setAcwr] = useState(null);
+  const [editId, setEditId] = useState(null);
+  const [editStart, setEditStart] = useState('');
+  const [editEind, setEditEind] = useState('');
 
   // Opbouw-ratio (ACWR) voor de coach — 1× per sessie laden (geen herlaad bij toggle).
   useEffect(() => {
@@ -79,6 +82,15 @@ export default function Dashboard() {
   const now = nuMin();
   const vak = tijdvak();
   const tik = (id, taakId) => { setPopId(id); toggleBlok(id, taakId); setTimeout(() => setPopId(null), 360); };
+
+  // Tijd van een blok aanpassen — bewerkbaar op elke dag, niet enkel gemiste blokken.
+  const beginBewerken = (b) => { setEditId(b.id); setEditStart(b.start); setEditEind(b.eind); };
+  const stopBewerken = () => setEditId(null);
+  const bewaarBewerking = () => {
+    if (toMin(editEind) <= toMin(editStart)) return;
+    wijzigBlokTijd(editId, editStart, editEind);
+    setEditId(null);
+  };
 
   // Gemiste sleutelblokken: vandaag enkel de voorbije + niet-afgevinkte; op een
   // voorbije dag is de hele dag al "voorbij", dus telt elk nog open blok.
@@ -219,6 +231,7 @@ export default function Dashboard() {
             const isNu = isToday && toMin(b.start) <= now && now < toMin(b.eind);
             const checkbaar = checkbare.some((c) => c.id === b.id);
             const on = !!gedaan?.[b.id];
+            const bewerkt = editId === b.id;
             return (
               <div className="tl-item" key={b.id}>
                 <div className="tl-time row" style={{ gap: 6, justifyContent: 'flex-end' }}>
@@ -230,12 +243,33 @@ export default function Dashboard() {
                     <div className="tl-title">
                       {b.titel}{b.conflict && <span className="badge bad small" style={{ marginLeft: 8 }}>conflict</span>}
                     </div>
-                    <div className="small dim">
-                      {b.start}–{b.eind} · {BLOK_TYPES[b.type]?.naam || b.type}
-                      {b.detail ? ` · ${b.detail}` : ''}
-                    </div>
+                    {bewerkt ? (
+                      <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                        <input type="time" className="input sm" value={editStart}
+                          onChange={(e) => setEditStart(e.target.value)} />
+                        <span className="dim">–</span>
+                        <input type="time" className="input sm" value={editEind}
+                          onChange={(e) => setEditEind(e.target.value)} />
+                        <button className="btn sm primary" onClick={bewaarBewerking}>Bewaar</button>
+                        <button className="btn sm" onClick={stopBewerken}>Annuleer</button>
+                      </div>
+                    ) : (
+                      <div className="small dim">
+                        {b.start}–{b.eind} · {BLOK_TYPES[b.type]?.naam || b.type}
+                        {b.detail ? ` · ${b.detail}` : ''}
+                        {b.verzet && (
+                          <button className="btn sm ghost" style={{ marginLeft: 8, padding: '0 6px' }}
+                            onClick={() => herstelBlokTijd(b.id)}>Terug naar gepland tijdstip</button>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {checkbaar && (
+                  {!bewerkt && (
+                    <button className="icon-btn" aria-label="Tijd aanpassen" onClick={() => beginBewerken(b)}>
+                      <IcoEdit width={16} height={16} />
+                    </button>
+                  )}
+                  {checkbaar && !bewerkt && (
                     <button className={'tl-check' + (on ? ' on' : '') + (popId === b.id ? ' pop' : '')}
                       onClick={() => tik(b.id, b.taakId)}
                       aria-label={on ? 'Ongedaan maken' : 'Afvinken'}>
