@@ -9,8 +9,12 @@
 // =========================================================================
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { parseIcs, icsDiagnose } = require('./lib/ics');
+
+const GITHUB_TOKEN = defineSecret('GITHUB_TOKEN');
+const GITHUB_REPO = 'dariodefreyne-ui/Personal-agenda-';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -275,6 +279,33 @@ exports.syncAgendaNu = onCall({ region: REGIO }, async (request) => {
   const uid = request.auth && request.auth.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Aanmelden vereist.');
   return await syncGebruikerAgenda(db.collection('users').doc(uid));
+});
+
+// Directe Garmin-sync op verzoek vanuit de app ("Garmin nu synchroniseren").
+// Triggert de bestaande garmin-daily.yml-workflow via de GitHub Actions API
+// in plaats van zelf Garmin aan te roepen — de Python-pijplijn en de
+// opgeslagen tokens blijven zo de enige plek die met Garmin praat.
+exports.syncGarminNu = onCall({ region: REGIO, secrets: [GITHUB_TOKEN] }, async (request) => {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Aanmelden vereist.');
+
+  const res = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/garmin-daily.yml/dispatches`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${GITHUB_TOKEN.value()}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ref: 'Main', inputs: { days_back: '1' } }),
+    }
+  );
+  if (!res.ok) {
+    const tekst = await res.text().catch(() => '');
+    throw new HttpsError('internal', `GitHub-trigger mislukt (${res.status}): ${tekst.slice(0, 200)}`);
+  }
+  return { gestart: true };
 });
 
 // =========================================================================

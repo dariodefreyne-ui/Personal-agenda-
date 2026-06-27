@@ -2,6 +2,18 @@
 // De pipeline bewaart de onbewerkte Garmin-objecten; sleutels kunnen per
 // account licht verschillen, dus alles is best-effort met nette fallback.
 
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../firebase';
+
+// Triggert de Garmin-sync nu meteen (i.p.v. te wachten op de 3-uurlijkse cron).
+// De workflow draait op GitHub Actions en duurt ~1 minuut; dit start hem enkel.
+export async function syncGarminNu() {
+  const fns = getFunctions(app, 'europe-west1');
+  const call = httpsCallable(fns, 'syncGarminNu');
+  const res = await call();
+  return res.data; // { gestart: true }
+}
+
 function eersteGetal(...kandidaten) {
   for (const k of kandidaten) {
     const n = Number(k);

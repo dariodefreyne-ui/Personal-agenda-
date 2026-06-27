@@ -7,7 +7,7 @@ import {
   addItem, updateItem, deleteItem, getLaatsteGarminSync,
 } from '../services/data';
 import { useSettings } from '../contexts/SettingsContext';
-import { garminSamenvatting, syncStatus } from '../services/garmin';
+import { garminSamenvatting, syncStatus, syncGarminNu } from '../services/garmin';
 import { coachAdvies, DOELEN } from '../services/coach';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
@@ -24,6 +24,7 @@ export default function Gezondheid() {
   const [reva, setReva] = useState([]);
   const [nieuwReva, setNieuwReva] = useState('');
   const [sync, setSync] = useState(null);
+  const [garminSyncBezig, setGarminSyncBezig] = useState(false);
   const doel = instellingen?.gezondheid?.doel || 'algemeen';
 
   useEffect(() => {
@@ -44,6 +45,18 @@ export default function Gezondheid() {
   const bewaarCheckin = async () => {
     await saveDag(user.uid, datum, { checkin });
     toast('Check-in bewaard. Je planning houdt hier rekening mee.');
+  };
+
+  const syncGarmin = async () => {
+    setGarminSyncBezig(true);
+    try {
+      await syncGarminNu();
+      toast('Garmin-sync gestart — duurt ~1 minuut, daarna automatisch verversen.');
+    } catch (e) {
+      toast(e?.message || 'Garmin-sync starten mislukt.');
+    } finally {
+      setGarminSyncBezig(false);
+    }
   };
 
   const voegRevaToe = async () => {
@@ -78,7 +91,12 @@ export default function Gezondheid() {
 
       {/* Garmin: gauges + profiel */}
       <section className="card stack">
-        <div className="card-title">Garmin — vandaag</div>
+        <div className="row between">
+          <div className="card-title" style={{ margin: 0 }}>Garmin — vandaag</div>
+          <button className="btn sm" onClick={syncGarmin} disabled={garminSyncBezig}>
+            {garminSyncBezig ? 'Starten…' : 'Nu synchroniseren'}
+          </button>
+        </div>
         {garmin ? (
           <>
             <div className="row wrap" style={{ gap: 18, justifyContent: 'center' }}>

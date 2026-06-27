@@ -2,8 +2,10 @@ name: Garmin Daily Sync
 
 on:
   schedule:
-    # 05:15 UTC every day -- after the night's data has settled.
-    - cron: "15 5 * * *"
+    # Elke 3u tijdens wakkere uren (Brussel CEST, UTC+2 in de zomer) zodat
+    # stappen/HR voelbaar bijschuiven tijdens de dag, plus 05:00 UTC als
+    # vroege ochtendsync voor de afgelopen nacht.
+    - cron: "0 5,8,11,14,17,20 * * *"
   workflow_dispatch:
     inputs:
       days_back:
