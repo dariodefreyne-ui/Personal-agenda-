@@ -1,0 +1,42 @@
+name: Garmin Backfill (historiek)
+
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "Startdatum YYYY-MM-DD"
+        required: true
+      end:
+        description: "Einddatum YYYY-MM-DD (leeg = vandaag)"
+        required: false
+      delay:
+        description: "Seconden wachten tussen dagen (default 0.7)"
+        required: false
+        default: "0.7"
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run backfill
+        env:
+          GARMIN_TOKENS_BASE64: ${{ secrets.GARMIN_TOKENS_BASE64 }}
+          GARMIN_IS_CN: ${{ vars.GARMIN_IS_CN }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIRESTORE_PROJECT_ID: ${{ secrets.FIRESTORE_PROJECT_ID }}
+          FIRESTORE_USER_ID: ${{ secrets.FIRESTORE_USER_ID }}
+        run: |
+          python -m garmin.backfill \
+            --start "${{ github.event.inputs.start }}" \
+            ${{ github.event.inputs.end != '' && format('--end {0}', github.event.inputs.end) || '' }} \
+            --delay "${{ github.event.inputs.delay || '0.7' }}"
