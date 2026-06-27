@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import {
   getCollection, getDocById, getGarminDag,
-  getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync, getVakanties,
+  getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync, getVakanties, verwijderVerzet,
 } from '../services/data';
 import { genereerDagPlan } from '../services/planner';
 import { garminSamenvatting } from '../services/garmin';
@@ -132,7 +132,28 @@ export function useDagPlan(datumObj = new Date()) {
     herlaad();
   }, [uid, datum, staat.plan, staat.verzet]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Direct een blok-tijd corrigeren — in tegenstelling tot verzetBlok (dat altijd
+  // naar "later vandaag" schuift) zet dit een willekeurig gekozen start/eind,
+  // op élke dag (ook voorbije). Opgeslagen in dagen/{datum}.verzet, net als verzetBlok.
+  const wijzigBlokTijd = useCallback(async (blokId, start, eind) => {
+    if (!uid) return;
+    const verzet = { ...(staat.verzet || {}), [blokId]: { start, eind } };
+    setStaat((s) => ({ ...s, verzet }));
+    await saveDag(uid, datum, { verzet });
+    herlaad();
+  }, [uid, datum, staat.verzet]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Herstelt een blok naar zijn oorspronkelijk gepland tijdstip.
+  const herstelBlokTijd = useCallback(async (blokId) => {
+    if (!uid) return;
+    const verzet = { ...(staat.verzet || {}) };
+    delete verzet[blokId];
+    setStaat((s) => ({ ...s, verzet }));
+    await verwijderVerzet(uid, datum, blokId);
+    herlaad();
+  }, [uid, datum, staat.verzet]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const herlaad = useCallback(() => setVersie((v) => v + 1), []);
 
-  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, herlaad };
+  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, wijzigBlokTijd, herstelBlokTijd, herlaad };
 }

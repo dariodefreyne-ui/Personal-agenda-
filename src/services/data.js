@@ -1,6 +1,6 @@
 // Firestore-datalaag. Alles leeft onder users/{uid}/...
 import {
-  doc, getDoc, getDocFromCache, setDoc, updateDoc, deleteDoc, collection, getDocs,
+  doc, getDoc, getDocFromCache, setDoc, updateDoc, deleteDoc, deleteField, collection, getDocs,
   getDocsFromServer, query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -99,6 +99,14 @@ export async function getDag(uid, datum) {
 export async function saveDag(uid, datum, data) {
   await setDoc(doc(db, ...u(uid, 'dagen', datum)),
     { ...data, datum, bijgewerktOp: serverTimestamp() }, { merge: true });
+}
+
+// Verwijdert één blok-correctie (terug naar het oorspronkelijk gepland tijdstip).
+// Gebruikt deleteField() zodat enkel die sleutel uit de verzet-map verdwijnt,
+// in plaats van de hele map te overschrijven (merge:true zou anders niets wissen).
+export async function verwijderVerzet(uid, datum, blokId) {
+  await setDoc(doc(db, ...u(uid, 'dagen', datum)),
+    { [`verzet.${blokId}`]: deleteField(), bijgewerktOp: serverTimestamp() }, { merge: true });
 }
 
 // Dag-doc cache-eerst (historische dagen wijzigen niet meer → bespaart reads).
