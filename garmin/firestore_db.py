@@ -23,6 +23,25 @@ log = logging.getLogger(__name__)
 _db = None
 
 
+def _sanitize(value):
+    """Firestore staat geen array-in-array toe (enkel maps in arrays).
+
+    Garmin-intraday-reeksen (hartslag/HRV/stappen) komen terug als lijsten van
+    lijsten, bv. [[timestamp, waarde], ...] -- die crashen de write met
+    "Property array contains an invalid nested entity". Wrap geneste lijsten
+    om tot maps (index -> waarde) zodat Firestore ze accepteert.
+    """
+    if isinstance(value, dict):
+        return {k: _sanitize(v) for k, v in value.items()}
+    if isinstance(value, list):
+        sanitized = [_sanitize(v) for v in value]
+        return [
+            {str(i): item for i, item in enumerate(v)} if isinstance(v, list) else v
+            for v in sanitized
+        ]
+    return value
+
+
 def get_db():
     global _db
     if _db is not None:
@@ -55,7 +74,7 @@ def _user_doc():
 
 
 def write_daily(date_str: str, data: dict) -> None:
-    payload = dict(data)
+    payload = _sanitize(data)
     payload["syncedAt"] = firestore.SERVER_TIMESTAMP
     _user_doc().collection(config.DAILY_COLLECTION).document(date_str).set(
         payload, merge=True
@@ -63,7 +82,7 @@ def write_daily(date_str: str, data: dict) -> None:
 
 
 def write_activity(activity_id, data: dict) -> None:
-    payload = dict(data)
+    payload = _sanitize(data)
     payload["syncedAt"] = firestore.SERVER_TIMESTAMP
     _user_doc().collection(config.ACTIVITIES_COLLECTION).document(
         str(activity_id)
