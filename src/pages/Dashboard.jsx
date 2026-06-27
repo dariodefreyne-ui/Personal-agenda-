@@ -7,7 +7,7 @@ import { syncStatus } from '../services/garmin';
 import { getDagCached, getCollection } from '../services/data';
 import { noordster } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
-import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock, IcoPulse } from '../components/Icons';
+import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock, IcoPulse, IcoChevron } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
 import CheckinKaart from '../components/CheckinKaart';
@@ -20,11 +20,16 @@ function tijdvak() {
   if (h < 18) return { groet: 'Goeiemiddag', aura: '#2dd4bf' };
   return { groet: 'Goeienavond', aura: '#a78bfa' };
 }
-const datumLabel = () =>
-  new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+const datumLabel = (d = new Date()) =>
+  d.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default function Dashboard() {
-  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan();
+  const [datumObj, setDatumObj] = useState(() => new Date());
+  const isToday = datumKey(datumObj) === datumKey(new Date());
+  const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
+  const kiesDatum = (str) => str && setDatumObj(new Date(str + 'T12:00:00'));
+
+  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan(datumObj);
   const { user } = useAuth();
   const [popId, setPopId] = useState(null);
   const [ns, setNs] = useState(null);
@@ -75,38 +80,61 @@ export default function Dashboard() {
   const vak = tijdvak();
   const tik = (id, taakId) => { setPopId(id); toggleBlok(id, taakId); setTimeout(() => setPopId(null), 360); };
 
-  // Gemiste sleutelblokken (voorbij + niet afgevinkt) — geen stil falen, wel inhalen.
-  const gemist = checkbare.filter((b) => toMin(b.eind) <= now && !gedaan?.[b.id]);
+  // Gemiste sleutelblokken: vandaag enkel de voorbije + niet-afgevinkte; op een
+  // voorbije dag is de hele dag al "voorbij", dus telt elk nog open blok.
+  const gemist = isToday
+    ? checkbare.filter((b) => toMin(b.eind) <= now && !gedaan?.[b.id])
+    : checkbare.filter((b) => !gedaan?.[b.id]);
 
   return (
     <div className="stack reveal">
       <header className="hero" style={{ '--aura': vak.aura, '--i': 0 }}>
         <h1>{vak.groet}<span className="accent">.</span></h1>
-        <span className="muted" style={{ textTransform: 'capitalize' }}>{datumLabel()}</span>
+        <span className="muted" style={{ textTransform: 'capitalize' }}>{datumLabel(datumObj)}</span>
       </header>
+
+      {/* Datumkiezer: vorige/volgende dag of vrij kiezen, om correcties op voorbije dagen door te voeren */}
+      <div className="row between" style={{ '--i': 0, gap: 8 }}>
+        <button className="icon-btn" aria-label="Vorige dag" onClick={() => naarDag(-1)}>
+          <IcoChevron width={18} height={18} style={{ transform: 'rotate(180deg)' }} />
+        </button>
+        <input type="date" className="input sm" style={{ maxWidth: 170, textAlign: 'center' }}
+          value={datumKey(datumObj)} max={datumKey(new Date())}
+          onChange={(e) => kiesDatum(e.target.value)} />
+        <button className="icon-btn" aria-label="Volgende dag" onClick={() => naarDag(1)} disabled={isToday}>
+          <IcoChevron width={18} height={18} />
+        </button>
+        {!isToday && <button className="btn sm" onClick={() => setDatumObj(new Date())}>Vandaag</button>}
+      </div>
+      {!isToday && (
+        <p className="small muted" style={{ margin: 0 }}>
+          Je bekijkt een voorbije dag — vink blokken af om die dag te corrigeren. Wijzigingen aan
+          gewoonte-taken kunnen de streak-telling beïnvloeden.
+        </p>
+      )}
 
       {/* Gezondheid: ring + inline stats (geen 4 identieke kaartjes) */}
       <GezondheidKaart garmin={garmin} garminSync={garminSync} i={1} />
 
-      {/* Dagelijkse check-in (stemming/energie 's ochtends, reflectie 's avonds) */}
-      <CheckinKaart checkin={checkin} bewaar={bewaarCheckin} i={2} />
+      {/* Dagelijkse check-in (stemming/energie 's ochtends, reflectie 's avonds) — enkel vandaag */}
+      {isToday && <CheckinKaart checkin={checkin} bewaar={bewaarCheckin} i={2} />}
 
-      {/* North Star: consistentie over de laatste 7 dagen */}
-      {ns && ns.score != null && <NoordsterKaart ns={ns} i={2} />}
+      {/* North Star: consistentie over de laatste 7 dagen — enkel vandaag relevant */}
+      {isToday && ns && ns.score != null && <NoordsterKaart ns={ns} i={2} />}
 
-      {/* Coach-advies van de dag */}
-      {garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (
+      {/* Coach-advies van de dag — enkel vandaag */}
+      {isToday && garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (
         <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel}
           blessureActief={blessureActief} energie={checkin?.ochtend?.energie} acwrZone={acwr?.zone} />
       )}
 
-      {/* Belasting & herstel */}
-      {(garmin?.trainingStatus || (acwr && acwr.ratio != null)) && <BelastingKaart garmin={garmin} acwr={acwr} />}
+      {/* Belasting & herstel — enkel vandaag */}
+      {isToday && (garmin?.trainingStatus || (acwr && acwr.ratio != null)) && <BelastingKaart garmin={garmin} acwr={acwr} />}
 
       {/* Advies */}
       {plan.advies?.tekst?.length > 0 && (
         <section className="card" style={{ '--i': 2 }}>
-          <div className="card-title">Advies vandaag</div>
+          <div className="card-title">Advies {isToday ? 'vandaag' : 'die dag'}</div>
           <ul className="stack" style={{ margin: 0, paddingLeft: 18, gap: 6 }}>
             {plan.advies.tekst.map((t, idx) => <li key={idx} className="small">{t}</li>)}
           </ul>
@@ -116,7 +144,7 @@ export default function Dashboard() {
       {/* Voortgang */}
       <section className="card" style={{ '--i': 3 }}>
         <div className="row between">
-          <div className="card-title" style={{ margin: 0 }}>Voortgang vandaag</div>
+          <div className="card-title" style={{ margin: 0 }}>Voortgang {isToday ? 'vandaag' : 'die dag'}</div>
           <span className="badge accent">{aantalGedaan}/{checkbare.length || 0}</span>
         </div>
         <div className="progress shine" style={{ marginTop: 12 }}>
@@ -130,12 +158,16 @@ export default function Dashboard() {
         </p>
       </section>
 
-      {/* In te halen: gemiste sleutelblokken — geen verwijt, wel een herkansing */}
+      {/* In te halen: gemiste sleutelblokken — geen verwijt, wel een herkansing.
+          Op een voorbije dag heeft "verzetten naar later vandaag" geen betekenis,
+          dus blijft daar enkel de directe correctie ("Toch gedaan") over. */}
       {gemist.length > 0 && (
         <section className="card stack" style={{ '--i': 4, gap: 10 }}>
           <div className="card-title" style={{ margin: 0 }}>Nog in te halen</div>
           <p className="small muted" style={{ margin: 0 }}>
-            Een blok gemist? Geen probleem — vink het alsnog af of schuif het naar later vandaag.
+            {isToday
+              ? 'Een blok gemist? Geen probleem — vink het alsnog af of schuif het naar later vandaag.'
+              : 'Nog openstaande blokken die dag — vink alsnog af wat je wel deed.'}
           </p>
           {gemist.map((b) => (
             <div className="row between" key={b.id} style={{ gap: 8 }}>
@@ -144,7 +176,7 @@ export default function Dashboard() {
                 <div className="small dim">stond gepland {b.start}–{b.eind}</div>
               </div>
               <div className="row" style={{ gap: 6 }}>
-                <button className="btn sm" onClick={() => verzetBlok(b.id)}>Verzet</button>
+                {isToday && <button className="btn sm" onClick={() => verzetBlok(b.id)}>Verzet</button>}
                 <button className="btn sm primary" onClick={() => tik(b.id, b.taakId)}>Toch gedaan</button>
               </div>
             </div>
@@ -180,11 +212,11 @@ export default function Dashboard() {
       <section className="stack" style={{ gap: 4, '--i': 5 }}>
         <div className="row between">
           <h2 style={{ margin: '4px 0' }}>Je dag</h2>
-          <span className="badge"><IcoClock width={14} height={14} /> {toHHMM(now)}</span>
+          {isToday && <span className="badge"><IcoClock width={14} height={14} /> {toHHMM(now)}</span>}
         </div>
         <div className="timeline">
           {plan.blokken.map((b) => {
-            const isNu = toMin(b.start) <= now && now < toMin(b.eind);
+            const isNu = isToday && toMin(b.start) <= now && now < toMin(b.eind);
             const checkbaar = checkbare.some((c) => c.id === b.id);
             const on = !!gedaan?.[b.id];
             return (
