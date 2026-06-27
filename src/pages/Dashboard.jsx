@@ -1,12 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDagPlan } from '../hooks/useDagPlan';
+import { useAuth } from '../contexts/AuthContext';
 import { BLOK_TYPES } from '../config/appConfig';
-import { toMin, nuMin, toHHMM } from '../services/tijd';
+import { toMin, nuMin, toHHMM, datumKey } from '../services/tijd';
 import { syncStatus } from '../services/garmin';
+import { getDagCached } from '../services/data';
+import { noordster } from '../services/noordster';
 import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
 import CheckinKaart from '../components/CheckinKaart';
+import NoordsterKaart from '../components/NoordsterKaart';
 
 function tijdvak() {
   const h = new Date().getHours();
@@ -20,7 +24,26 @@ const datumLabel = () =>
 
 export default function Dashboard() {
   const { laden, plan, garmin, gedaan, toggleBlok, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan();
+  const { user } = useAuth();
   const [popId, setPopId] = useState(null);
+  const [ns, setNs] = useState(null);
+
+  // North Star (consistentie) over de laatste 7 dagen — cache-eerst, dus goedkoop.
+  useEffect(() => {
+    if (!user) return;
+    let actief = true;
+    (async () => {
+      const dagen = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dagen.push(datumKey(d));
+      }
+      const docs = await Promise.all(dagen.map((dk) => getDagCached(user.uid, dk)));
+      if (actief) setNs(noordster(docs));
+    })();
+    return () => { actief = false; };
+  }, [user, gedaan]);
 
   const checkbare = useMemo(
     () => (plan?.blokken || []).filter((b) => ['taak', 'judo', 'agenda'].includes(b.bron) || b.type === 'sport' || b.type === 'reva'),
@@ -47,6 +70,9 @@ export default function Dashboard() {
 
       {/* Dagelijkse check-in (stemming/energie 's ochtends, reflectie 's avonds) */}
       <CheckinKaart checkin={checkin} bewaar={bewaarCheckin} i={2} />
+
+      {/* North Star: consistentie over de laatste 7 dagen */}
+      {ns && ns.score != null && <NoordsterKaart ns={ns} i={2} />}
 
       {/* Coach-advies van de dag */}
       {garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (

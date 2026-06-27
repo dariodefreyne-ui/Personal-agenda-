@@ -70,9 +70,13 @@ export function useDagPlan(datumObj = new Date()) {
       // sturen (ook als de app vandaag niet meer geopend wordt).
       if (datum === datumKey(new Date())) {
         const sleutelTypes = new Set(['judo', 'lesgeven', 'sport', 'reva', 'maaltijd', 'slaap', 'voetbal']);
+        // checkbaar = exact dezelfde definitie als op het dashboard, zodat de
+        // North Star-score (therapietrouw) op afvinkbare blokken klopt.
+        const isCheckbaar = (b) => ['taak', 'judo', 'agenda'].includes(b.bron) || b.type === 'sport' || b.type === 'reva';
         const minimaal = plan.blokken.map((b) => ({
           id: b.id, start: b.start, eind: b.eind, titel: b.titel, type: b.type,
-          push: b.push !== false, detail: b.detail || null, sleutel: sleutelTypes.has(b.type),
+          push: b.push !== false, detail: b.detail || null,
+          sleutel: sleutelTypes.has(b.type), checkbaar: isCheckbaar(b),
         }));
         // Alleen schrijven als het plan echt veranderd is — bespaart Firestore-writes.
         if (JSON.stringify(minimaal) !== JSON.stringify(dag?.plan || null)) {

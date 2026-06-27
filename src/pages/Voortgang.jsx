@@ -5,7 +5,9 @@ import { getGarminDagCached, getDagCached, getCollection, subscribeCollection, a
 import { garminSamenvatting } from '../services/garmin';
 import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
 import { reflectieSamenvatting, stemmingInfo } from '../services/reflectie';
+import { noordster } from '../services/noordster';
 import { datumKey } from '../services/tijd';
+import NoordsterKaart from '../components/NoordsterKaart';
 import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash, IcoBike, IcoEdit } from '../components/Icons';
 import Gauge from '../components/Gauge';
 import Sparkline from '../components/Sparkline';
@@ -41,6 +43,7 @@ export default function Voortgang() {
   const { toast } = useToast();
   const [reeks, setReeks] = useState([]);
   const [mind, setMind] = useState(null);
+  const [ns, setNs] = useState(null);
   const [taken, setTaken] = useState([]);
   const [doelen, setDoelen] = useState([]);
   const [garminVandaag, setGarminVandaag] = useState(null);
@@ -66,6 +69,7 @@ export default function Voortgang() {
         datum: datumKey(d), label: d.toLocaleDateString('nl-BE', { weekday: 'short' }),
         checkin: dagDocs[i]?.checkin,
       }))));
+      setNs(noordster(dagDocs));
       setTaken((await getCollection(user.uid, 'taken')).filter((t) => t.type === 'gewoonte'));
       const acts = (await getCollection(user.uid, 'garminActivities')).map(activiteitInfo)
         .filter((a) => a.datum).sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 8);
@@ -133,6 +137,8 @@ export default function Voortgang() {
   return (
     <div className="stack reveal">
       <h1 style={{ margin: 0 }}>Voortgang</h1>
+
+      <NoordsterKaart ns={ns} />
 
       <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} />
 

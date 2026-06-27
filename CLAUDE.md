@@ -51,8 +51,9 @@ src/
     planner.js            genereert dagindeling uit werkmodus + ankers + advies
     tijd.js               tijd/datum/week-helpers
     garmin.js             leest ruwe Garmin-dag uit tot samenvatting
-    coach.js              Garmin + zelfrapportage -> sportadvies (niveau/duur)
+    coach.js              Garmin + zelfrapportage -> sportadvies (uitlegbaar: waarom/zekerheid)
     reflectie.js          stemming/energie/tevredenheid-schalen + trend-helpers
+    noordster.js          North Star-score (therapietrouw/consistentie) uit dagdata
     push.js               FCM-token registreren (client)
     taken.js              afvinken + streaks
   hooks/useDagPlan.js     laadt dagdata, berekent + persisteert plan
@@ -110,12 +111,13 @@ Gedaan (✓):
 Volgende fases:
 > Alle volgende fases bouwen we **explainable-first** en met oog op de North
 > Star-metric (zie Productprincipes). Een advies zonder "waarom" is niet af.
-- **Fase 4.5 — Vertrouwenslaag (NIEUW, eerst):** maak bestaande adviezen
-  *uitlegbaar*. Coach/planner geven `waarom` + databronnen + zekerheid; UI toont een
-  korte "waarom"-regel met detail achter een uitklap. Introduceer één **North
-  Star-score** (richting: therapietrouw/consistentie) op het dashboard + Voortgang.
-  Veilige terugval bij weinig data. Dit raakt vrijwel elk onderdeel en verhoogt de
-  waargenomen kwaliteit méér dan een nieuwe feature.
+- **Fase 4.5 — Vertrouwenslaag (grotendeels ✓):** coach-advies is nu *uitlegbaar*
+  (`waarom` + `databronnen` + `zekerheid` + `meetlat`; UI: korte "waarom"-regel +
+  uitklap), met **veilige terugval** (lage zekerheid → geen 'hard'). **North
+  Star-score** (therapietrouw, `services/noordster.js`) staat op Dashboard +
+  Voortgang, met uitleg en veilige terugval bij weinig data.
+  Nog open: **plan laten meebewegen met gemiste blokken** (inhalen/herschikken
+  i.p.v. stil falen).
 - **Fase 5 — Periodisering & slimme coach:** acute:chronic load-ratio,
   RPE-gewogen belasting, trainingsblokken/periodisering, blessure-preventie-advies,
   slimme aanbevelingen op basis van Garmin + zelfgerapporteerd — **elk met
