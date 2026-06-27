@@ -22,3 +22,4 @@ export const IcoEdit = (p) => (<svg {...base} {...p}><path d="M4 20h4L19 9l-4-4L
 export const IcoLogout = (p) => (<svg {...base} {...p}><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" /><path d="M10 12H3m0 0 3-3m-3 3 3 3" /></svg>);
 export const IcoClock = (p) => (<svg {...base} {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>);
 export const IcoChevron = (p) => (<svg {...base} {...p}><path d="M9 6l6 6-6 6" /></svg>);
+export const IcoPulse = (p) => (<svg {...base} {...p}><path d="M3 12h4l2-5 4 10 2-5h6" /></svg>);

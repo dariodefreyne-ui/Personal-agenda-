@@ -97,6 +97,7 @@ export default function Gezondheid() {
             </div>
             <div className="divider" />
             <div className="row wrap" style={{ gap: 8 }}>
+              {garmin.hrvStatus && <span className="badge">HRV: {garmin.hrvStatus}{garmin.hrvAvg != null ? ` (${Math.round(garmin.hrvAvg)}ms)` : ''}</span>}
               {garmin.vo2max != null && <span className="badge">VO₂max {Math.round(garmin.vo2max)}</span>}
               {garmin.gewichtKg != null && <span className="badge">{garmin.gewichtKg} kg</span>}
               {garmin.vetPct != null && <span className="badge">{Math.round(garmin.vetPct)}% vet</span>}

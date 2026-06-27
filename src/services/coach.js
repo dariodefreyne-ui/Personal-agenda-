@@ -51,7 +51,15 @@ const MATRIX = {
   },
 };
 
-function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast }) {
+// HRV-status -> bijstelling van de score. Onbekende/afwezige status telt niet mee.
+function hrvBijstelling(hrvStatus) {
+  const s = String(hrvStatus || '').toUpperCase();
+  if (/UNBALANCED|LOW|POOR/.test(s)) return -10;
+  if (/BALANCED/.test(s)) return 4;
+  return 0;
+}
+
+function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast }) {
   if (blessureActief || overbelast) return 'herstel';
   const r = readiness ?? 55;
   const bb = bodyBattery ?? 60;
@@ -63,6 +71,7 @@ function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActi
   if (typeof energie === 'number') {
     score += { 1: -16, 2: -8, 3: 0, 4: 6, 5: 10 }[energie] ?? 0;
   }
+  score += hrvBijstelling(hrvStatus);
   if (score >= 65) return 'hard';
   if (score >= 45) return 'matig';
   if (score >= 30) return 'rustig';
@@ -71,7 +80,7 @@ function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActi
 
 // Hoeveel echte meetsignalen zitten er achter het advies? Bepaalt de zekerheid.
 // Weinig data -> lage zekerheid -> we adviseren bewust voorzichtiger (zie cap).
-function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast }) {
+function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast }) {
   // Blessure/overbelasting is een duidelijk, hard veiligheidssignaal.
   if (blessureActief || overbelast) return 'hoog';
   let n = 0;
@@ -79,6 +88,7 @@ function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, blessureA
   if (bodyBattery != null) n += 1;
   if (typeof slaapUren === 'number') n += 1;
   if (typeof energie === 'number') n += 1;
+  if (hrvStatus) n += 1;
   // ≥2 elkaar bevestigende signalen = hoog; één los getal kan ruis zijn.
   if (n >= 2) return 'hoog';
   if (n === 1) return 'gemiddeld';
@@ -88,12 +98,12 @@ function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, blessureA
 const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
 
 export function coachAdvies({
-  readiness = null, bodyBattery = null, slaapUren = null, energie = null,
+  readiness = null, bodyBattery = null, slaapUren = null, energie = null, hrvStatus = null,
   goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
-  let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast });
-  const zekerheid = bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast });
+  let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast });
+  const zekerheid = bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast });
 
   // Beoordeeld op je slechtste advies: 'hard' enkel bij hoge zekerheid (≥2 signalen).
   let voorzichtig = false;
@@ -116,6 +126,7 @@ export function coachAdvies({
   if (bodyBattery != null) waarom.push(`Body battery ${Math.round(bodyBattery)}.`);
   if (typeof slaapUren === 'number') waarom.push(`${slaapUren.toFixed(1)}u slaap.`);
   if (typeof energie === 'number') waarom.push(`Je gaf energie ${energie}/5 op.`);
+  if (hrvStatus) waarom.push(`HRV-status: ${hrvStatus}.`);
   if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
   if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
   if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
@@ -127,6 +138,7 @@ export function coachAdvies({
   if (bodyBattery != null) databronnen.push('Body battery');
   if (typeof slaapUren === 'number') databronnen.push('Slaap');
   if (typeof energie === 'number') databronnen.push('Zelf-gerapporteerde energie');
+  if (hrvStatus) databronnen.push('HRV-status');
   if (!databronnen.length) databronnen.push('Geen meetdata');
 
   const titel = {

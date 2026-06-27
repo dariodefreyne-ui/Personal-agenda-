@@ -16,6 +16,7 @@ export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief =
     readiness: garmin?.readiness ?? null,
     bodyBattery: garmin?.bodyBattery ?? null,
     slaapUren: garmin?.slaapUren ?? null,
+    hrvStatus: garmin?.hrvStatus ?? null,
     energie,
     goal, blessureActief, overbelast, acwrZone,
   });

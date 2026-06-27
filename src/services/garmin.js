@@ -59,6 +59,11 @@ export function garminSamenvatting(g) {
     if (levels.length) { bodyBattery = levels[levels.length - 1]; bodyBatteryMax = Math.max(...levels); }
   }
 
+  // HRV-status (Garmin: BALANCED/UNBALANCED/LOW/...) + gemiddelde van afgelopen nacht.
+  const hrvSummary = g.hrv?.hrvSummary || g.hrv;
+  const hrvStatus = hrvSummary?.status || hrvSummary?.lastNightAvgStatus || null;
+  const hrvAvg = eersteGetal(hrvSummary?.lastNightAvg, hrvSummary?.weeklyAvg);
+
   const mm = Array.isArray(g.maxMetrics) ? g.maxMetrics[0] : g.maxMetrics;
   const vo2max = eersteGetal(mm?.generic?.vo2MaxValue, mm?.vo2MaxValue, g.userProfile?.userData?.vo2Max);
 
@@ -85,6 +90,8 @@ export function garminSamenvatting(g) {
     trainingStatus: status,
     bodyBattery,
     bodyBatteryMax,
+    hrvStatus,
+    hrvAvg,
     vo2max,
     gewichtKg,
     vetPct,
