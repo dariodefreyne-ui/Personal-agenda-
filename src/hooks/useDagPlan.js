@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import {
   getCollection, getDocById, getGarminDag,
-  getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync,
+  getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync, getVakanties,
 } from '../services/data';
 import { genereerDagPlan } from '../services/planner';
 import { garminSamenvatting } from '../services/garmin';
@@ -35,7 +35,7 @@ export function useDagPlan(datumObj = new Date()) {
         getAgendaEventsVoorDag(uid, datum),
         getDocById(uid, 'dagen', datum),
         getDocById(uid, 'weken', weekKey(datumObj)),
-        getCollection(uid, 'vakanties'),
+        getVakanties(uid),
         getLaatsteGarminSync(uid),
       ]);
 

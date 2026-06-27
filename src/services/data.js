@@ -172,4 +172,11 @@ export async function getAgendaEvents(uid) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
+// Vakantieperiodes server-eerst: bewerkingen (datums, judovrij) moeten meteen
+// doorwerken in de planning, niet pas na een cache-verval.
+export async function getVakanties(uid) {
+  const snap = await getDocsVers(collection(db, ...u(uid, 'vakanties')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 export { serverTimestamp };

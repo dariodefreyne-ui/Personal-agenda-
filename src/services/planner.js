@@ -126,18 +126,24 @@ export function genereerDagPlan({
     maakBlok(blok, t.start, t.eind, 'Judotraining', 'judo', { bron: 'judo', vast: true, id: `judo-${i}` });
   });
 
-  // Judovrij melden als er normaal judo zou zijn
-  const judoVandaag = (sport.judoEigenClub || []).some((t) => t.dag === dagKort)
-    || (sport.judoLesgeven || []).some((l) => l.dag === dagKort);
-  if (geenJudo && judoVandaag) advies.tekst.push('🥋 Judovrij vandaag (vakantie) — geen training of les.');
-
-  // 5) Agenda-events (ICS): o.a. RSCA-matchen
+  // 5) Agenda-events (ICS): o.a. RSCA-matchen. Tijdens een judovrije periode
+  //    vervallen óók geïmporteerde judo-afspraken (training/les uit je agenda).
+  const JUDO_RE = /judo|kodokan/i;
+  let judoAgendaGeschrapt = false;
   agendaEvents.forEach((ev, i) => {
     const titel = ev.titel || ev.summary || 'Afspraak';
+    if (geenJudo && JUDO_RE.test(titel)) { judoAgendaGeschrapt = true; return; }
     const isVoetbal = /anderlecht|rsca|voetbal/i.test(titel);
     maakBlok(blok, ev.start, ev.eind || addMin(ev.start, 90), titel,
       isVoetbal ? 'voetbal' : 'vrije_tijd', { bron: 'agenda', vast: true, id: `agenda-${i}` });
   });
+
+  // Judovrij melden als er normaal judo zou zijn (gepland of uit de agenda)
+  const judoVandaag = (sport.judoEigenClub || []).some((t) => t.dag === dagKort)
+    || (sport.judoLesgeven || []).some((l) => l.dag === dagKort);
+  if (geenJudo && (judoVandaag || judoAgendaGeschrapt)) {
+    advies.tekst.push('🥋 Judovrij (vakantie) — judo-afspraken en training vallen vandaag weg.');
+  }
 
   // 6) Reva + gewoontes met vast tijdslot worden blokken; rest -> todos
   const todos = [];
