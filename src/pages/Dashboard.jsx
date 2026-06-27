@@ -1,12 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDagPlan } from '../hooks/useDagPlan';
+import { useAuth } from '../contexts/AuthContext';
 import { BLOK_TYPES } from '../config/appConfig';
-import { toMin, nuMin, toHHMM } from '../services/tijd';
+import { toMin, nuMin, toHHMM, datumKey } from '../services/tijd';
 import { syncStatus } from '../services/garmin';
+import { getDagCached, getCollection } from '../services/data';
+import { noordster } from '../services/noordster';
+import { acwrBerekenen, sessieBelasting } from '../services/belasting';
 import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
 import CheckinKaart from '../components/CheckinKaart';
+import NoordsterKaart from '../components/NoordsterKaart';
 
 function tijdvak() {
   const h = new Date().getHours();
@@ -19,8 +24,43 @@ const datumLabel = () =>
   new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default function Dashboard() {
-  const { laden, plan, garmin, gedaan, toggleBlok, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan();
+  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan();
+  const { user } = useAuth();
   const [popId, setPopId] = useState(null);
+  const [ns, setNs] = useState(null);
+  const [acwr, setAcwr] = useState(null);
+
+  // Opbouw-ratio (ACWR) voor de coach — 1× per sessie laden (geen herlaad bij toggle).
+  useEffect(() => {
+    if (!user) return;
+    let actief = true;
+    (async () => {
+      const [acts, logs] = await Promise.all([
+        getCollection(user.uid, 'garminActivities'),
+        getCollection(user.uid, 'activiteitLog'),
+      ]);
+      const rpe = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
+      if (actief) setAcwr(acwrBerekenen(sessieBelasting(acts, rpe)));
+    })();
+    return () => { actief = false; };
+  }, [user]);
+
+  // North Star (consistentie) over de laatste 7 dagen — cache-eerst, dus goedkoop.
+  useEffect(() => {
+    if (!user) return;
+    let actief = true;
+    (async () => {
+      const dagen = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dagen.push(datumKey(d));
+      }
+      const docs = await Promise.all(dagen.map((dk) => getDagCached(user.uid, dk)));
+      if (actief) setNs(noordster(docs));
+    })();
+    return () => { actief = false; };
+  }, [user, gedaan]);
 
   const checkbare = useMemo(
     () => (plan?.blokken || []).filter((b) => ['taak', 'judo', 'agenda'].includes(b.bron) || b.type === 'sport' || b.type === 'reva'),
@@ -35,6 +75,9 @@ export default function Dashboard() {
   const vak = tijdvak();
   const tik = (id, taakId) => { setPopId(id); toggleBlok(id, taakId); setTimeout(() => setPopId(null), 360); };
 
+  // Gemiste sleutelblokken (voorbij + niet afgevinkt) — geen stil falen, wel inhalen.
+  const gemist = checkbare.filter((b) => toMin(b.eind) <= now && !gedaan?.[b.id]);
+
   return (
     <div className="stack reveal">
       <header className="hero" style={{ '--aura': vak.aura, '--i': 0 }}>
@@ -48,14 +91,17 @@ export default function Dashboard() {
       {/* Dagelijkse check-in (stemming/energie 's ochtends, reflectie 's avonds) */}
       <CheckinKaart checkin={checkin} bewaar={bewaarCheckin} i={2} />
 
+      {/* North Star: consistentie over de laatste 7 dagen */}
+      {ns && ns.score != null && <NoordsterKaart ns={ns} i={2} />}
+
       {/* Coach-advies van de dag */}
       {garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (
         <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel}
-          blessureActief={blessureActief} energie={checkin?.ochtend?.energie} />
+          blessureActief={blessureActief} energie={checkin?.ochtend?.energie} acwrZone={acwr?.zone} />
       )}
 
       {/* Belasting & herstel */}
-      {garmin?.trainingStatus && <BelastingKaart garmin={garmin} />}
+      {(garmin?.trainingStatus || (acwr && acwr.ratio != null)) && <BelastingKaart garmin={garmin} acwr={acwr} />}
 
       {/* Advies */}
       {plan.advies?.tekst?.length > 0 && (
@@ -83,6 +129,28 @@ export default function Dashboard() {
             : 'Begin met je eerstvolgende blok.'}
         </p>
       </section>
+
+      {/* In te halen: gemiste sleutelblokken — geen verwijt, wel een herkansing */}
+      {gemist.length > 0 && (
+        <section className="card stack" style={{ '--i': 4, gap: 10 }}>
+          <div className="card-title" style={{ margin: 0 }}>Nog in te halen</div>
+          <p className="small muted" style={{ margin: 0 }}>
+            Een blok gemist? Geen probleem — vink het alsnog af of schuif het naar later vandaag.
+          </p>
+          {gemist.map((b) => (
+            <div className="row between" key={b.id} style={{ gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600 }}>{b.titel}</div>
+                <div className="small dim">stond gepland {b.start}–{b.eind}</div>
+              </div>
+              <div className="row" style={{ gap: 6 }}>
+                <button className="btn sm" onClick={() => verzetBlok(b.id)}>Verzet</button>
+                <button className="btn sm primary" onClick={() => tik(b.id, b.taakId)}>Toch gedaan</button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* Losse to-do's */}
       {plan.todos?.length > 0 && (

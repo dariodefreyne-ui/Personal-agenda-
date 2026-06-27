@@ -69,21 +69,65 @@ function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActi
   return 'herstel';
 }
 
+// Hoeveel echte meetsignalen zitten er achter het advies? Bepaalt de zekerheid.
+// Weinig data -> lage zekerheid -> we adviseren bewust voorzichtiger (zie cap).
+function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast }) {
+  // Blessure/overbelasting is een duidelijk, hard veiligheidssignaal.
+  if (blessureActief || overbelast) return 'hoog';
+  let n = 0;
+  if (readiness != null) n += 1;
+  if (bodyBattery != null) n += 1;
+  if (typeof slaapUren === 'number') n += 1;
+  if (typeof energie === 'number') n += 1;
+  // ≥2 elkaar bevestigende signalen = hoog; één los getal kan ruis zijn.
+  if (n >= 2) return 'hoog';
+  if (n === 1) return 'gemiddeld';
+  return 'laag';
+}
+
+const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
+
 export function coachAdvies({
   readiness = null, bodyBattery = null, slaapUren = null, energie = null,
-  goal = 'algemeen', blessureActief = false, overbelast = false,
+  goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
-  const niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast });
+  let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast });
+  const zekerheid = bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, blessureActief, overbelast });
+
+  // Beoordeeld op je slechtste advies: 'hard' enkel bij hoge zekerheid (≥2 signalen).
+  let voorzichtig = false;
+  if (zekerheid !== 'hoog' && niveau === 'hard') { niveau = 'matig'; voorzichtig = true; }
+
+  // Periodisering (ACWR): te snelle opbouw remt het advies af (blessurepreventie).
+  let acwrRem = null;
+  if (acwrZone === 'risico' && NIVEAU_RANG.indexOf(niveau) > NIVEAU_RANG.indexOf('rustig')) {
+    niveau = 'rustig'; acwrRem = 'risico';
+  } else if (acwrZone === 'verhoogd' && niveau === 'hard') {
+    niveau = 'matig'; acwrRem = 'verhoogd';
+  }
   const advies = MATRIX[doel][niveau];
 
-  const redenen = [];
-  if (overbelast) redenen.push('Garmin: overbelast — herstel afgedwongen');
-  if (blessureActief) redenen.push('blessure actief — herstel staat voorop');
-  if (readiness != null) redenen.push(`readiness ${Math.round(readiness)}/100`);
-  if (bodyBattery != null) redenen.push(`body battery ${Math.round(bodyBattery)}`);
-  if (typeof slaapUren === 'number') redenen.push(`${slaapUren.toFixed(1)}u slaap`);
-  if (typeof energie === 'number') redenen.push(`energie ${energie}/5 (zelf)`);
+  // "Waarom": de signalen die het advies dragen (mensbaar geformuleerd).
+  const waarom = [];
+  if (overbelast) waarom.push('Garmin meldt overbelasting — herstel gaat voor.');
+  if (blessureActief) waarom.push('Blessure actief — we beschermen je herstel.');
+  if (readiness != null) waarom.push(`Readiness ${Math.round(readiness)}/100.`);
+  if (bodyBattery != null) waarom.push(`Body battery ${Math.round(bodyBattery)}.`);
+  if (typeof slaapUren === 'number') waarom.push(`${slaapUren.toFixed(1)}u slaap.`);
+  if (typeof energie === 'number') waarom.push(`Je gaf energie ${energie}/5 op.`);
+  if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
+  if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
+  if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
+  if (!waarom.length) waarom.push('Nog geen meetdata vandaag — dit is een veilig algemeen advies.');
+
+  // Welke databronnen zijn effectief gebruikt.
+  const databronnen = [];
+  if (readiness != null) databronnen.push('Garmin readiness');
+  if (bodyBattery != null) databronnen.push('Body battery');
+  if (typeof slaapUren === 'number') databronnen.push('Slaap');
+  if (typeof energie === 'number') databronnen.push('Zelf-gerapporteerde energie');
+  if (!databronnen.length) databronnen.push('Geen meetdata');
 
   const titel = {
     hard: 'Goeie dag om er vol voor te gaan',
@@ -97,7 +141,11 @@ export function coachAdvies({
     sport: advies.sport,
     duurMin: advies.duurMin,
     doelLabel: DOELEN[doel],
-    reden: redenen.join(' · '),
+    waarom,
+    databronnen,
+    zekerheid,
+    meetlat: 'Geslaagd = je voltooit deze sessie en voelt je morgen niet slechter.',
+    reden: waarom.join(' '), // korte samenvatting (backwards-compat)
     kleur: NIVEAU_KLEUR[niveau],
   };
 }

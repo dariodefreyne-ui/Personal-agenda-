@@ -3,17 +3,21 @@ import { belastingStatus } from '../services/belasting';
 import { IcoBolt, IcoClock } from './Icons';
 
 const NIVEAU_LABEL = { hard: 'Vol gas', matig: 'Matig', rustig: 'Rustig', herstel: 'Herstel' };
+const ZEKERHEID_LABEL = { hoog: 'Hoge zekerheid', gemiddeld: 'Gemiddelde zekerheid', laag: 'Lage zekerheid' };
+const ZEKERHEID_KLEUR = { hoog: 'var(--success)', gemiddeld: 'var(--warning)', laag: 'var(--text-dim)' };
 
 // Coach-advies van de dag. Toont sport + intensiteit op basis van Garmin + doel.
-// Veiligheidsslot: bij Garmin-overbelasting dwingt de coach herstel af.
-export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false, energie = null }) {
+// Premium-principe: elk advies is uitlegbaar — waarom, welke data, hoe zeker, hoe
+// succes gemeten wordt. Veiligheidsslot: bij overbelasting wint herstel; bij weinig
+// data adviseert de coach bewust voorzichtiger.
+export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false, energie = null, acwrZone = null }) {
   const overbelast = belastingStatus({ trainingStatus: garmin?.trainingStatus }).key === 'overbelast';
   const a = coachAdvies({
     readiness: garmin?.readiness ?? null,
     bodyBattery: garmin?.bodyBattery ?? null,
     slaapUren: garmin?.slaapUren ?? null,
     energie,
-    goal, blessureActief, overbelast,
+    goal, blessureActief, overbelast, acwrZone,
   });
 
   return (
@@ -39,7 +43,24 @@ export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief =
 
       <div className="row between small dim">
         <span><IcoClock width={13} height={13} /> ±{a.duurMin} min</span>
-        {a.reden && <span style={{ textAlign: 'right', maxWidth: '62%' }}>{a.reden}</span>}
+        <span style={{ color: ZEKERHEID_KLEUR[a.zekerheid] }}>● {ZEKERHEID_LABEL[a.zekerheid]}</span>
+      </div>
+
+      {/* Waarom: korte regel + detail in uitklap (uitlegbaarheid) */}
+      <div className="stack" style={{ gap: 6 }}>
+        <div className="small">{a.waarom[0]}</div>
+        <details className="small">
+          <summary className="dim" style={{ cursor: 'pointer' }}>Waarom dit advies?</summary>
+          <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+            {a.waarom.length > 1 && (
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {a.waarom.map((w, i) => <li key={i} className="dim">{w}</li>)}
+              </ul>
+            )}
+            <div className="dim"><b>Op basis van:</b> {a.databronnen.join(' · ')}</div>
+            <div className="dim"><b>Meetlat:</b> {a.meetlat}</div>
+          </div>
+        </details>
       </div>
     </section>
   );

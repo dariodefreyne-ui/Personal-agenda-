@@ -9,7 +9,7 @@ import { genereerDagPlan } from '../services/planner';
 import { garminSamenvatting } from '../services/garmin';
 import { vakantieVoorDatum } from '../services/vakanties';
 import { zetTaakGedaan } from '../services/taken';
-import { datumKey, dagKortVanDatum, weekKey } from '../services/tijd';
+import { datumKey, dagKortVanDatum, weekKey, toMin, toHHMM, nuMin } from '../services/tijd';
 
 // Laadt alle dagdata, berekent het plan en biedt afvink-acties.
 export function useDagPlan(datumObj = new Date()) {
@@ -59,10 +59,19 @@ export function useDagPlan(datumObj = new Date()) {
         weer: null, blessureActief, isVakantie, geenJudo,
       });
 
+      // Adaptief: verzette (ingehaalde) blokken krijgen hun nieuwe tijd. Zo "faalt"
+      // een gemist blok niet stil, maar schuift het naar later op de dag.
+      const verzet = dag?.verzet || {};
+      if (Object.keys(verzet).length) {
+        plan.blokken = plan.blokken
+          .map((b) => (verzet[b.id] ? { ...b, start: verzet[b.id].start, eind: verzet[b.id].eind, verzet: true } : b))
+          .sort((a, b) => toMin(a.start) - toMin(b.start));
+      }
+
       if (!actief) return;
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
-        gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null,
+        gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
         werkModus, datum, dagKort, blessureActief, garminSync,
       });
 
@@ -70,9 +79,13 @@ export function useDagPlan(datumObj = new Date()) {
       // sturen (ook als de app vandaag niet meer geopend wordt).
       if (datum === datumKey(new Date())) {
         const sleutelTypes = new Set(['judo', 'lesgeven', 'sport', 'reva', 'maaltijd', 'slaap', 'voetbal']);
+        // checkbaar = exact dezelfde definitie als op het dashboard, zodat de
+        // North Star-score (therapietrouw) op afvinkbare blokken klopt.
+        const isCheckbaar = (b) => ['taak', 'judo', 'agenda'].includes(b.bron) || b.type === 'sport' || b.type === 'reva';
         const minimaal = plan.blokken.map((b) => ({
           id: b.id, start: b.start, eind: b.eind, titel: b.titel, type: b.type,
-          push: b.push !== false, detail: b.detail || null, sleutel: sleutelTypes.has(b.type),
+          push: b.push !== false, detail: b.detail || null,
+          sleutel: sleutelTypes.has(b.type), checkbaar: isCheckbaar(b),
         }));
         // Alleen schrijven als het plan echt veranderd is — bespaart Firestore-writes.
         if (JSON.stringify(minimaal) !== JSON.stringify(dag?.plan || null)) {
@@ -106,7 +119,22 @@ export function useDagPlan(datumObj = new Date()) {
     await saveDag(uid, datum, { checkin: nieuw });
   }, [uid, datum, staat.checkin]);
 
+  // Een gemist (sleutel)blok inhalen: verschuif het naar het eerstvolgende
+  // kwartier na nu, voor dezelfde duur. Opgeslagen in dagen/{datum}.verzet.
+  const verzetBlok = useCallback(async (blokId) => {
+    if (!uid) return;
+    const blok = staat.plan?.blokken?.find((b) => b.id === blokId);
+    if (!blok) return;
+    const duur = Math.max(15, toMin(blok.eind) - toMin(blok.start));
+    const startMin = Math.min(23 * 60 + 45 - duur, Math.ceil((nuMin() + 5) / 15) * 15);
+    const nieuwTijd = { start: toHHMM(startMin), eind: toHHMM(startMin + duur) };
+    const verzet = { ...(staat.verzet || {}), [blokId]: nieuwTijd };
+    setStaat((s) => ({ ...s, verzet }));
+    await saveDag(uid, datum, { verzet });
+    herlaad();
+  }, [uid, datum, staat.plan, staat.verzet]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const herlaad = useCallback(() => setVersie((v) => v + 1), []);
 
-  return { ...staat, toggleBlok, bewaarCheckin, herlaad };
+  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, herlaad };
 }

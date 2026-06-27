@@ -64,3 +64,37 @@ describe('coach houdt rekening met zelf-gerapporteerde energie', () => {
     expect(a.reden).toContain('energie 2/5');
   });
 });
+
+describe('coach — uitlegbaarheid & veilige terugval (Fase 4.5)', () => {
+  it('geeft waarom, databronnen, zekerheid en meetlat terug', () => {
+    const a = coachAdvies({ readiness: 70, bodyBattery: 65, slaapUren: 8, goal: 'kracht' });
+    expect(Array.isArray(a.waarom)).toBe(true);
+    expect(a.waarom.length).toBeGreaterThan(0);
+    expect(a.databronnen).toContain('Garmin readiness');
+    expect(a.zekerheid).toBe('hoog'); // 3 signalen
+    expect(typeof a.meetlat).toBe('string');
+  });
+
+  it('bij geen meetdata: lage zekerheid + veilig algemeen advies', () => {
+    const a = coachAdvies({ goal: 'algemeen' });
+    expect(a.zekerheid).toBe('laag');
+    expect(a.databronnen).toContain('Geen meetdata');
+    expect(a.waarom.join(' ')).toMatch(/veilig algemeen advies/i);
+  });
+
+  it('cap: lage zekerheid pusht nooit "hard"', () => {
+    // Zeer hoge readiness zou 'hard' geven, maar zonder andere signalen is de
+    // zekerheid laag -> conservatief naar 'matig'.
+    const a = coachAdvies({ readiness: 95 });
+    expect(a.zekerheid).not.toBe('hoog');
+    expect(a.niveau).not.toBe('hard');
+  });
+
+  it('ACWR-risico tempert het advies en legt uit waarom', () => {
+    const vol = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht' });
+    const risico = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht', acwrZone: 'risico' });
+    const rang = { herstel: 0, rustig: 1, matig: 2, hard: 3 };
+    expect(rang[risico.niveau]).toBeLessThan(rang[vol.niveau]);
+    expect(risico.waarom.join(' ')).toMatch(/blessurerisico/i);
+  });
+});
