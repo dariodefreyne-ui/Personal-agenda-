@@ -37,22 +37,11 @@ describe('genereerDagPlan', () => {
     expect(titels(plan).some((x) => /Judoles geven/.test(x))).toBe(false);
   });
 
-  it('geenJudo schrapt ook een judo-afspraak uit de agenda (ICS)', () => {
-    const agendaEvents = [
-      { titel: 'Judo training', datum: '2026-06-24', start: '18:30', eind: '20:00' },
-      { titel: 'Tandarts', datum: '2026-06-24', start: '14:00', eind: '14:30' },
-    ];
-    const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'thuis', geenJudo: true, agendaEvents });
-    const t = titels(plan);
-    expect(t.some((x) => /Judo training/.test(x))).toBe(false); // judo-afspraak vervalt
-    expect(t.some((x) => /Tandarts/.test(x))).toBe(true);       // andere afspraak blijft
-    expect(plan.advies.tekst.some((x) => /Judovrij/.test(x))).toBe(true);
-  });
-
-  it('zonder geenJudo blijft de judo-afspraak uit de agenda staan', () => {
-    const agendaEvents = [{ titel: 'Judo training', datum: '2026-06-23', start: '18:30', eind: '20:00' }];
-    const plan = genereerDagPlan({ datum: '2026-06-23', dagKort: 'di', instellingen: I, werkModus: 'thuis', agendaEvents });
-    expect(titels(plan).some((x) => /Judo training/.test(x))).toBe(true);
+  it('geenJudo schrapt de gegenereerde judotraining maar laat agenda-items (BBQ judo) staan', () => {
+    const agendaEvents = [{ titel: 'BBQ judo', datum: '2026-06-27', start: '16:00', eind: '21:00' }];
+    const plan = genereerDagPlan({ datum: '2026-06-27', dagKort: 'za', instellingen: I, werkModus: 'vrij', geenJudo: true, agendaEvents });
+    expect(titels(plan).some((x) => /Judotraining/.test(x))).toBe(false); // gegenereerd: weg
+    expect(titels(plan).some((x) => /BBQ judo/.test(x))).toBe(true);       // agenda: blijft
   });
 
   it('kantoor-fiets voegt fietsblokken als sport toe', () => {

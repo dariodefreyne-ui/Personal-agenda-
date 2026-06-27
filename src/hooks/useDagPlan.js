@@ -7,7 +7,7 @@ import {
 } from '../services/data';
 import { genereerDagPlan } from '../services/planner';
 import { garminSamenvatting } from '../services/garmin';
-import { vakantieVoorDatum } from '../services/vakanties';
+import { vakantieFlags } from '../services/vakanties';
 import { zetTaakGedaan } from '../services/taken';
 import { datumKey, dagKortVanDatum, weekKey, toMin, toHHMM, nuMin } from '../services/tijd';
 
@@ -39,18 +39,18 @@ export function useDagPlan(datumObj = new Date()) {
         getLaatsteGarminSync(uid),
       ]);
 
-      const periode = vakantieVoorDatum(vakanties, datum);
+      // Vlaggen over ÁLLE overlappende vakantieperiodes (zie vakantieFlags).
+      const { verlof, geenJudo } = vakantieFlags(vakanties, datum);
       const isWeekend = dagKort === 'za' || dagKort === 'zo';
       // Effectief dagtype: expliciete keuze wint, anders verlofperiode -> 'verlof',
       // anders weekend -> 'vrij'. Zo wordt er tijdens verlof geen werk gepland.
       let werkModus = week?.dagen?.[dagKort] || null;
       if (!werkModus) {
-        if (periode?.verlof) werkModus = 'verlof';
+        if (verlof) werkModus = 'verlof';
         else if (isWeekend) werkModus = 'vrij';
       }
       const blessureActief = (reva || []).some((r) => r.blessureActief);
-      const isVakantie = !!week?.vakantie || !!periode?.verlof;
-      const geenJudo = !!periode?.geenJudo;
+      const isVakantie = !!week?.vakantie || verlof;
       const garminSam = garminSamenvatting(garmin);
 
       const plan = genereerDagPlan({

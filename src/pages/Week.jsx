@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { getDocById, setItem, subscribeCollection, addItem, deleteItem, getAgendaEvents } from '../services/data';
-import { vakantieVoorDatum, vakantieInWeek, vakantieLabel } from '../services/vakanties';
+import { vakantieFlags, vakantieInWeek, vakantieLabel } from '../services/vakanties';
 import { WERK_MODI, DAG_NAMEN } from '../config/appConfig';
 import { datumKey, weekKey, DAG_KORT } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoEdit } from '../components/Icons';
@@ -148,7 +148,7 @@ export default function Week() {
           const d = dagen[idx];
           const dDatum = datumKey(d);
           const isVandaag = dDatum === datumKey(new Date());
-          const per = vakantieVoorDatum(vakanties, dDatum);
+          const per = vakantieFlags(vakanties, dDatum); // gecombineerde vlaggen bij overlap
           // Judo voor deze dag uit je eigen instellingen (niet hardcoded), zodat de
           // "judovrij"-status élke judo-dag dekt en live meegaat met de periode.
           const lesgeven = (sport.judoLesgeven || []).filter((l) => l.dag === dk);
