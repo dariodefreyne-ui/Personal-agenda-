@@ -59,7 +59,7 @@ def get_client() -> Garmin:
         )
         garmin.login()
         try:
-            garmin.garth.dump(tokenstore)
+            garmin.client.dump(tokenstore)
             log.info("Saved fresh Garmin tokens to %s", tokenstore)
         except Exception:
             pass

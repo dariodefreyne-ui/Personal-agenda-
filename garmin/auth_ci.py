@@ -39,20 +39,15 @@ def main() -> None:
         # In CI komt de MFA-code uit een workflow-input; leeg = account zonder MFA.
         prompt_mfa=lambda: mfa,
     )
+    # garmin.login() doorloopt zelf een 5-strategie-keten (mobile/widget/portal,
+    # met TLS-impersonation) en raist pas als alle pogingen mislukken -- met een
+    # duidelijke foutmelding (zie garminconnect.exceptions). Geen losse 429-check
+    # nodig (en .garth bestaat niet meer op recente garminconnect-versies).
     garmin.login()
-
-    # Bij een 429 (IP rate-limit) slikt garminconnect de fout soms in en blijft
-    # garth ongeïnitialiseerd. Geef dan een duidelijke melding i.p.v. een crash.
-    if getattr(garmin, "garth", None) is None:
-        raise SystemExit(
-            "Login niet voltooid (waarschijnlijk 429 IP rate-limit van Garmin).\n"
-            "Wacht 30-60 min en probeer opnieuw, of genereer de token via "
-            "Google Cloud Shell (zie README). 2FA staat best tijdelijk uit."
-        )
 
     tokenstore = config.GARMIN_TOKENSTORE
     os.makedirs(tokenstore, exist_ok=True)
-    garmin.garth.dump(tokenstore)
+    garmin.client.dump(tokenstore)
 
     blob = _tokens_to_base64(tokenstore)
     with open("garmin_token_b64.txt", "w", encoding="utf-8") as fh:

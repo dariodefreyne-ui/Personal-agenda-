@@ -39,7 +39,7 @@ def main() -> None:
 
     tokenstore = config.GARMIN_TOKENSTORE
     os.makedirs(tokenstore, exist_ok=True)
-    garmin.garth.dump(tokenstore)
+    garmin.client.dump(tokenstore)
     print(f"\nTokens saved to {tokenstore}")
 
     blob = _tokens_to_base64(tokenstore)
