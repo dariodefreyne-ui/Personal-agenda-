@@ -237,21 +237,6 @@ VITE_THEME_COLOR=#0b1120
 > zijn. Anders schrijft het Garmin-script naar een andere map dan de app leest, en
 > blijft je gezondheidswidget leeg.
 
-### C3 — Voor de "Garmin nu synchroniseren"-knop in de app
-
-De knop op de Gezondheid-pagina laat de Cloud Function `syncGarminNu` de
-GitHub Actions-workflow direct starten (i.p.v. te wachten op de 3-uurlijkse
-cron). Dat is een **Firebase Functions-secret** (niet de GitHub-secrets
-hierboven) — zet ze met de Firebase CLI:
-
-```bash
-firebase functions:secrets:set GITHUB_TOKEN
-```
-
-Plak een GitHub **Personal Access Token** (fine-grained, scope **Actions:
-write** op deze repo) als waarde. Zonder deze secret blijft de knop een
-foutmelding geven; de automatische cron-sync blijft wel altijd werken.
-
 ---
 
 ## 6. DEEL D — Eerste deploy
@@ -283,8 +268,7 @@ Het script print een lange `GARMIN_TOKENS_BASE64`-waarde. Zet die als GitHub-sec
 
 **Daarna draait alles vanzelf**, elke 3 uur overdag, via de workflow
 `.github/workflows/garmin-daily.yml`. Handmatig bijwerken kan via **Actions →
-Garmin Daily Sync → Run workflow**, of met de knop **Nu synchroniseren** op de
-Gezondheid-pagina in de app (zie C3 voor de benodigde secret).
+Garmin Daily Sync → Run workflow**.
 
 **Geen pc? Token via GitHub Actions:** zet secrets `GARMIN_EMAIL`/`GARMIN_PASSWORD`,
 merge naar `main`, en draai **Actions → Garmin Auth (token aanmaken)**. Download
