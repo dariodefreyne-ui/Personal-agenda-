@@ -31,7 +31,7 @@ def fetch_day(garmin, date_str: str) -> dict:
         "maxMetrics": _safe(garmin.get_max_metrics, date_str),
         "hrv": _safe(garmin.get_hrv_data, date_str),
         # Statisch profiel (leeftijd/lengte/gewicht/geslacht); zelfde elke dag.
-        "userProfile": _safe(garmin.get_userprofile),
+        "userProfile": _safe(garmin.get_user_profile),
     }
 
 
