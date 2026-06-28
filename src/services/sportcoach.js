@@ -3,6 +3,8 @@
 // (oefeningen + waarom, km/interval/hartslagzone voor fietsen, km/stappen voor
 // wandelen). Judo blijft bewust ongedetailleerd — dat is al een vast blok.
 
+import { SPORTEN } from '../config/appConfig';
+
 const NIVEAU_LABEL = { hard: 'hoge belastbaarheid', matig: 'gemiddelde belastbaarheid', rustig: 'lichte belastbaarheid', herstel: 'herstel' };
 
 // Intensiteit-rangorde van de sporten zelf — bepaalt of een override "lichter" is.
@@ -10,7 +12,7 @@ const SPORT_INTENSITEIT = { rust: 0, wandelen: 1, homefitness: 2, fietsen: 3 };
 
 // Hybride: vast weekschema, met override naar een lichtere sport bij laag
 // herstel — nooit zomaar schrappen, altijd met uitleg.
-export function kiesSportVanDag({ dagKort, weekSchema, niveau, judoVandaag, weer = null }) {
+export function kiesSportVanDag({ dagKort, weekSchema, niveau, judoVandaag, weer = null, vermijdSporten = [] }) {
   if (judoVandaag) return { sport: 'judo', gepland: 'judo', overschreven: false, waarom: [] };
 
   const gepland = weekSchema?.[dagKort] || 'rust';
@@ -32,6 +34,18 @@ export function kiesSportVanDag({ dagKort, weekSchema, niveau, judoVandaag, weer
       waarom.push(`Fietsen stond gepland, maar ${weerReden} — een home fitness-sessie in plaats daarvan.`);
     }
   }
+
+  // Blessure-veto: een actieve blessure kan deze sport specifiek afraden (zie
+  // BLESSURE_REGIOS). Kies dan het lichtste alternatief dat zelf niet ook
+  // afgeraden wordt; pas als alles afgeraden is, valt het terug op rust.
+  if (vermijdSporten.includes(sport)) {
+    const voorVeto = sport;
+    const alternatieven = ['wandelen', 'homefitness', 'rust'];
+    sport = alternatieven.find((s) => s === 'rust' || !vermijdSporten.includes(s));
+    waarom.push(`${SPORTEN[voorVeto]?.naam || voorVeto} stond gepland, maar dat wordt afgeraden door een actieve blessure — ${
+      sport === 'rust' ? 'vandaag rust in plaats daarvan.' : `${SPORTEN[sport]?.naam || sport} in de plaats daarvan.`}`);
+  }
+
   return { sport, gepland, overschreven: sport !== gepland, waarom };
 }
 

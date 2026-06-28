@@ -9,6 +9,8 @@ import {
 import { useSettings } from '../contexts/SettingsContext';
 import { garminSamenvatting, syncStatus } from '../services/garmin';
 import { DOELEN } from '../services/coach';
+import { isBlessureActief, isVerlopenNietGemeld } from '../services/blessures';
+import { BLESSURE_REGIOS } from '../config/appConfig';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
@@ -22,8 +24,8 @@ export default function Gezondheid() {
   const datum = datumKey(new Date());
   const [garmin, setGarmin] = useState(null);
   const [checkin, setCheckin] = useState({ slaapGevoel: 3, energie: 3, pijn: 0, notitie: '' });
-  const [reva, setReva] = useState([]);
-  const [nieuwReva, setNieuwReva] = useState('');
+  const [blessures, setBlessures] = useState([]);
+  const [nieuweBlessure, setNieuweBlessure] = useState('');
   const [sync, setSync] = useState(null);
   const [acwr, setAcwr] = useState(null);
   const doel = instellingen?.gezondheid?.doel || 'algemeen';
@@ -38,10 +40,54 @@ export default function Gezondheid() {
         const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
         setAcwr(acwrBerekenen(sessieBelasting(acts, rpeMap)));
       });
-    return subscribeCollection(user.uid, 'reva', setReva);
+    return subscribeCollection(user.uid, 'blessures', setBlessures);
   }, [user, datum]);
 
-  const blessureActief = (reva || []).some((r) => r.blessureActief);
+  // Eenmalige migratie: oude losse reva-oefeningen (vóór het blessure-model)
+  // worden samengevoegd tot één "Algemeen"-blessure, zodat niets verloren gaat.
+  useEffect(() => {
+    if (!user || blessures.length) return;
+    getCollection(user.uid, 'reva').then(async (oude) => {
+      if (!oude.length) return;
+      await addItem(user.uid, 'blessures', {
+        titel: 'Algemeen', regio: 'algemeen', specifiek: '', notitie: '',
+        startDatum: null, eindDatum: null, actief: true, eindeGemeld: false,
+        aantalPerDag: oude.length,
+        oefeningen: oude.map((r) => ({ id: r.id, naam: r.naam, sets: r.sets || '3×12', actief: true })),
+      });
+      await Promise.all(oude.map((r) => deleteItem(user.uid, 'reva', r.id)));
+      toast('Je oude reva-oefeningen zijn samengevoegd tot één blessure "Algemeen" — pas gerust regio/naam aan.');
+    });
+  }, [user, blessures.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const blessureActief = (blessures || []).some((b) => isBlessureActief(b, datum));
+
+  const voegBlessureToe = async () => {
+    if (!nieuweBlessure.trim()) return;
+    await addItem(user.uid, 'blessures', {
+      titel: nieuweBlessure.trim(), regio: 'algemeen', specifiek: '', notitie: '',
+      startDatum: datum, eindDatum: null, actief: true, eindeGemeld: false,
+      aantalPerDag: 3, oefeningen: [],
+    });
+    setNieuweBlessure('');
+  };
+
+  const bevestigAfgelopen = (b) => updateItem(user.uid, 'blessures', b.id, { actief: false, eindeGemeld: true });
+
+  const voegOefeningToe = (b) => {
+    const naam = window.prompt('Naam van de oefening?');
+    if (!naam?.trim()) return;
+    const oefeningen = [...(b.oefeningen || []), { id: `o${Date.now()}`, naam: naam.trim(), sets: '3×12', actief: true }];
+    updateItem(user.uid, 'blessures', b.id, { oefeningen });
+  };
+  const wijzigOefening = (b, oId, patch) => {
+    const oefeningen = (b.oefeningen || []).map((o) => (o.id === oId ? { ...o, ...patch } : o));
+    updateItem(user.uid, 'blessures', b.id, { oefeningen });
+  };
+  const verwijderOefening = (b, oId) => {
+    const oefeningen = (b.oefeningen || []).filter((o) => o.id !== oId);
+    updateItem(user.uid, 'blessures', b.id, { oefeningen });
+  };
   const kiesDoel = async (d) => {
     await opslaan('gezondheid', { doel: d });
     toast('Doel bewaard — de coach past zijn advies aan.');
@@ -51,12 +97,6 @@ export default function Gezondheid() {
   const bewaarCheckin = async () => {
     await saveDag(user.uid, datum, { checkin });
     toast('Check-in bewaard. Je planning houdt hier rekening mee.');
-  };
-
-  const voegRevaToe = async () => {
-    if (!nieuwReva.trim()) return;
-    await addItem(user.uid, 'reva', { naam: nieuwReva.trim(), sets: '3×12', blessureActief: false });
-    setNieuwReva('');
   };
 
   return (
@@ -81,7 +121,8 @@ export default function Gezondheid() {
       {/* Coach-advies */}
       {(garmin || blessureActief) && (
         <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief}
-          energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null} />
+          energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null}
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} />
       )}
 
       {/* Garmin: gauges + profiel */}
@@ -143,39 +184,117 @@ export default function Gezondheid() {
         <button className="btn primary block" onClick={bewaarCheckin}>Check-in bewaren</button>
       </section>
 
-      {/* Revalidatie-oefeningen */}
+      {/* Blessures + revalidatie-oefeningen */}
       <section className="card stack">
-        <div className="card-title">Revalidatie-oefeningen</div>
-        {reva.length === 0 && <p className="small muted" style={{ margin: 0 }}>Voeg je kine-oefeningen toe.</p>}
-        {reva.map((r) => (
-          <div className="list-row" key={r.id}>
+        <div className="card-title">Blessures & revalidatie</div>
+        {blessures.length === 0 && <p className="small muted" style={{ margin: 0 }}>Voeg een blessure toe om revalidatie-oefeningen te plannen.</p>}
+        {blessures.map((b) => <BlessureKaart key={b.id} b={b} uid={user.uid} datum={datum}
+          bevestigAfgelopen={bevestigAfgelopen} voegOefeningToe={voegOefeningToe}
+          wijzigOefening={wijzigOefening} verwijderOefening={verwijderOefening} />)}
+        <div className="row" style={{ gap: 8 }}>
+          <input className="input" value={nieuweBlessure} onChange={(e) => setNieuweBlessure(e.target.value)}
+            placeholder="Nieuwe blessure (bv. knie, of gewoon 'spier')…" onKeyDown={(e) => e.key === 'Enter' && voegBlessureToe()} />
+          <button className="btn primary" onClick={voegBlessureToe}><IcoPlus width={18} height={18} /></button>
+        </div>
+        <p className="small dim" style={{ margin: 0 }}>
+          Geen diagnose nodig — “spier” of “onbepaald” mag. Bij een gekozen regio (knie, rug…)
+          raadt de coach zelf de juiste sporten af; bij “algemeen” blijft de coach enkel voorzichtiger
+          met je niveau. Oefeningen op inactief zetten verwijdert ze niet — handig om op te bouwen
+          van makkelijk naar moeilijk.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function BlessureKaart({ b, uid, datum, bevestigAfgelopen, voegOefeningToe, wijzigOefening, verwijderOefening }) {
+  const actief = isBlessureActief(b, datum);
+  const verlopenNietGemeld = isVerlopenNietGemeld(b, datum);
+  const oefeningen = b.oefeningen || [];
+  return (
+    <div className="card" style={{ background: 'var(--bg-2)', padding: 12 }}>
+      <div className="stack" style={{ gap: 8 }}>
+        <div className="row between" style={{ gap: 8 }}>
+          <input className="input sm" style={{ minHeight: 32, fontWeight: 600, flex: 1 }}
+            defaultValue={b.titel || ''} aria-label="Titel blessure"
+            onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== b.titel && updateItem(uid, 'blessures', b.id, { titel: e.target.value.trim() })} />
+          <button className="icon-btn" onClick={() => deleteItem(uid, 'blessures', b.id)} aria-label="Verwijderen">
+            <IcoTrash width={18} height={18} />
+          </button>
+        </div>
+
+        {verlopenNietGemeld && (
+          <div className="row between small" style={{ color: 'var(--warning)', gap: 8 }}>
+            <span>⚠ Einddatum ({b.eindDatum}) is voorbij — nog actief?</span>
+            <button className="btn sm" onClick={() => bevestigAfgelopen(b)}>Bevestig afgelopen</button>
+          </div>
+        )}
+
+        <div className="row wrap" style={{ gap: 8 }}>
+          <div className="field" style={{ minWidth: 160 }}>
+            <label>Regio</label>
+            <select className="input sm" value={b.regio || 'algemeen'}
+              onChange={(e) => updateItem(uid, 'blessures', b.id, { regio: e.target.value })}>
+              {Object.entries(BLESSURE_REGIOS).map(([k, v]) => <option key={k} value={k}>{v.naam}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{ minWidth: 140 }}>
+            <label>Aantal oef./dag</label>
+            <input className="input sm" type="number" min={1} value={b.aantalPerDag || 3}
+              onChange={(e) => updateItem(uid, 'blessures', b.id, { aantalPerDag: Math.max(1, Number(e.target.value) || 1) })} />
+          </div>
+          <label className="row small" style={{ gap: 6, alignSelf: 'center' }}>
+            <input type="checkbox" checked={b.actief !== false}
+              onChange={(e) => updateItem(uid, 'blessures', b.id, { actief: e.target.checked })} />
+            actief
+          </label>
+        </div>
+
+        <input className="input sm" placeholder="Specifiek (optioneel, bv. 'voorste kruisband' of 'spier — niet naar dokter')"
+          defaultValue={b.specifiek || ''}
+          onBlur={(e) => e.target.value.trim() !== (b.specifiek || '') && updateItem(uid, 'blessures', b.id, { specifiek: e.target.value.trim() })} />
+
+        <div className="row wrap" style={{ gap: 8 }}>
+          <div className="field" style={{ minWidth: 140 }}>
+            <label>Startdatum</label>
+            <input className="input sm" type="date" value={b.startDatum || ''}
+              onChange={(e) => updateItem(uid, 'blessures', b.id, { startDatum: e.target.value || null })} />
+          </div>
+          <div className="field" style={{ minWidth: 140 }}>
+            <label>Einddatum</label>
+            <input className="input sm" type="date" value={b.eindDatum || ''}
+              onChange={(e) => updateItem(uid, 'blessures', b.id, { eindDatum: e.target.value || null, eindeGemeld: false })} />
+          </div>
+          <label className="row small" style={{ gap: 6, alignSelf: 'center' }}>
+            <input type="checkbox" checked={!b.eindDatum}
+              onChange={(e) => e.target.checked && updateItem(uid, 'blessures', b.id, { eindDatum: null, eindeGemeld: false })} />
+            onbepaald
+          </label>
+        </div>
+
+        <div className="divider" />
+        <div className="small dim">Oefeningen ({oefeningen.filter((o) => o.actief !== false).length} actief van {oefeningen.length})</div>
+        {oefeningen.map((o) => (
+          <div className="list-row" key={o.id}>
             <div className="grow">
-              <input className="input sm" style={{ minHeight: 32, fontWeight: 600 }}
-                defaultValue={r.naam || ''} aria-label="Naam oefening"
-                onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== r.naam && updateItem(user.uid, 'reva', r.id, { naam: e.target.value.trim() })} />
+              <input className="input sm" style={{ minHeight: 32 }} defaultValue={o.naam || ''} aria-label="Naam oefening"
+                onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== o.naam && wijzigOefening(b, o.id, { naam: e.target.value.trim() })} />
               <input className="input sm" style={{ minHeight: 32, marginTop: 4, maxWidth: 140 }}
-                value={r.sets || ''} onChange={(e) => updateItem(user.uid, 'reva', r.id, { sets: e.target.value })} />
+                value={o.sets || ''} onChange={(e) => wijzigOefening(b, o.id, { sets: e.target.value })} />
             </div>
             <label className="row small" style={{ gap: 6 }}>
-              <input type="checkbox" checked={!!r.blessureActief}
-                onChange={(e) => updateItem(user.uid, 'reva', r.id, { blessureActief: e.target.checked })} />
-              blessure actief
+              <input type="checkbox" checked={o.actief !== false}
+                onChange={(e) => wijzigOefening(b, o.id, { actief: e.target.checked })} />
+              actief
             </label>
-            <button className="icon-btn" onClick={() => deleteItem(user.uid, 'reva', r.id)} aria-label="Verwijderen">
+            <button className="icon-btn" onClick={() => verwijderOefening(b, o.id)} aria-label="Verwijderen">
               <IcoTrash width={18} height={18} />
             </button>
           </div>
         ))}
-        <div className="row" style={{ gap: 8 }}>
-          <input className="input" value={nieuwReva} onChange={(e) => setNieuwReva(e.target.value)}
-            placeholder="Nieuwe oefening…" onKeyDown={(e) => e.key === 'Enter' && voegRevaToe()} />
-          <button className="btn primary" onClick={voegRevaToe}><IcoPlus width={18} height={18} /></button>
-        </div>
-        <p className="small dim" style={{ margin: 0 }}>
-          Zet “blessure actief” aan bij een lopende blessure — dan stelt de app geen fietsen voor
-          en plant het herstel in.
-        </p>
-      </section>
+        <button className="btn sm" onClick={() => voegOefeningToe(b)}><IcoPlus width={14} height={14} /> Oefening toevoegen</button>
+        {!actief && <p className="small dim" style={{ margin: 0 }}>Niet actief — telt niet mee voor de coach of "vandaag".</p>}
+      </div>
     </div>
   );
 }

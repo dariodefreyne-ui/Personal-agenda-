@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import {
-  getCollection, getDocById, getGarminDag, getWeer,
+  getCollection, getDocById, getGarminDag, getWeer, getDagCached,
   getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync, getVakanties, verwijderVerzet,
   verwijderSlaapOverride,
 } from '../services/data';
@@ -11,6 +11,8 @@ import { garminSamenvatting } from '../services/garmin';
 import { vakantieFlags } from '../services/vakanties';
 import { zetTaakGedaan } from '../services/taken';
 import { coachAdvies } from '../services/coach';
+import { isBlessureActief, vermijdSportenVanBlessures } from '../services/blessures';
+import { revaTherapietrouw } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting, belastingStatus } from '../services/belasting';
 import { datumKey, dagKortVanDatum, weekKey, toMin, toHHMM, nuMin } from '../services/tijd';
 
@@ -40,9 +42,10 @@ export function useDagPlan(datumObj = new Date()) {
     let actief = true;
     (async () => {
       setStaat((s) => ({ ...s, laden: true }));
-      const [taken, reva, maaltijden, garmin, agendaEvents, dag, week, vakanties, garminSync, weer, acts, logs] = await Promise.all([
+      const [taken, reva, blessures, maaltijden, garmin, agendaEvents, dag, week, vakanties, garminSync, weer, acts, logs] = await Promise.all([
         getCollection(uid, 'taken'),
         getCollection(uid, 'reva'),
+        getCollection(uid, 'blessures'),
         getCollection(uid, 'maaltijden'),
         getGarminDag(uid, datum),
         getAgendaEventsVoorDag(uid, datum),
@@ -63,8 +66,24 @@ export function useDagPlan(datumObj = new Date()) {
       // Zonder verlof: expliciete keuze, anders weekend -> 'vrij'.
       let werkModus = verlof ? 'verlof' : (week?.dagen?.[dagKort] || null);
       if (!werkModus && isWeekend) werkModus = 'vrij';
-      const blessureActief = (reva || []).some((r) => r.blessureActief);
+      const blessureActief = (blessures || []).some((b) => isBlessureActief(b, datum));
+      const vermijdSporten = vermijdSportenVanBlessures(blessures, datum);
       const isVakantie = !!week?.vakantie || verlof;
+
+      // Adaptieve feedback-loop voor reva: als de voorbije dagen de oefeningen
+      // structureel zijn gemist, signaleren we dat — niet om te straffen, maar
+      // omdat een blessure die niet wordt nageleefd net het risico is dat we
+      // willen vermijden (premium-principe 6: adaptief, met feedback-loops).
+      let revaTrouw = null;
+      if (blessureActief) {
+        const vorigeData = new Date(datumObj);
+        const vorigeDagen = await Promise.all([1, 2, 3].map((n) => {
+          const d = new Date(vorigeData);
+          d.setDate(d.getDate() - n);
+          return getDagCached(uid, datumKey(d));
+        }));
+        revaTrouw = revaTherapietrouw(vorigeDagen).score;
+      }
       const garminSam = metSlaapOverride(garminSamenvatting(garmin), dag?.slaapOverride);
 
       // Periodisering (ACWR) + overbelasting: dezelfde signalen die de coach op
@@ -80,12 +99,13 @@ export function useDagPlan(datumObj = new Date()) {
         hrvStatus: garminSam?.hrvStatus ?? null,
         goal: instellingen.gezondheid?.doel,
         blessureActief, overbelast, acwrZone: acwr?.zone,
+        pijn: typeof dag?.checkin?.pijn === 'number' && dag.checkin.pijn > 0 ? dag.checkin.pijn : null,
       });
 
       const plan = genereerDagPlan({
         datum, dagKort, instellingen, werkModus,
-        taken, reva, maaltijden, agendaEvents, garmin: garminSam,
-        weer, blessureActief, isVakantie, geenJudo, coachNiveau: advies.niveau,
+        taken, reva, blessures, maaltijden, agendaEvents, garmin: garminSam,
+        weer, blessureActief, isVakantie, geenJudo, coachNiveau: advies.niveau, revaTrouw,
       });
 
       // Adaptief: verzette (ingehaalde) blokken krijgen hun nieuwe tijd. Zo "faalt"
@@ -101,7 +121,7 @@ export function useDagPlan(datumObj = new Date()) {
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
-        werkModus, datum, dagKort, blessureActief, garminSync, acwr, advies, weer,
+        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, advies, weer,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen
@@ -115,6 +135,9 @@ export function useDagPlan(datumObj = new Date()) {
           id: b.id, start: b.start, eind: b.eind, titel: b.titel, type: b.type,
           push: b.push !== false, detail: b.detail || null,
           sleutel: sleutelTypes.has(b.type), checkbaar: isCheckbaar(b),
+          // Oefening-id's bewaren zodat de North Star-score een reva-blok met
+          // checklist pas als "gedaan" telt wanneer alle oefeningen zijn afgevinkt.
+          oefeningen: b.oefeningen?.length ? b.oefeningen.map((o) => o.id) : null,
         }));
         // Alleen schrijven als het plan echt veranderd is — bespaart Firestore-writes.
         if (JSON.stringify(minimaal) !== JSON.stringify(dag?.plan || null)) {

@@ -11,12 +11,46 @@
 const KERN_TYPES = new Set(['judo', 'lesgeven', 'sport', 'reva', 'voetbal']);
 const teltMee = (b) => (typeof b?.checkbaar === 'boolean' ? b.checkbaar : KERN_TYPES.has(b?.type));
 
+// Een reva-blok met een oefeningen-checklist is pas "gedaan" als alle losse
+// oefeningen zijn afgevinkt (die staan onder samengestelde id's `${blokId}::${oefId}`).
+// Andere blokken blijven gewoon op hun eigen blok-id.
+function isBlokGedaan(b, gedaan) {
+  if (b.oefeningen?.length) return b.oefeningen.every((oId) => gedaan?.[`${b.id}::${oId}`]);
+  return !!gedaan?.[b.id];
+}
+
 // Therapietrouw van één dag, of null als er die dag niets te doen viel.
 export function dagTherapietrouw(dag) {
   const kern = (dag?.plan || []).filter(teltMee);
   if (!kern.length) return null;
-  const gedaan = kern.filter((b) => dag?.gedaan?.[b.id]).length;
+  const gedaan = kern.filter((b) => isBlokGedaan(b, dag?.gedaan)).length;
   return { ratio: gedaan / kern.length, gedaan, totaal: kern.length };
+}
+
+// Reva-specifieke therapietrouw (enkel blessure-oefeningen), losstaand van de
+// algemene North Star-score. Geeft null als er die dag(en) geen reva gepland stond.
+export function dagRevaTherapietrouw(dag) {
+  const reva = (dag?.plan || []).filter((b) => b.type === 'reva');
+  if (!reva.length) return null;
+  const gedaan = reva.filter((b) => isBlokGedaan(b, dag?.gedaan)).length;
+  return { ratio: gedaan / reva.length, gedaan, totaal: reva.length };
+}
+
+// dagen = reeks dagdocs (oud→nieuw). Geeft een reva-therapietrouw-score + uitleg,
+// met dezelfde veilige terugval als de algemene North Star-score bij weinig data.
+export function revaTherapietrouw(dagen) {
+  const perDag = (dagen || []).map(dagRevaTherapietrouw);
+  const metData = perDag.filter((d) => d != null);
+  if (!metData.length) {
+    return { score: null, dagenMetReva: 0, waarom: 'Nog geen reva-blokken gepland in deze periode.' };
+  }
+  const score = Math.round((metData.reduce((a, d) => a + d.ratio, 0) / metData.length) * 100);
+  const totGedaan = metData.reduce((a, d) => a + d.gedaan, 0);
+  const totKern = metData.reduce((a, d) => a + d.totaal, 0);
+  return {
+    score, dagenMetReva: metData.length,
+    waarom: `${totGedaan}/${totKern} reva-blokken volledig afgevinkt over ${metData.length} ${metData.length === 1 ? 'dag' : 'dagen'} met reva gepland.`,
+  };
 }
 
 function label(score) {
