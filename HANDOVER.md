@@ -5,7 +5,7 @@ Werkdocument voor wie verder bouwt. Geeft de **stand van zaken**, wat er onderwe
 valkuilen niet herhaalt) en een **concrete to-do per fase**. Lees ook `CLAUDE.md`
 (architectuur + datamodel) en `README.md` (babyproof setup/deploy).
 
-Laatst bijgewerkt: 27/06/2026 (avond).
+Laatst bijgewerkt: 28/06/2026.
 
 ---
 
@@ -14,9 +14,28 @@ Laatst bijgewerkt: 27/06/2026 (avond).
 Persoonlijke planning/gezondheid-PWA op **Firebase** (Firestore, Auth e-mail, FCM
 push, Cloud Functions) + een **Garmin→Firestore** Python-pijplijn. **Eén gebruiker**
 (single-user). Doel: alle losse apps vervangen en de dag structureren rond werk
-(thuis/kantoor, auto/fiets), sport (judo trainen + lesgeven, fietsen, reva) en vrije
-tijd (o.a. RSCA-matchen), met push-herinneringen, gewoontes/streaks, Garmin-data en
-een coach-laag. **Alles na opzet in-app beheerbaar** — geen code meer nodig.
+(thuis/kantoor, auto/fiets), sport (judo trainen + lesgeven, fietsen) en vrije
+tijd (o.a. RSCA-matchen), met push-herinneringen en gewoontes/streaks. **Alles na
+opzet in-app beheerbaar** — geen code meer nodig.
+
+De app is **niet langer alleen een planner**: ze werkt sinds Fase 5/5.5 ook als
+**persoonlijke sportcoach**. Concreet (zie §2 voor de code-locaties):
+- **Trainingsadvies** (`services/coach.js`) uit Garmin (readiness/body battery/
+  slaap/HRV) + zelfrapportage (energie, pijn), per doel (afvallen/kracht/
+  uithouding/herstel/algemeen), altijd met `waarom`/`databronnen`/`zekerheid`.
+- **Blessure- & revalidatiebeheer** (`services/blessures.js`, `pages/Gezondheid.jsx`):
+  blessures met regio + eigen oefenlijst, round-robin in de dagplanning
+  (`services/planner.js`), met therapietrouw-tracking per oefening.
+- **Trainingsbelasting (ACWR)** (`services/belasting.js`): acute:chronic-ratio
+  uit RPE-gewogen sessiebelasting, met zones en blessurepreventie-advies.
+- **North Star-consistentiescore** (`services/noordster.js`): één score voor
+  "ben ik consequent", plus een apart **reva-trouw**-getal zodra er actieve
+  blessures zijn.
+
+Dit verandert het **doel** van de app: niet enkel "mijn dag plannen", maar "mijn
+dag plannen **en** mij coachen naar een gezonder, blessurevrijer trainingsritme" —
+zie `CLAUDE.md` → "Productprincipes" voor de explainability-eisen die voor élk
+nieuw coach-/planneradvies gelden.
 
 Stack: Vite + React 18 + react-router-dom v6 + vite-plugin-pwa · Firestore met
 persistentLocalCache · Cloud Functions v2 (Node 22, CommonJS) · Vitest (unit) +
@@ -26,7 +45,7 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
 
 ## 2. Stand van zaken — wat is af
 
-**Fase 1–3 + audit-ronde + Fase 4 zijn klaar, gedeployed en in gebruik.**
+**Fase 1–5 zijn klaar, gedeployed en in gebruik.**
 
 - **Fase 1 — Skelet:** Vite/React/Firebase/PWA, config (thema's, bloktypes,
   werkmodi, `DEFAULT_INSTELLINGEN`).
@@ -81,8 +100,55 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
   gewoonte-taak achteraf op een voorbije dag af- of uitvinken kan de streak
   dus laten kloppen of net laten afwijken, afhankelijk van de volgorde. Geen
   retroactieve streak-herrekening gebouwd — bewust uit scope gehouden.
+- **Fase 5.5 — Blessures & revalidatie (volledige feature, audit-gedreven):**
+  legacy losse `reva`-oefeningen vervangen door een echt **blessuremodel**
+  (`blessures/{id}`: regio, specifiek, start-/einddatum, `aantalPerDag`, eigen
+  oefenlijst) met automatische **eenmalige migratie** van oude `reva`-docs
+  (`pages/Gezondheid.jsx`, gegated op `blessures.length === 0`). Na een audit
+  ("wat heeft de gebruiker nog nodig voor optimaal herstel?") zijn 5 concrete
+  gaten gedicht, stuk voor stuk getest:
+  1. **Reva-blokken tellen mee in conflictdetectie** (`planner.js` →
+     `detecteerConflicten` nam `reva` op in de "belangrijke" bron-/type-lijst) —
+     voordien kon een reva-sessie ongemerkt overlappen met een vast agenda-item.
+  2. **Zelf-gerapporteerde pijn is een hard veiligheidssignaal**, niet enkel een
+     actieve blessure: `coachAdvies({ pijn })` dwingt bij `pijn ≥ 3/5` altijd
+     'herstel' + hoge zekerheid af (`coach.js` → `PIJN_HERSTEL_DREMPEL`), en
+     tempert het advies al bij lichte pijn (1-2).
+  3. **Adaptieve reva-trouw-nudge**: bij een actieve blessure berekent
+     `useDagPlan` de reva-therapietrouw van de afgelopen 3 dagen
+     (`noordster.js` → `revaTherapietrouw`, via `getDagCached`) en de planner
+     waarschuwt (zonder te bestraffen) als die onder 50% zit — premium-principe
+     "bouw voor de échte gebruiker, niet de perfecte".
+  4. **North Star-score telde reva-blokken met een oefeningenchecklist nooit als
+     "gedaan"** (bug): `dagTherapietrouw` keek naar `gedaan[blokId]`, maar reva
+     wordt per oefening afgevinkt op het samengestelde id `${blokId}::${oefeningId}`.
+     Gefixt met de `isBlokGedaan`-helper in `noordster.js`; vereiste ook dat
+     `useDagPlan` de oefening-ids meeschrijft in het persisted plan.
+  5. **Blessure-afloop wordt niet stilzwijgend genegeerd**: de dispatcher
+     (`functions/index.js`, ochtend-blok) stuurt een push als een blessure z'n
+     `eindDatum` voorbij is maar nog niet bevestigd (`eindeGemeld`).
+  - **Coach-kaart-flicker (Gezondheid-pagina) — twee opeenvolgende bugs, allebei
+    gefixt:**
+    (a) de pagina las Garmin/check-in/blessures via losse, ongecoördineerde
+    `useEffect`/listener-calls, waardoor `CoachKaart` even met onvolledige data
+    rendert vóór alles binnen is — opgelost door alles te bundelen in één
+    `Promise.all(...)` en het renderen te gaten op `klaar && blessuresKlaar`
+    (`pages/Gezondheid.jsx`).
+    (b) **de échte hoofdoorzaak**: `firestore.rules` had **geen regel voor de
+    `blessures`-collectie** en viel terug op het vangnet `allow write: if false`.
+    Elke schrijf (blessure/oefening toevoegen of wijzigen) werd dus door de
+    server geweigerd, maar de Firestore-SDK past **eerst optimistisch lokaal**
+    toe en draait dat na de afwijzing weer terug — dat liet `blessures`
+    (en dus `blessureActief`/de coach-kaart én de Blessures-kaart) **continu**
+    heen-en-weer springen tussen de optimistische en teruggedraaide staat.
+    Gefixt door `match /blessures/{doc} { allow read, write: if isOwner(userId); }`
+    toe te voegen, naast de andere eigenaar-collecties.
+    **Les voor de volgende fase:** als een nieuwe top-level subcollectie wordt
+    toegevoegd, check **altijd** `firestore.rules` — het vangnet (`{document=**}`)
+    is read-only en geeft géén foutmelding in de UI, enkel een stille
+    write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 70 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 119 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -162,6 +228,27 @@ accountniveau aan. `garmin/requirements.txt` staat op 0.3.6 + curl_cffi + ua-gen
 tot de account-hold voorbij is. **Let op:** plak nooit Garmin-wachtwoorden in de
 chat/repo; de repo is publiek.
 
+### 4.5 "Flikkerende" UI die geen render-bug was, maar een ontbrekende security-rule
+Symptoom: op Gezondheid sprong de coach-kaart constant tussen twee adviesregels,
+en de Blessures-kaart wisselde constant tussen de oefeningenlijst en de lege
+"voeg blessure toe"-staat. Eerste (verkeerde) hypothese: een React-laad-volgorde-
+race (losse `useEffect`/listener-calls die op verschillende momenten landen) —
+die fix (alles bundelen in `Promise.all`, renderen gaten op een `klaar`-vlag) was
+op zich een verbetering, maar **loste het probleem niet op**. De échte oorzaak:
+`firestore.rules` had **geen expliciete regel voor `blessures`**, dus elke write
+viel terug op het vangnet (`allow write: if false`). De Firestore-SDK schrijft
+**altijd eerst optimistisch lokaal** vóór de server bevestigt; bij een
+permission-denied draait ze die lokale schrijf weer terug — en dat
+"schrijven → terugdraaien" in een lus (telkens een blessure/oefening
+toevoegen/wijzigen probeert opnieuw) is wat als "constant flikkeren" zichtbaar
+werd. **Les:** als de UI data toont die niet blijft "plakken" (verschijnt en
+verdwijnt weer, zonder duidelijke gebruikersactie ertussen) en er is een
+real-time `onSnapshot`/listener in het spel, verdenk **eerst** een ontbrekende of
+te strikte Firestore-rule vóór je een React-timingbug zoekt — permission-denied
+op een write geeft in de UI géén foutmelding, enkel een stille rollback. Check
+bij elke nieuwe top-level subcollectie meteen of `firestore.rules` een regel
+heeft (de catch-all onderaan is bewust read-only).
+
 ---
 
 ## 4b. Productrichting — premium = vertrouwen, niet intelligentie
@@ -224,6 +311,23 @@ Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
 - [ ] **Trainingsblokken / periodisering** (expliciete opbouw- vs deload-weken) — nog
       open; ACWR geeft nu al de richting.
 
+### Fase 5.5 — Blessures & revalidatie ✓ (af)
+Volledig blessuremodel + reva-therapietrouw, audit-gedreven (zie §4.5 voor de
+twee gefixte bugs in deze feature):
+- [x] **Blessuremodel** (`blessures/{id}`) met regio, oefenlijst, round-robin in
+      de dagplanning, automatische migratie van legacy `reva`-docs.
+- [x] **Pijn als hard veiligheidssignaal** in de coach (≥3/5 → altijd herstel).
+- [x] **Reva-conflictdetectie** in de planner + **reva-trouw-nudge** (adaptieve
+      feedback-loop, niet-bestraffend) + **North Star meet reva-checklists
+      correct**.
+- [x] **Blessure-afloop-melding** via de push-dispatcher.
+- [x] **Firestore-rule voor `blessures`** toegevoegd (was de échte oorzaak van de
+      "flikkerende" coach-/blessures-kaart, zie §4.5).
+- [ ] **Niet opgelost (bewust uit scope):** geen rate-limiting/dedup op de
+      blessure-afloop-push als de gebruiker `eindDatum` meermaals wijzigt op
+      één dag — beperkt risico (max. 1×/dag door de bestaande `alGestuurd`-dedup
+      per slug, maar geen specifieke test hiervoor).
+
 ### Fase 6 — Veerkracht & data
 - [ ] **Strava-fallback** als Garmin faalt (zie §4.4).
 - [ ] **Data-export** (JSON/CSV) + back-up/herstel.
@@ -243,12 +347,15 @@ Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
 ```bash
 npm install
 npm run dev      # lokaal draaien
-npm test         # 49 unit-tests
+npm test         # 119 unit-tests
 npm run build    # productie-build (genereert ook firebase-messaging-sw.js)
 ```
 
-- **Branch:** ontwikkel op `claude/personal-agenda-app-setup-jmfbm4`, push daarheen.
-  Geen PR aanmaken tenzij gevraagd. Merge naar `main`/`Main` triggert de deploy.
+- **Branch:** ontwikkel op `claude/dashboard-datumkiezer`, push daarheen. Geen PR
+  aanmaken tenzij gevraagd. Merge naar `main` triggert de deploy.
+- **Bij een nieuwe top-level Firestore-subcollectie:** voeg altijd meteen een
+  regel toe in `firestore.rules` (zie §4.5) — de catch-all is read-only en
+  geeft géén foutmelding in de UI bij een geweigerde write.
 - **Na deploy:** controleer de **App-versie** onderaan Beheer om te bevestigen dat de
   nieuwe build live staat (iOS-PWA: bij twijfel app verwijderen + opnieuw toevoegen).
 - **Tweede repo:** `clubapp-Kodokan` (zelfde branchnaam) — daar staat de app-versie in
