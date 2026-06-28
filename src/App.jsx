@@ -8,6 +8,7 @@ import Taken from './pages/Taken';
 import Gezondheid from './pages/Gezondheid';
 import Maaltijden from './pages/Maaltijden';
 import Voortgang from './pages/Voortgang';
+import Coach from './pages/Coach';
 import Beheer from './pages/Beheer';
 
 function Laden() {
@@ -36,6 +37,7 @@ export default function App() {
       <Route path="/gezondheid" element={<Beveiligd><Gezondheid /></Beveiligd>} />
       <Route path="/maaltijden" element={<Beveiligd><Maaltijden /></Beveiligd>} />
       <Route path="/voortgang" element={<Beveiligd><Voortgang /></Beveiligd>} />
+      <Route path="/coach" element={<Beveiligd><Coach /></Beveiligd>} />
       <Route path="/beheer/*" element={<Beveiligd><Beheer /></Beveiligd>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

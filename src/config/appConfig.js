@@ -42,6 +42,25 @@ export const DAG_NAMEN = {
   vr: 'Vrijdag', za: 'Zaterdag', zo: 'Zondag',
 };
 
+// Sporten die de coach op niet-judo dagen kan inplannen + invullen. Judo blijft
+// een vast, niet-gedetailleerd blok (zie sport.judoEigenClub/judoLesgeven).
+export const SPORTEN = {
+  homefitness: { naam: 'Home fitness', kort: 'Fitness' },
+  fietsen: { naam: 'Fietsen', kort: 'Fietsen' },
+  wandelen: { naam: 'Wandelen', kort: 'Wandelen' },
+  rust: { naam: 'Rustdag', kort: 'Rust' },
+};
+
+// Standaard oefeningen-bibliotheek voor home fitness — uitbreidbaar via Beheer.
+const STANDAARD_OEFENINGEN = [
+  { id: 'squat', naam: 'Squats', waarom: 'Bouwt beenkracht op — ondersteunt judo-explosiviteit en knie-stabiliteit.', sets: 3, reps: 12, categorie: 'kracht' },
+  { id: 'pushup', naam: 'Push-ups', waarom: 'Bovenlichaamskracht voor grip- en worpacties bij judo.', sets: 3, reps: 12, categorie: 'kracht' },
+  { id: 'plank', naam: 'Plank', waarom: 'Core-stabiliteit beschermt de onderrug bij judo en fietsen.', sets: 3, reps: 1, categorie: 'core' },
+  { id: 'lunges', naam: 'Lunges', waarom: 'Eenzijdige beenkracht en balans — verkleint blessurerisico.', sets: 3, reps: 10, categorie: 'kracht' },
+  { id: 'rows', naam: 'Rows (elastiek/halter)', waarom: 'Trekkracht voor grip en houding, complement op judo-duwbewegingen.', sets: 3, reps: 12, categorie: 'kracht' },
+  { id: 'mobiliteit', naam: 'Heup- & schoudermobiliteit', waarom: 'Houdt gewrichten soepel — verlaagt blessurerisico bij intensieve training.', sets: 2, reps: 8, categorie: 'mobiliteit' },
+];
+
 // Standaardinstellingen — bewerkbaar via Beheer.
 export const DEFAULT_INSTELLINGEN = {
   algemeen: {
@@ -76,6 +95,11 @@ export const DEFAULT_INSTELLINGEN = {
     elderstrainenDagen: ['ma', 'vr'],
     fietsAlsSport: true,
     fietsBijBlessure: false,
+    // Vast weekschema voor niet-judo dagen; de coach vult dit dagelijks in met
+    // concrete inhoud (oefeningen/km/interval) en mag het bij laag herstel
+    // vervangen door iets lichters (uitgelegd, nooit stilzwijgend geschrapt).
+    weekSchema: { ma: 'homefitness', di: 'fietsen', do: 'wandelen', vr: 'rust', zo: 'rust' },
+    oefeningen: STANDAARD_OEFENINGEN,
   },
   push: {
     intensiteit: 'elk_blok',   // 'elk_blok' | 'sleutel' | 'minimaal'

@@ -6,7 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { activeerPush } from '../services/push';
 import { syncAgendaNu } from '../services/agenda';
-import { PUSH_INTENSITEIT, APP_NAAM, DAGEN, DAG_NAMEN } from '../config/appConfig';
+import { PUSH_INTENSITEIT, APP_NAAM, DAGEN, DAG_NAMEN, SPORTEN } from '../config/appConfig';
 import { IcoBell, IcoLogout, IcoPlus, IcoTrash, IcoChevron } from '../components/Icons';
 
 // Gedeelde beheer-helpers bovenop de SettingsContext.
@@ -276,6 +276,11 @@ function SubSport() {
     const huidig = I.sport?.elderstrainenDagen || [];
     bewaar('sport', { elderstrainenDagen: huidig.includes(d) ? huidig.filter((x) => x !== d) : [...huidig, d] });
   };
+  const zetSchemaDag = (d, sport) => bewaar('sport', { weekSchema: { ...(I.sport?.weekSchema || {}), [d]: sport } });
+  const oefeningen = I.sport?.oefeningen || [];
+  const updateOefening = (idx, patch) => bewaar('sport', { oefeningen: oefeningen.map((o, i) => (i === idx ? { ...o, ...patch } : o)) });
+  const verwijderOefening = (idx) => bewaar('sport', { oefeningen: oefeningen.filter((_, i) => i !== idx) });
+  const voegOefeningToe = () => bewaar('sport', { oefeningen: [...oefeningen, { id: `oef-${Date.now()}`, naam: '', waarom: '', sets: 3, reps: 12, categorie: 'kracht' }] });
   // Gewone render-functie (géén component) -> geen remount/focusverlies bij typen.
   const tijdRij = (key0, idx, r) => (
     <div className="row wrap" style={{ gap: 8 }}>
@@ -344,6 +349,48 @@ function SubSport() {
         <p className="small dim" style={{ margin: 0 }}>
           “Vandaag” gebruikt dit schema: eigen trainingen worden vaste blokken; judoles geven plant ook
           een vertrek + snelle maaltijd ervoor (valt weg in vakantie tenzij aangevinkt).
+        </p>
+
+        <div className="divider" />
+        <div className="card-title" style={{ margin: 0 }}>Sportschema (niet-judo dagen)</div>
+        <div className="stack" style={{ gap: 6 }}>
+          {DAGEN.map((d) => (
+            <label className="row between" key={d}>
+              <span>{DAG_NAMEN[d]}</span>
+              <select className="select" style={{ width: 'auto' }} value={I.sport?.weekSchema?.[d] || 'rust'}
+                onChange={(e) => zetSchemaDag(d, e.target.value)}>
+                {Object.entries(SPORTEN).map(([key, s]) => <option key={key} value={key}>{s.naam}</option>)}
+              </select>
+            </label>
+          ))}
+        </div>
+        <p className="small dim" style={{ margin: 0 }}>
+          Op dagen met vaste judotraining/-les negeert de Coach dit schema automatisch. Bij laag herstel
+          kiest de Coach zelf een lichtere sport in de plaats (met uitleg), in plaats van te schrappen.
+        </p>
+
+        <div className="divider" />
+        <div className="card-title" style={{ margin: 0 }}>Home fitness-oefeningen</div>
+        {oefeningen.map((o, idx) => (
+          <div className="stack" style={{ gap: 6 }} key={o.id || idx}>
+            <div className="row wrap" style={{ gap: 8 }}>
+              <input className="input" style={{ minWidth: 160, flex: 1 }} value={o.naam} placeholder="Naam"
+                onChange={(e) => updateOefening(idx, { naam: e.target.value })} />
+              <input className="input" type="number" style={{ width: 70 }} value={o.sets ?? 3} placeholder="sets"
+                onChange={(e) => updateOefening(idx, { sets: Number(e.target.value) })} />
+              <input className="input" type="number" style={{ width: 70 }} value={o.reps ?? 12} placeholder="reps"
+                onChange={(e) => updateOefening(idx, { reps: Number(e.target.value) })} />
+              <button className="icon-btn" onClick={() => verwijderOefening(idx)} aria-label="Verwijderen"><IcoTrash width={18} height={18} /></button>
+            </div>
+            <input className="input" value={o.waarom || ''} placeholder="Waarom deze oefening?"
+              onChange={(e) => updateOefening(idx, { waarom: e.target.value })} />
+          </div>
+        ))}
+        <button className="btn sm" onClick={voegOefeningToe}>
+          <IcoPlus width={16} height={16} /> Oefening toevoegen
+        </button>
+        <p className="small dim" style={{ margin: 0 }}>
+          De Coach-pagina stelt hieruit elke home fitness-dag een sessie samen, met de “waarom” erbij.
         </p>
       </section>
     </Sub>
