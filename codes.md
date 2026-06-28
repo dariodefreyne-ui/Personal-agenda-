@@ -100,8 +100,6 @@ Branch: `claude/dashboard-datumkiezer`
 - `test/tijd.test.js`
 - `test/vakanties.test.js`
 
----
-
 ## `.env.example`
 
 ```example
@@ -734,6 +732,25 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
   5. **Blessure-afloop wordt niet stilzwijgend genegeerd**: de dispatcher
      (`functions/index.js`, ochtend-blok) stuurt een push als een blessure z'n
      `eindDatum` voorbij is maar nog niet bevestigd (`eindeGemeld`).
+  - **Reva-blok plant zelf rond werk/judo/agenda i.p.v. enkel een conflict te
+    melden** (gebruikersfeedback: een reva-sessie kwam standaard op
+    `opstaan + 60 min` te liggen, wat bij een laat opstaan-uur middenin de
+    werkdag terechtkwam — de planner zag het conflict wél, maar deed er niets
+    mee). `planner.js` → nieuwe `vindVrijSlot(blok, vanaf, duurMin)` scant
+    vooruit langs de al geplande "belangrijke" blokken (`vast` of bron
+    werk/judo/lesgeven/woonwerk/agenda) en geeft het eerste vrije moment van de
+    juiste duur terug. De reva-sectie (5c) probeert eerst een slot **na het
+    ontbijt en vóór het werk**, anders **na het werk**, telkens via
+    `vindVrijSlot` om al ingeplande blokken heen geschoven. Een **expliciet
+    gekozen** `blessure.tijd` blijft bewust ongewijzigd — dat is een bewuste
+    keuze van de gebruiker, conflictdetectie blijft daar het vangnet. Ook de
+    losse, verouderde 7u-"Reva-oefeningen"-gewoonte uit de eerste-login-seed
+    (`services/data.js` → `seedDefaultsIfNeeded`) is verwijderd: die was een
+    legacy-overblijfsel van vóór het blessuremodel (Fase 5.5) en boekte dubbel
+    met het nieuwe auto-blok. **Let op:** dit verwijdert enkel de seed voor
+    *nieuwe* gebruikers — een al bestaande, eerder geseede "Reva-oefeningen"-taak
+    in Firestore moet de gebruiker zelf verwijderen/deactiveren via de
+    Taken-pagina.
   - **Coach-kaart-flicker (Gezondheid-pagina) — twee opeenvolgende bugs, allebei
     gefixt:**
     (a) de pagina las Garmin/check-in/blessures via losse, ongecoördineerde
@@ -755,7 +772,7 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
     is read-only en geeft géén foutmelding in de UI, enkel een stille
     write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 135 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 138 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -7202,12 +7219,14 @@ export async function seedDefaultsIfNeeded(uid, profiel) {
     batch.set(doc(db, ...u(uid, 'instellingen', rubriek)), data, { merge: true });
   }
 
-  // Voorbeeld-gewoontes om mee te starten (in-app aanpasbaar).
+  // Voorbeeld-gewoontes om mee te starten (in-app aanpasbaar). Géén losse
+  // reva-taak meer: blessures (`pages/Gezondheid.jsx`) plannen hun reva-blok
+  // nu zelf in (`services/planner.js`), een losse seed-taak zou dat dubbel
+  // boeken.
   const seedTaken = [
-    { titel: 'Reva-oefeningen', type: 'gewoonte', dagen: ['ma', 'wo', 'vr'], tijd: '07:10', blokType: 'reva', icoon: 'reva', volgorde: 1, actief: true },
-    { titel: 'Water drinken (2,5 L)', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: null, blokType: 'routine', volgorde: 2, actief: true },
-    { titel: 'Geen scrollen na 22:00', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: '22:00', blokType: 'scherm', volgorde: 3, actief: true },
-    { titel: 'Maaltijd voorbereiden', type: 'gewoonte', dagen: ['zo'], tijd: '17:00', blokType: 'maaltijd', volgorde: 4, actief: true },
+    { titel: 'Water drinken (2,5 L)', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: null, blokType: 'routine', volgorde: 1, actief: true },
+    { titel: 'Geen scrollen na 22:00', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: '22:00', blokType: 'scherm', volgorde: 2, actief: true },
+    { titel: 'Maaltijd voorbereiden', type: 'gewoonte', dagen: ['zo'], tijd: '17:00', blokType: 'maaltijd', volgorde: 3, actief: true },
   ];
   seedTaken.forEach((t, i) => {
     batch.set(doc(db, ...u(uid, 'taken', `seed${i}`)),
@@ -7713,6 +7732,21 @@ function maakBlok(arr, start, eind, titel, type, opts = {}) {
   });
 }
 
+// Zoekt, vanaf een voorkeurstijd, het eerstvolgende moment van duurMin
+// minuten dat geen vaste/belangrijke blokken overlapt — zo plant de planner
+// zelf rond werk/judo/agenda i.p.v. enkel een conflict te melden.
+function vindVrijSlot(blok, vanaf, duurMin) {
+  const belangrijk = blok
+    .filter((b) => b.vast || ['werk', 'judo', 'lesgeven', 'woonwerk', 'agenda'].includes(b.bron))
+    .slice().sort((a, b) => toMin(a.start) - toMin(b.start));
+  let kandidaat = vanaf;
+  for (const b of belangrijk) {
+    if (toMin(addMin(kandidaat, duurMin)) <= toMin(b.start)) return kandidaat;
+    if (toMin(kandidaat) < toMin(b.eind)) kandidaat = b.eind;
+  }
+  return kandidaat;
+}
+
 // Fietsadvies op basis van blessure, Garmin-readiness en weer.
 export function berekenFietsAdvies({ sport, blessureActief, vermijdSporten = [], garmin, weer }) {
   if (!sport?.fietsAlsSport) return { fiets: false, reden: 'Fietsen-als-sport staat uit.' };
@@ -7746,6 +7780,7 @@ export function genereerDagPlan({
   const blok = [];
   const advies = { tekst: [] };
   let werkEindTijd = null;
+  let werkStartTijd = null;
 
   const isWo = dagKort === 'wo';
 
@@ -7775,6 +7810,9 @@ export function genereerDagPlan({
       maakBlok(blok, addMin(start, -reis), start,
         fiets ? 'Fietsen naar werk' : 'Rijden naar werk', fiets ? 'sport' : 'woonwerk',
         { bron: 'woonwerk', detail: fiets ? 'Telt als training' : null });
+      werkStartTijd = addMin(start, -reis);
+    } else {
+      werkStartTijd = start;
     }
 
     // Werk opsplitsen rond de middagpauze
@@ -7885,7 +7923,20 @@ export function genereerDagPlan({
     const oefeningen = kiesOefeningenVanDag({ oefeningen: b.oefeningen || [], aantalPerDag: b.aantalPerDag, datum });
     if (!oefeningen.length) return;
     const duurMin = blessureBlokDuur(oefeningen.length);
-    const start = b.tijd || addMin(opstaan, 60);
+    // Geen vaste tijd gekozen: de planner plant zelf rond werk/judo/agenda in
+    // plaats van enkel een conflict te melden — bij voorkeur vóór het werk
+    // begint (na het ontbijt), anders na het werk, telkens om vaste blokken
+    // heen geschoven. Een expliciet gekozen tijd (b.tijd) blijft gerespecteerd
+    // — die kiest de gebruiker bewust, daar schuift de planner niet aan.
+    let start;
+    if (b.tijd) {
+      start = b.tijd;
+    } else {
+      const naOntbijt = addMin(opstaan, 45);
+      const pastVoorWerk = !werkStartTijd || toMin(addMin(naOntbijt, duurMin)) <= toMin(werkStartTijd);
+      const voorkeur = pastVoorWerk ? naOntbijt : (werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 60));
+      start = vindVrijSlot(blok, voorkeur, duurMin);
+    }
     maakBlok(blok, start, addMin(start, duurMin), `Reva — ${b.titel || b.naam || 'oefeningen'}`, 'reva', {
       bron: 'reva', id: `reva-${b.id || i}`, blessureId: b.id || null,
       oefeningen: oefeningen.map((o) => ({ id: o.id, naam: o.naam, sets: o.sets || null })),
@@ -9318,6 +9369,7 @@ describe('periodiseringBepalen', () => {
 import { describe, it, expect } from 'vitest';
 import { genereerDagPlan, berekenFietsAdvies } from '../src/services/planner.js';
 import { DEFAULT_INSTELLINGEN } from '../src/config/appConfig.js';
+import { toMin } from '../src/services/tijd.js';
 
 const I = DEFAULT_INSTELLINGEN;
 const titels = (plan) => plan.blokken.map((b) => b.titel);
@@ -9464,6 +9516,37 @@ describe('genereerDagPlan — blessures', () => {
     expect(revaBlok.type).toBe('reva');
     expect(revaBlok.blessureId).toBe('b1');
     expect(revaBlok.oefeningen.length).toBe(2);
+  });
+
+  it('plant het reva-blok zelf rond het werk i.p.v. enkel een conflict te melden', () => {
+    // Laat opstaan laat genoeg liggen zodat de oude vaste "opstaan + 60 min"
+    // precies in de werkuren terechtkomt — dit reproduceert het gemelde
+    // probleem (reva om 9u, werk begint om 8:25).
+    const laatOp = { ...I, algemeen: { ...I.algemeen, opstaan: '08:00' } };
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: laatOp, werkModus: 'thuis', blessures });
+    const revaBlok = plan.blokken.find((b) => b.bron === 'reva');
+    const werkBlok = plan.blokken.find((b) => b.bron === 'werk');
+    expect(revaBlok).toBeTruthy();
+    expect(plan.conflicten.length).toBe(0);
+    expect(revaBlok.conflict).toBeFalsy();
+    // Geen overlap met het werkblok.
+    const overlapt = revaBlokTijd => toMin(revaBlokTijd.start) < toMin(werkBlok.eind) && toMin(revaBlokTijd.eind) > toMin(werkBlok.start);
+    expect(overlapt(revaBlok)).toBe(false);
+  });
+
+  it('plant het reva-blok vóór het werk als daar ruimte voor is na het ontbijt', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures });
+    const revaBlok = plan.blokken.find((b) => b.bron === 'reva');
+    const werkBlok = plan.blokken.find((b) => b.bron === 'werk');
+    expect(toMin(revaBlok.eind)).toBeLessThanOrEqual(toMin(werkBlok.start));
+  });
+
+  it('respecteert een expliciet gekozen tijd en schuift die niet automatisch weg', () => {
+    const metTijd = [{ ...blessures[0], tijd: '09:00' }];
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures: metTijd });
+    const revaBlok = plan.blokken.find((b) => b.bron === 'reva');
+    expect(revaBlok.start).toBe('09:00');
+    expect(revaBlok.conflict).toBe(true); // valt midden in het werkblok — gemeld, niet verschoven
   });
 
   it('negeert verlopen blessures voor het reva-blok', () => {

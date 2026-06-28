@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { genereerDagPlan, berekenFietsAdvies } from '../src/services/planner.js';
 import { DEFAULT_INSTELLINGEN } from '../src/config/appConfig.js';
+import { toMin } from '../src/services/tijd.js';
 
 const I = DEFAULT_INSTELLINGEN;
 const titels = (plan) => plan.blokken.map((b) => b.titel);
@@ -147,6 +148,37 @@ describe('genereerDagPlan — blessures', () => {
     expect(revaBlok.type).toBe('reva');
     expect(revaBlok.blessureId).toBe('b1');
     expect(revaBlok.oefeningen.length).toBe(2);
+  });
+
+  it('plant het reva-blok zelf rond het werk i.p.v. enkel een conflict te melden', () => {
+    // Laat opstaan laat genoeg liggen zodat de oude vaste "opstaan + 60 min"
+    // precies in de werkuren terechtkomt — dit reproduceert het gemelde
+    // probleem (reva om 9u, werk begint om 8:25).
+    const laatOp = { ...I, algemeen: { ...I.algemeen, opstaan: '08:00' } };
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: laatOp, werkModus: 'thuis', blessures });
+    const revaBlok = plan.blokken.find((b) => b.bron === 'reva');
+    const werkBlok = plan.blokken.find((b) => b.bron === 'werk');
+    expect(revaBlok).toBeTruthy();
+    expect(plan.conflicten.length).toBe(0);
+    expect(revaBlok.conflict).toBeFalsy();
+    // Geen overlap met het werkblok.
+    const overlapt = revaBlokTijd => toMin(revaBlokTijd.start) < toMin(werkBlok.eind) && toMin(revaBlokTijd.eind) > toMin(werkBlok.start);
+    expect(overlapt(revaBlok)).toBe(false);
+  });
+
+  it('plant het reva-blok vóór het werk als daar ruimte voor is na het ontbijt', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures });
+    const revaBlok = plan.blokken.find((b) => b.bron === 'reva');
+    const werkBlok = plan.blokken.find((b) => b.bron === 'werk');
+    expect(toMin(revaBlok.eind)).toBeLessThanOrEqual(toMin(werkBlok.start));
+  });
+
+  it('respecteert een expliciet gekozen tijd en schuift die niet automatisch weg', () => {
+    const metTijd = [{ ...blessures[0], tijd: '09:00' }];
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures: metTijd });
+    const revaBlok = plan.blokken.find((b) => b.bron === 'reva');
+    expect(revaBlok.start).toBe('09:00');
+    expect(revaBlok.conflict).toBe(true); // valt midden in het werkblok — gemeld, niet verschoven
   });
 
   it('negeert verlopen blessures voor het reva-blok', () => {

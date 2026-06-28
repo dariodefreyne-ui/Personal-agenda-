@@ -42,12 +42,14 @@ export async function seedDefaultsIfNeeded(uid, profiel) {
     batch.set(doc(db, ...u(uid, 'instellingen', rubriek)), data, { merge: true });
   }
 
-  // Voorbeeld-gewoontes om mee te starten (in-app aanpasbaar).
+  // Voorbeeld-gewoontes om mee te starten (in-app aanpasbaar). Géén losse
+  // reva-taak meer: blessures (`pages/Gezondheid.jsx`) plannen hun reva-blok
+  // nu zelf in (`services/planner.js`), een losse seed-taak zou dat dubbel
+  // boeken.
   const seedTaken = [
-    { titel: 'Reva-oefeningen', type: 'gewoonte', dagen: ['ma', 'wo', 'vr'], tijd: '07:10', blokType: 'reva', icoon: 'reva', volgorde: 1, actief: true },
-    { titel: 'Water drinken (2,5 L)', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: null, blokType: 'routine', volgorde: 2, actief: true },
-    { titel: 'Geen scrollen na 22:00', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: '22:00', blokType: 'scherm', volgorde: 3, actief: true },
-    { titel: 'Maaltijd voorbereiden', type: 'gewoonte', dagen: ['zo'], tijd: '17:00', blokType: 'maaltijd', volgorde: 4, actief: true },
+    { titel: 'Water drinken (2,5 L)', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: null, blokType: 'routine', volgorde: 1, actief: true },
+    { titel: 'Geen scrollen na 22:00', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: '22:00', blokType: 'scherm', volgorde: 2, actief: true },
+    { titel: 'Maaltijd voorbereiden', type: 'gewoonte', dagen: ['zo'], tijd: '17:00', blokType: 'maaltijd', volgorde: 3, actief: true },
   ];
   seedTaken.forEach((t, i) => {
     batch.set(doc(db, ...u(uid, 'taken', `seed${i}`)),
