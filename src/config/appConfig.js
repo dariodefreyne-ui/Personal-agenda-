@@ -51,6 +51,23 @@ export const SPORTEN = {
   rust: { naam: 'Rustdag', kort: 'Rust' },
 };
 
+// Lichaamsregio's voor blessures -> sporten die de coach/fietsadvies automatisch
+// afraadt zolang de blessure actief is. Bewust een grove, uitlegbare vuistregel
+// (geen medisch advies): 'algemeen' (bv. "spier", niet naar dokter geweest) geeft
+// veilig géén automatische sportveto, maar de coach blijft via de algemene
+// blessureActief-vlag (zie services/coach.js) toch voorzichtiger qua niveau.
+export const BLESSURE_REGIOS = {
+  knie: { naam: 'Knie', vermijdSport: ['fietsen', 'wandelen', 'judo'] },
+  heup_lies: { naam: 'Heup / lies', vermijdSport: ['fietsen', 'wandelen', 'judo'] },
+  kuit_hamstring: { naam: 'Kuit / hamstring / quadriceps', vermijdSport: ['fietsen', 'wandelen', 'judo'] },
+  voet_enkel: { naam: 'Voet / enkel', vermijdSport: ['wandelen', 'judo'] },
+  rug: { naam: 'Rug / onderrug', vermijdSport: ['fietsen', 'judo'] },
+  schouder: { naam: 'Schouder', vermijdSport: ['judo'] },
+  elleboog_pols: { naam: 'Elleboog / pols / hand', vermijdSport: ['judo'] },
+  nek: { naam: 'Nek', vermijdSport: ['judo'] },
+  algemeen: { naam: 'Algemeen / spier (geen diagnose)', vermijdSport: [] },
+};
+
 // Standaard oefeningen-bibliotheek voor home fitness — uitbreidbaar via Beheer.
 const STANDAARD_OEFENINGEN = [
   { id: 'squat', naam: 'Squats', waarom: 'Bouwt beenkracht op — ondersteunt judo-explosiviteit en knie-stabiliteit.', sets: 3, reps: 12, categorie: 'kracht' },

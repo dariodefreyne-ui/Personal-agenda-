@@ -54,10 +54,20 @@ export default function Dashboard() {
     return () => { actief = false; };
   }, [user, gedaan]);
 
-  const checkbare = useMemo(
-    () => (plan?.blokken || []).filter((b) => ['taak', 'judo', 'agenda'].includes(b.bron) || b.type === 'sport' || b.type === 'reva'),
-    [plan]
-  );
+  // Reva-blokken met een oefeningen-checklist tellen per oefening (composite id
+  // `${blokId}::${oefeningId}`), niet als één geheel — zo blijft North Star precies
+  // ook als je maar de helft van de oefeningen deed.
+  const checkbare = useMemo(() => {
+    const items = [];
+    (plan?.blokken || []).forEach((b) => {
+      if (b.type === 'reva' && b.oefeningen?.length) {
+        b.oefeningen.forEach((o) => items.push({ id: `${b.id}::${o.id}`, start: b.start, eind: b.eind, titel: o.naam, taakId: null }));
+      } else if (['taak', 'judo', 'agenda'].includes(b.bron) || b.type === 'sport' || b.type === 'reva') {
+        items.push(b);
+      }
+    });
+    return items;
+  }, [plan]);
   const aantalGedaan = checkbare.filter((b) => gedaan?.[b.id]).length;
   const pct = checkbare.length ? Math.round((aantalGedaan / checkbare.length) * 100) : 0;
 
@@ -215,7 +225,8 @@ export default function Dashboard() {
         <div className="timeline">
           {plan.blokken.map((b) => {
             const isNu = isToday && toMin(b.start) <= now && now < toMin(b.eind);
-            const checkbaar = checkbare.some((c) => c.id === b.id);
+            const isRevaChecklist = b.type === 'reva' && b.oefeningen?.length > 0;
+            const checkbaar = !isRevaChecklist && checkbare.some((c) => c.id === b.id);
             const on = !!gedaan?.[b.id];
             const bewerkt = editId === b.id;
             return (
@@ -247,6 +258,25 @@ export default function Dashboard() {
                           <button className="btn sm ghost" style={{ marginLeft: 8, padding: '0 6px' }}
                             onClick={() => herstelBlokTijd(b.id)}>Terug naar gepland tijdstip</button>
                         )}
+                      </div>
+                    )}
+                    {isRevaChecklist && !isFuture && (
+                      <div className="stack" style={{ gap: 4, marginTop: 8 }}>
+                        {b.oefeningen.map((o) => {
+                          const oId = `${b.id}::${o.id}`;
+                          const oOn = !!gedaan?.[oId];
+                          return (
+                            <button key={oId} className="row" onClick={() => tik(oId, null)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, gap: 8 }}>
+                              <span className={'tl-check' + (oOn ? ' on' : '') + (popId === oId ? ' pop' : '')} aria-hidden>
+                                {oOn && <IcoCheck width={14} height={14} />}
+                              </span>
+                              <span className="small" style={{ textDecoration: oOn ? 'line-through' : 'none', color: oOn ? 'var(--text-dim)' : 'var(--text)' }}>
+                                {o.naam}{o.sets ? ` · ${o.sets}` : ''}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

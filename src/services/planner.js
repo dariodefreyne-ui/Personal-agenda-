@@ -11,6 +11,7 @@
 import { BLOK_TYPES, SPORTEN } from '../config/appConfig';
 import { toMin, toHHMM, addMin } from './tijd';
 import { kiesSportVanDag, genereerSportInhoud } from './sportcoach';
+import { isBlessureActief, isVerlopenNietGemeld, vermijdSportenVanBlessures, kiesOefeningenVanDag, blessureBlokDuur } from './blessures';
 
 const kleurVoor = (type) => (BLOK_TYPES[type]?.kleur || BLOK_TYPES.routine.kleur);
 
@@ -25,13 +26,15 @@ function maakBlok(arr, start, eind, titel, type, opts = {}) {
     taakId: opts.taakId || null,
     push: opts.push ?? true,
     detail: opts.detail || null,
+    oefeningen: opts.oefeningen || null,
+    blessureId: opts.blessureId || null,
   });
 }
 
 // Fietsadvies op basis van blessure, Garmin-readiness en weer.
-export function berekenFietsAdvies({ sport, blessureActief, garmin, weer }) {
+export function berekenFietsAdvies({ sport, blessureActief, vermijdSporten = [], garmin, weer }) {
   if (!sport?.fietsAlsSport) return { fiets: false, reden: 'Fietsen-als-sport staat uit.' };
-  if (blessureActief && !sport.fietsBijBlessure) {
+  if ((blessureActief || vermijdSporten.includes('fietsen')) && !sport.fietsBijBlessure) {
     return { fiets: false, reden: 'Blessure actief — neem vandaag de auto.' };
   }
   const readiness = garmin?.trainingReadiness?.score ?? garmin?.trainingReadiness ?? null;
@@ -49,7 +52,7 @@ export function berekenFietsAdvies({ sport, blessureActief, garmin, weer }) {
 
 export function genereerDagPlan({
   datum, dagKort, instellingen, werkModus,
-  taken = [], reva = [], maaltijden = [], agendaEvents = [],
+  taken = [], reva = [], blessures = [], maaltijden = [], agendaEvents = [],
   garmin = null, weer = null, blessureActief = false, isVakantie = false, geenJudo = false,
   coachNiveau = null,
 }) {
@@ -150,11 +153,23 @@ export function genereerDagPlan({
     advies.tekst.push('🥋 Judovrij (vakantie) — geen training of les vandaag.');
   }
 
+  // Welke sporten een actieve blessure afraadt (zie BLESSURE_REGIOS) — voedt
+  // zowel de sportcoach-keuze als het fietsadvies hieronder.
+  const vermijdSporten = vermijdSportenVanBlessures(blessures, datum);
+  if (judoVandaag && !geenJudo && vermijdSporten.includes('judo')) {
+    advies.tekst.push('⚠️ Judo staat gepland, maar een actieve blessure raadt dit af — overweeg te schrappen of aan te passen.');
+  }
+  blessures.forEach((b) => {
+    if (isVerlopenNietGemeld(b, datum)) {
+      advies.tekst.push(`ℹ️ Blessure “${b.titel || b.naam || 'onbenoemd'}” liep af op ${b.eindDatum} — controleer of die echt voorbij is.`);
+    }
+  });
+
   // 5b) Sportcoach: concreet trainingsblok voor vandaag, zodat het advies van
   //     de coach ook echt in het dagschema staat (niet enkel op de coach-pagina).
   //     Judo heeft hierboven al een eigen vast blok; rustdagen krijgen geen blok.
   if (coachNiveau) {
-    const keuze = kiesSportVanDag({ dagKort, weekSchema: sport.weekSchema, niveau: coachNiveau, judoVandaag: judoVandaag && !geenJudo, weer });
+    const keuze = kiesSportVanDag({ dagKort, weekSchema: sport.weekSchema, niveau: coachNiveau, judoVandaag: judoVandaag && !geenJudo, weer, vermijdSporten });
     if (keuze.sport !== 'rust' && keuze.sport !== 'judo') {
       const inhoud = genereerSportInhoud({
         sport: keuze.sport, niveau: coachNiveau, oefeningen: sport.oefeningen,
@@ -174,6 +189,21 @@ export function genereerDagPlan({
       if (keuze.overschreven) advies.tekst.push(`🏋️ ${keuze.waarom.join(' ')}`);
     }
   }
+
+  // 5c) Reva: één blok per actieve blessure, met die dag eerlijk-geroteerde
+  //     selectie oefeningen als checklist — zichtbaar bij "vandaag".
+  const actieveBlessures = blessures.filter((b) => isBlessureActief(b, datum));
+  actieveBlessures.forEach((b, i) => {
+    const oefeningen = kiesOefeningenVanDag({ oefeningen: b.oefeningen || [], aantalPerDag: b.aantalPerDag, datum });
+    if (!oefeningen.length) return;
+    const duurMin = blessureBlokDuur(oefeningen.length);
+    const start = b.tijd || addMin(opstaan, 60);
+    maakBlok(blok, start, addMin(start, duurMin), `Reva — ${b.titel || b.naam || 'oefeningen'}`, 'reva', {
+      bron: 'reva', id: `reva-${b.id || i}`, blessureId: b.id || null,
+      oefeningen: oefeningen.map((o) => ({ id: o.id, naam: o.naam, sets: o.sets || null })),
+      detail: oefeningen.map((o) => o.naam).join(', '),
+    });
+  });
 
   // 6) Reva + gewoontes met vast tijdslot worden blokken; rest -> todos
   const todos = [];
@@ -210,7 +240,7 @@ export function genereerDagPlan({
   vulVrijeTijd(blok, slapen);
 
   // Advies
-  const fietsAdvies = berekenFietsAdvies({ sport, blessureActief, garmin, weer });
+  const fietsAdvies = berekenFietsAdvies({ sport, blessureActief, vermijdSporten, garmin, weer });
   advies.fiets = fietsAdvies;
   if (modus === 'kantoor_fiets' || modus === 'kantoor_auto') {
     advies.tekst.push(fietsAdvies.fiets

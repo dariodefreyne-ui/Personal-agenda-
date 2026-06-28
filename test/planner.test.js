@@ -123,9 +123,56 @@ describe('genereerDagPlan — sportcoach-integratie', () => {
   });
 });
 
+describe('genereerDagPlan — blessures', () => {
+  const blessures = [{
+    id: 'b1', titel: 'Knie', regio: 'knie', actief: true, eindDatum: null, aantalPerDag: 2,
+    oefeningen: [{ id: 'o1', naam: 'Quad sets', sets: '3×12', actief: true }, { id: 'o2', naam: 'Stepdowns', sets: '3×10', actief: true }],
+  }];
+
+  it('voegt een reva-blok toe per actieve blessure, met geselecteerde oefeningen', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures });
+    const revaBlok = plan.blokken.find((b) => b.bron === 'reva');
+    expect(revaBlok).toBeTruthy();
+    expect(revaBlok.type).toBe('reva');
+    expect(revaBlok.blessureId).toBe('b1');
+    expect(revaBlok.oefeningen.length).toBe(2);
+  });
+
+  it('negeert verlopen blessures voor het reva-blok', () => {
+    const verlopen = [{ ...blessures[0], eindDatum: '2026-06-01' }];
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures: verlopen });
+    expect(plan.blokken.some((b) => b.bron === 'reva')).toBe(false);
+  });
+
+  it('knie-blessure verbant fietsen uit de sportcoach-keuze', () => {
+    const metDiFiets = { ...I, sport: { ...I.sport, weekSchema: { ...I.sport.weekSchema, di: 'fietsen' } } };
+    const plan = genereerDagPlan({ datum: '2026-06-23', dagKort: 'di', instellingen: metDiFiets, werkModus: 'thuis', coachNiveau: 'hard', blessures });
+    const sportBlok = plan.blokken.find((b) => b.bron === 'sportcoach');
+    expect(sportBlok).toBeTruthy();
+    expect(sportBlok.titel).not.toBe('Fietsen');
+    expect(plan.advies.tekst.some((t) => /afgeraden door een actieve blessure/.test(t))).toBe(true);
+  });
+
+  it('meldt een judo-veto als blessure judo afraadt, maar schrapt het judoblok niet', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'thuis', blessures });
+    expect(plan.blokken.some((b) => /Judoles geven/.test(b.titel))).toBe(true);
+    expect(plan.advies.tekst.some((t) => /Judo staat gepland.*blessure/.test(t))).toBe(true);
+  });
+
+  it('meldt een verlopen-niet-gemelde blessure in het advies', () => {
+    const verlopenNietGemeld = [{ ...blessures[0], eindDatum: '2026-06-01', eindeGemeld: false }];
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures: verlopenNietGemeld });
+    expect(plan.advies.tekst.some((t) => /liep af op/.test(t))).toBe(true);
+  });
+});
+
 describe('berekenFietsAdvies', () => {
   it('raadt fietsen af bij actieve blessure', () => {
     const a = berekenFietsAdvies({ sport: I.sport, blessureActief: true });
+    expect(a.fiets).toBe(false);
+  });
+  it('raadt fietsen af als de blessure-regio fietsen vermijdt (zonder globale vlag)', () => {
+    const a = berekenFietsAdvies({ sport: I.sport, vermijdSporten: ['fietsen'] });
     expect(a.fiets).toBe(false);
   });
   it('raadt fietsen af bij lage readiness', () => {

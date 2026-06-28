@@ -15,7 +15,7 @@ export default function Coach() {
   const isToday = datumKey(datumObj) === datumKey(new Date());
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
 
-  const { laden, plan, garmin, instellingen, advies, weer } = useDagPlan(datumObj);
+  const { laden, plan, garmin, instellingen, advies, weer, vermijdSporten } = useDagPlan(datumObj);
 
   return (
     <div className="stack reveal">
@@ -36,19 +36,19 @@ export default function Coach() {
         <div className="empty">Laden…</div>
       ) : (
         <CoachInhoud datumObj={datumObj} plan={plan} garmin={garmin} instellingen={instellingen}
-          advies={advies} weer={weer} />
+          advies={advies} weer={weer} vermijdSporten={vermijdSporten} />
       )}
     </div>
   );
 }
 
-function CoachInhoud({ datumObj, plan, garmin, instellingen, advies, weer }) {
+function CoachInhoud({ datumObj, plan, garmin, instellingen, advies, weer, vermijdSporten = [] }) {
   const dagKort = dagKortVanDatum(datumObj);
   const datum = datumKey(datumObj);
   const judoVandaag = (plan?.blokken || []).some((b) => b.type === 'judo' || b.type === 'lesgeven');
 
   const keuze = kiesSportVanDag({
-    dagKort, weekSchema: instellingen.sport?.weekSchema, niveau: advies.niveau, judoVandaag, weer,
+    dagKort, weekSchema: instellingen.sport?.weekSchema, niveau: advies.niveau, judoVandaag, weer, vermijdSporten,
   });
 
   const inhoud = genereerSportInhoud({
