@@ -4,12 +4,23 @@ import { useSettings } from '../contexts/SettingsContext';
 import {
   getCollection, getDocById, getGarminDag,
   getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync, getVakanties, verwijderVerzet,
+  verwijderSlaapOverride,
 } from '../services/data';
 import { genereerDagPlan } from '../services/planner';
 import { garminSamenvatting } from '../services/garmin';
 import { vakantieFlags } from '../services/vakanties';
 import { zetTaakGedaan } from '../services/taken';
 import { datumKey, dagKortVanDatum, weekKey, toMin, toHHMM, nuMin } from '../services/tijd';
+
+// Past een handmatige slaap-correctie toe op de Garmin-samenvatting (begin/eind
+// + herberekende duur). Garmin's nachtmeting kan een uur mis zitten; de gebruiker
+// mag dat rechtzetten zonder op een nieuwe sync te wachten.
+function metSlaapOverride(garminSam, override) {
+  if (!garminSam || !override?.begin || !override?.eind) return garminSam;
+  let duurMin = toMin(override.eind) - toMin(override.begin);
+  if (duurMin <= 0) duurMin += 24 * 60; // slaap loopt over middernacht
+  return { ...garminSam, slaapBegin: override.begin, slaapEind: override.eind, slaapUren: duurMin / 60, slaapOverride: true };
+}
 
 // Laadt alle dagdata, berekent het plan en biedt afvink-acties.
 export function useDagPlan(datumObj = new Date()) {
@@ -49,7 +60,7 @@ export function useDagPlan(datumObj = new Date()) {
       if (!werkModus && isWeekend) werkModus = 'vrij';
       const blessureActief = (reva || []).some((r) => r.blessureActief);
       const isVakantie = !!week?.vakantie || verlof;
-      const garminSam = garminSamenvatting(garmin);
+      const garminSam = metSlaapOverride(garminSamenvatting(garmin), dag?.slaapOverride);
 
       const plan = genereerDagPlan({
         datum, dagKort, instellingen, werkModus,
@@ -153,7 +164,22 @@ export function useDagPlan(datumObj = new Date()) {
     herlaad();
   }, [uid, datum, staat.verzet]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Slaap-begin/eind handmatig corrigeren — Garmin's nachtmeting zit soms mis.
+  const wijzigSlaap = useCallback(async (begin, eind) => {
+    if (!uid) return;
+    const slaapOverride = { begin, eind };
+    setStaat((s) => ({ ...s, garmin: metSlaapOverride(s.garmin, slaapOverride) }));
+    await saveDag(uid, datum, { slaapOverride });
+  }, [uid, datum]);
+
+  // Herstelt de slaaptijden naar wat Garmin zelf meet (volgende herlaad).
+  const herstelSlaap = useCallback(async () => {
+    if (!uid) return;
+    await verwijderSlaapOverride(uid, datum);
+    herlaad();
+  }, [uid, datum]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const herlaad = useCallback(() => setVersie((v) => v + 1), []);
 
-  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, wijzigBlokTijd, herstelBlokTijd, herlaad };
+  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, herlaad };
 }

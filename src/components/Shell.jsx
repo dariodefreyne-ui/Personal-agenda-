@@ -5,11 +5,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { luisterVoorgrond } from '../services/push';
 import UpdateBanner from './UpdateBanner';
-import { IcoHome, IcoAgenda, IcoCheck, IcoHeart, IcoCog, IcoLogout } from './Icons';
+import { IcoHome, IcoAgenda, IcoCheck, IcoHeart, IcoBolt, IcoCog, IcoLogout } from './Icons';
 
 const NAV = [
   { to: '/', label: 'Vandaag', Icon: IcoHome, end: true },
   { to: '/week', label: 'Week', Icon: IcoAgenda },
+  { to: '/coach', label: 'Coach', Icon: IcoBolt },
   { to: '/taken', label: 'Taken', Icon: IcoCheck },
   { to: '/gezondheid', label: 'Gezondheid', Icon: IcoHeart },
   { to: '/beheer', label: 'Beheer', Icon: IcoCog },
