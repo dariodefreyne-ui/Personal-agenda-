@@ -97,4 +97,49 @@ describe('coach — uitlegbaarheid & veilige terugval (Fase 4.5)', () => {
     expect(rang[risico.niveau]).toBeLessThan(rang[vol.niveau]);
     expect(risico.waarom.join(' ')).toMatch(/blessurerisico/i);
   });
+
+  it('deload-week (Fase 5 — periodisering) tempert "hard" naar "matig", los van ACWR', () => {
+    const vol = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht' });
+    const deload = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht', periodiseringFase: 'deload' });
+    expect(vol.niveau).toBe('hard');
+    expect(deload.niveau).toBe('matig');
+    expect(deload.waarom.join(' ')).toMatch(/hersteller/i);
+  });
+
+  it('deload-week verlaagt "rustig" of "matig" niet verder (enkel een rem op vol gas)', () => {
+    const matig = coachAdvies({ readiness: 55, bodyBattery: 55, slaapUren: 7, energie: 3, goal: 'kracht' });
+    const matigMetDeload = coachAdvies({ readiness: 55, bodyBattery: 55, slaapUren: 7, energie: 3, goal: 'kracht', periodiseringFase: 'deload' });
+    expect(matigMetDeload.niveau).toBe(matig.niveau);
+  });
+});
+
+describe('coach — groot verlof (thuis vs. buitenland)', () => {
+  const basis = { readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht' };
+
+  it('verlof thuis verlengt de sessieduur t.o.v. een gewone dag', () => {
+    const normaal = coachAdvies(basis);
+    const thuis = coachAdvies({ ...basis, vakantieType: 'thuis' });
+    expect(thuis.duurMin).toBeGreaterThan(normaal.duurMin);
+    expect(thuis.waarom.join(' ')).toMatch(/meer tijd/i);
+  });
+
+  it('verlof in het buitenland laat de duur standaard (geen aanname over faciliteiten)', () => {
+    const normaal = coachAdvies(basis);
+    const buitenland = coachAdvies({ ...basis, vakantieType: 'buitenland' });
+    expect(buitenland.duurMin).toBe(normaal.duurMin);
+    expect(buitenland.waarom.join(' ')).toMatch(/buitenland/i);
+  });
+
+  it('bij niveau "herstel" telt de verlof-bonus niet — herstel blijft kort', () => {
+    const herstel = coachAdvies({ goal: 'kracht', blessureActief: true });
+    const herstelThuis = coachAdvies({ goal: 'kracht', blessureActief: true, vakantieType: 'thuis' });
+    expect(herstelThuis.niveau).toBe('herstel');
+    expect(herstelThuis.duurMin).toBe(herstel.duurMin);
+  });
+
+  it('herhaalde aanroepen muteren de gedeelde MATRIX niet (geen lekkende state)', () => {
+    coachAdvies({ ...basis, vakantieType: 'thuis' });
+    const normaalNa = coachAdvies(basis);
+    expect(normaalNa.duurMin).toBe(60); // ongewijzigde 'kracht'/'hard'-waarde uit MATRIX
+  });
 });

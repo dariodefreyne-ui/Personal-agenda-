@@ -119,12 +119,23 @@ Volgende fases:
   met uitleg en veilige terugval. **Plan beweegt mee met gemiste blokken**:
   "Nog in te halen"-kaart met *Toch gedaan* / *Verzet* (→ `dagen/{datum}.verzet`,
   toegepast in `useDagPlan`).
-- **Fase 5 — Periodisering & slimme coach (grotendeels ✓):** **ACWR**
+- **Fase 5 — Periodisering & slimme coach (✓):** **ACWR**
   (acute:chronic, `services/belasting.js` → `acwrBerekenen`) uit **RPE-gewogen
   sRPE-belasting** (`sessieBelasting`), met zones (laag/optimaal/verhoogd/risico),
   zekerheid en uitleg. Voedt de coach (`acwrZone` → conservatiever bij risico) en
-  toont blessurepreventie in `BelastingKaart`. Veilige terugval bij weinig data.
-  Nog open: expliciete **trainingsblokken/periodisering-weken** (opbouw vs deload).
+  toont blessurepreventie in `BelastingKaart`. Daarnaast expliciete
+  **trainingsblokken/periodisering** (`services/periodisering.js` →
+  `periodiseringBepalen`): een vaste, kalenderbepaalde cyclus van 4 weken (3 weken
+  opbouw + 1 deload-week) — bewust geen losse instelling of data-gok (premium-
+  principe "vertrouwen > intelligentie"). Een deload-week tempert de coach altijd
+  van 'hard' naar 'matig', los van ACWR/Garmin; getoond in `BelastingKaart`
+  ("Trainingscyclus"). Veilige terugval bij weinig data blijft via ACWR/zekerheid.
+  Ook **groot verlof**: een vakantieperiode (`Week.jsx` → `vakanties/{id}`) kan
+  naast judovrij/verlof ook **buitenland** aanvinden. Thuis met verlof verlengt
+  de coach de sessieduur licht (meer tijd dan gewoonlijk, behalve bij niveau
+  'herstel'); in het buitenland blijft de duur standaard (geen aanname over
+  faciliteiten daar). `vakantieFlags()` geeft dit door als `vakantieType`
+  ('thuis'/'buitenland'/null) aan `coachAdvies()`, met uitleg in `waarom`.
 - **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
 - **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —

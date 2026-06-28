@@ -107,6 +107,7 @@ const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
 export function coachAdvies({
   readiness = null, bodyBattery = null, slaapUren = null, energie = null, hrvStatus = null,
   goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null, pijn = null,
+  periodiseringFase = null, vakantieType = null,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
   let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
@@ -123,7 +124,25 @@ export function coachAdvies({
   } else if (acwrZone === 'verhoogd' && niveau === 'hard') {
     niveau = 'matig'; acwrRem = 'verhoogd';
   }
+
+  // Periodisering: vaste deload-week in de trainingscyclus temperen we altijd
+  // af van 'hard', los van hoe de losse meetdata vandaag uitvallen — dit is een
+  // structureel vangnet, niet een schatting (zie services/periodisering.js).
+  let deload = false;
+  if (periodiseringFase === 'deload' && niveau === 'hard') { niveau = 'matig'; deload = true; }
+
   const advies = MATRIX[doel][niveau];
+
+  // Groot verlof: thuis heb je vaak meer tijd om te sporten dan een gewone dag;
+  // we verlengen de sessie licht (niet bij 'herstel' — dat blijft kort, dat is
+  // net het punt). In het buitenland verandert er bewust niets: geen aanname
+  // over beschikbare tijd/faciliteiten daar, dus standaardduur.
+  let duurMin = advies.duurMin;
+  let verlofBonus = false;
+  if (vakantieType === 'thuis' && niveau !== 'herstel') {
+    duurMin = advies.duurMin + 15;
+    verlofBonus = true;
+  }
 
   // "Waarom": de signalen die het advies dragen (mensbaar geformuleerd).
   const waarom = [];
@@ -138,6 +157,9 @@ export function coachAdvies({
   if (hrvStatus) waarom.push(`HRV-status: ${hrvStatus}.`);
   if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
   if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
+  if (deload) waarom.push('Deze week is een ingeplande hersteller in je trainingscyclus — geen volle gas, ook niet als je je goed voelt.');
+  if (verlofBonus) waarom.push('Je bent met verlof thuis — meer tijd dan gewoonlijk, dus iets langere sessie.');
+  else if (vakantieType === 'buitenland') waarom.push('Je bent met verlof in het buitenland — we houden de duur standaard, geen aanname over faciliteiten daar.');
   if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
   if (!waarom.length) waarom.push('Nog geen meetdata vandaag — dit is een veilig algemeen advies.');
 
@@ -161,7 +183,7 @@ export function coachAdvies({
   return {
     niveau, titel,
     sport: advies.sport,
-    duurMin: advies.duurMin,
+    duurMin,
     doelLabel: DOELEN[doel],
     waarom,
     databronnen,

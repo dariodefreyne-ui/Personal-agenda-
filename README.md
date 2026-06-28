@@ -9,8 +9,12 @@ streaks/voortgang.
 Daarnaast fungeert de app als **persoonlijke sportcoach**: ze leest je **Garmin**-
 data (readiness, body battery, slaap, HRV) en je **zelfrapportage** (energie, pijn)
 uit om elke dag een **uitlegbaar** trainingsadvies te geven (welk niveau, hoeveel
-tijd, waarom), houdt je **trainingsbelasting bij (ACWR)** om overbelasting/
-blessures te helpen voorkomen, en volgt actieve **blessures met
+tijd, waarom), houdt je **trainingsbelasting bij (ACWR)** én plant een vaste
+**opbouw-/deload-cyclus** (3 weken opbouw, dan 1 hersteller) om overbelasting/
+blessures te helpen voorkomen. Tijdens **groot verlof** (in te stellen bij Week →
+vakantieperiode) sport je vaak met meer tijd thuis, maar niet als je in het
+**buitenland** bent — dat geef je apart aan, en de coach verlengt de sessieduur
+enkel bij verlof thuis. De app volgt ook actieve **blessures met
 revalidatie-oefeningen** op (per blessure een eigen oefenschema, met een
 **North Star-therapietrouwscore** die toont hoe consequent je je reva volhoudt).
 Bij gemiste reva-sessies of een afgelopen blessure die niet bevestigd is, krijg je
@@ -58,7 +62,7 @@ schrijven.
 | **Week** | Per dag aanduiden: thuiswerk, kantoor (auto/fiets), verlof of vrij. Vakantieweek aanvinken (dan valt judoles-geven weg). De dagplanning past zich automatisch aan. |
 | **Taken** | Gewoontes/taken beheren met streaks (bv. water drinken, niet scrollen). |
 | **Gezondheid** | Garmin-samenvatting (readiness, body battery, slaap, rust-HR, HRV, stappen) + dagelijkse check-in (slaap/energie/pijn). **Sportcoach**: per dag een uitlegbaar trainingsadvies (niveau + duur + waarom/databronnen/zekerheid), aangepast aan je doel (afvallen/kracht/uithouding/herstel/algemeen). **Blessures & revalidatie**: blessures aanmaken/afsluiten met regio, per blessure een eigen oefenlijst die round-robin in de dagplanning verschijnt; een actieve blessure of zelf-gerapporteerde pijn (≥3/5) dwingt de coach altijd naar "herstel", en een blessure-regio kan specifieke sporten (bv. fietsen bij een knieblessure) afraden. |
-| **Voortgang** | **North Star-score** (therapietrouw/consistentie over de afgelopen week) + apart een **reva-therapietrouwscore** zodra je actieve blessures hebt, plus ACWR-trainingsbelasting (laag/optimaal/verhoogd/risico). |
+| **Voortgang** | **North Star-score** (therapietrouw/consistentie over de afgelopen week) + apart een **reva-therapietrouwscore** zodra je actieve blessures hebt, plus ACWR-trainingsbelasting (laag/optimaal/verhoogd/risico) en je huidige **trainingscyclusweek** (opbouw of deload). |
 | **Beheer** | Alle instellingen no-code: thema, meldingen, werkuren, reistijden, sport, voeding, agenda-link. |
 | **Push** | Ochtendbriefing, readiness-check, herinnering per tijdslot, avondvooruitblik, anti-scroll nudges, **en een melding als een blessure is afgelopen maar nog niet bevestigd in de app**. Intensiteit instelbaar (streng → soepel). |
 

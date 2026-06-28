@@ -14,6 +14,7 @@ import { coachAdvies } from '../services/coach';
 import { isBlessureActief, vermijdSportenVanBlessures } from '../services/blessures';
 import { revaTherapietrouw } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting, belastingStatus } from '../services/belasting';
+import { periodiseringBepalen } from '../services/periodisering';
 import { datumKey, dagKortVanDatum, weekKey, toMin, toHHMM, nuMin } from '../services/tijd';
 
 // Past een handmatige slaap-correctie toe op de Garmin-samenvatting (begin/eind
@@ -59,7 +60,8 @@ export function useDagPlan(datumObj = new Date()) {
       ]);
 
       // Vlaggen over ÁLLE overlappende vakantieperiodes (zie vakantieFlags).
-      const { verlof, geenJudo } = vakantieFlags(vakanties, datum);
+      const { verlof, geenJudo, buitenland } = vakantieFlags(vakanties, datum);
+      const vakantieType = verlof ? (buitenland ? 'buitenland' : 'thuis') : null;
       const isWeekend = dagKort === 'za' || dagKort === 'zo';
       // Effectief dagtype: verlofperiode wint altijd, ook over een eerder gezette
       // expliciete dagmodus (retroactief verlof mag geen ingepland werk laten staan).
@@ -91,6 +93,7 @@ export function useDagPlan(datumObj = new Date()) {
       const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
       const acwr = acwrBerekenen(sessieBelasting(acts, rpeMap));
       const overbelast = belastingStatus({ trainingStatus: garminSam?.trainingStatus }).key === 'overbelast';
+      const periodisering = periodiseringBepalen(datumObj);
       const advies = coachAdvies({
         readiness: garminSam?.readiness ?? null,
         bodyBattery: garminSam?.bodyBattery ?? null,
@@ -100,6 +103,8 @@ export function useDagPlan(datumObj = new Date()) {
         goal: instellingen.gezondheid?.doel,
         blessureActief, overbelast, acwrZone: acwr?.zone,
         pijn: typeof dag?.checkin?.pijn === 'number' && dag.checkin.pijn > 0 ? dag.checkin.pijn : null,
+        periodiseringFase: periodisering.fase,
+        vakantieType,
       });
 
       const plan = genereerDagPlan({
@@ -121,7 +126,7 @@ export function useDagPlan(datumObj = new Date()) {
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
-        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, advies, weer,
+        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, periodisering, advies, weer, vakantieType,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen

@@ -78,6 +78,7 @@ Branch: `claude/dashboard-datumkiezer`
 - `src/services/doelen.js`
 - `src/services/garmin.js`
 - `src/services/noordster.js`
+- `src/services/periodisering.js`
 - `src/services/planner.js`
 - `src/services/push.js`
 - `src/services/reflectie.js`
@@ -92,6 +93,7 @@ Branch: `claude/dashboard-datumkiezer`
 - `test/doelen.test.js`
 - `test/ics.test.js`
 - `test/noordster.test.js`
+- `test/periodisering.test.js`
 - `test/planner.test.js`
 - `test/reflectie.test.js`
 - `test/sportcoach.test.js`
@@ -554,12 +556,23 @@ Volgende fases:
   met uitleg en veilige terugval. **Plan beweegt mee met gemiste blokken**:
   "Nog in te halen"-kaart met *Toch gedaan* / *Verzet* (→ `dagen/{datum}.verzet`,
   toegepast in `useDagPlan`).
-- **Fase 5 — Periodisering & slimme coach (grotendeels ✓):** **ACWR**
+- **Fase 5 — Periodisering & slimme coach (✓):** **ACWR**
   (acute:chronic, `services/belasting.js` → `acwrBerekenen`) uit **RPE-gewogen
   sRPE-belasting** (`sessieBelasting`), met zones (laag/optimaal/verhoogd/risico),
   zekerheid en uitleg. Voedt de coach (`acwrZone` → conservatiever bij risico) en
-  toont blessurepreventie in `BelastingKaart`. Veilige terugval bij weinig data.
-  Nog open: expliciete **trainingsblokken/periodisering-weken** (opbouw vs deload).
+  toont blessurepreventie in `BelastingKaart`. Daarnaast expliciete
+  **trainingsblokken/periodisering** (`services/periodisering.js` →
+  `periodiseringBepalen`): een vaste, kalenderbepaalde cyclus van 4 weken (3 weken
+  opbouw + 1 deload-week) — bewust geen losse instelling of data-gok (premium-
+  principe "vertrouwen > intelligentie"). Een deload-week tempert de coach altijd
+  van 'hard' naar 'matig', los van ACWR/Garmin; getoond in `BelastingKaart`
+  ("Trainingscyclus"). Veilige terugval bij weinig data blijft via ACWR/zekerheid.
+  Ook **groot verlof**: een vakantieperiode (`Week.jsx` → `vakanties/{id}`) kan
+  naast judovrij/verlof ook **buitenland** aanvinden. Thuis met verlof verlengt
+  de coach de sessieduur licht (meer tijd dan gewoonlijk, behalve bij niveau
+  'herstel'); in het buitenland blijft de duur standaard (geen aanname over
+  faciliteiten daar). `vakantieFlags()` geeft dit door als `vakantieType`
+  ('thuis'/'buitenland'/null) aan `coachAdvies()`, met uitleg in `waarom`.
 - **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
 - **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —
@@ -609,6 +622,16 @@ De app is **niet langer alleen een planner**: ze werkt sinds Fase 5/5.5 ook als
   (`services/planner.js`), met therapietrouw-tracking per oefening.
 - **Trainingsbelasting (ACWR)** (`services/belasting.js`): acute:chronic-ratio
   uit RPE-gewogen sessiebelasting, met zones en blessurepreventie-advies.
+- **Periodisering** (`services/periodisering.js`): vaste, kalenderbepaalde cyclus
+  van 4 weken (3× opbouw + 1× deload), getoond in `BelastingKaart` als
+  "Trainingscyclus". Tempert de coach altijd van 'hard' naar 'matig' in een
+  deload-week, los van ACWR/Garmin-signalen — bewust géén data-gok maar een
+  voorspelbaar structureel vangnet (zie §4.6).
+- **Groot verlof** (`services/vakanties.js`, `pages/Week.jsx`): een
+  vakantieperiode kan naast judovrij/verlof ook **buitenland** aanvinden. Verlof
+  thuis verlengt de coach-sessieduur licht (niet bij niveau 'herstel'); in het
+  buitenland blijft de duur standaard. Doorgegeven als `vakantieType`
+  ('thuis'/'buitenland'/null) via `vakantieFlags()` → `coachAdvies()`.
 - **North Star-consistentiescore** (`services/noordster.js`): één score voor
   "ben ik consequent", plus een apart **reva-trouw**-getal zodra er actieve
   blessures zijn.
@@ -650,9 +673,12 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
   `zekerheid`/`meetlat` + UI-uitklap), veilige terugval, **North Star-consistentie-
   score** (`services/noordster.js`) op Dashboard + Voortgang, en **adaptief inhalen**
   van gemiste blokken (`dagen/{datum}.verzet`).
-- **Fase 5 — Periodisering (grotendeels):** **ACWR** uit RPE-gewogen belasting
+- **Fase 5 — Periodisering (af):** **ACWR** uit RPE-gewogen belasting
   (`services/belasting.js`), uitlegbaar, voedt de coach (blessurepreventie) en
-  toont in `BelastingKaart`.
+  toont in `BelastingKaart`. Daarbij **expliciete trainingsblokken**
+  (`services/periodisering.js`): een vaste 4-wekencyclus (3× opbouw + 1× deload),
+  puur kalenderbepaald (geen instelling, geen data-gok), die de coach altijd
+  van 'hard' naar 'matig' tempert in een deload-week — zie §4.6.
 - **Garmin — HRV + stappen in de UI:** `services/garmin.js` leest nu ook
   HRV-status/-gemiddelde uit; getoond op Dashboard en Gezondheid naast stappen
   (die er al stonden). De coach (`services/coach.js`) neemt HRV mee in zowel
@@ -729,7 +755,7 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
     is read-only en geeft géén foutmelding in de UI, enkel een stille
     write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 119 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 135 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -830,6 +856,24 @@ op een write geeft in de UI géén foutmelding, enkel een stille rollback. Check
 bij elke nieuwe top-level subcollectie meteen of `firestore.rules` een regel
 heeft (de catch-all onderaan is bewust read-only).
 
+### 4.6 Periodisering: bewust géén heuristiek, maar een vaste kalenderregel
+Bij het afwerken van Fase 5 (expliciete opbouw-/deload-weken) was de eerste
+ingeving een *data-gedreven* heuristiek: tel hoeveel weken op rij de
+trainingsbelasting steeg (uit `sessieBelasting`) en leid daaruit af of een
+deload "verdiend" is. Bewust **niet** gedaan: zo'n streak-detectie is fragiel
+(ruis in 1 week breekt de telling), moeilijk uitlegbaar ("waarom precies nu?")
+en — belangrijker — in tegenspraak met premium-principe 2 ("vertrouwen >
+intelligentie", liever voorspelbaar dan slim). Gekozen oplossing
+(`services/periodisering.js` → `periodiseringBepalen`): een **vaste,
+kalenderbepaalde cyclus** van 4 weken (3× opbouw, dan 1× deload), als pure
+functie van de datum — geen instelling, geen meetdata nodig, dus altijd
+`zekerheid: 'hoog'`. ACWR (`services/belasting.js`) blijft de dynamische,
+data-gedreven laag die per dag bijstuurt; periodisering is de structurele laag
+daarboven die onafhankelijk daarvan een deload-week afdwingt. **Les:** bij
+twijfel tussen "slimmer" (heuristiek/streak/score) en "voorspelbaarder" (vaste
+regel) voor een coach-achtige beslissing, kies voorspelbaar — dat is letterlijk
+premium-principe 2, en het scheelt ook fors in testbaarheid.
+
 ---
 
 ## 4b. Productrichting — premium = vertrouwen, niet intelligentie
@@ -881,7 +925,7 @@ Het bestaande uitlegbaar gemaakt — de grootste hefboom voor "premium":
       in-app badge/toast bij het behalen ervan — gebruiker koos expliciet voor
       in-app i.p.v. push-notificatie.
 
-### Fase 5 — Periodisering & slimme coach (grotendeels af)
+### Fase 5 — Periodisering & slimme coach ✓ (af)
 Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
 - [x] **Acute:Chronic load-ratio (ACWR)** — `services/belasting.js` → `acwrBerekenen`,
       met zones (laag/optimaal/verhoogd/risico), zekerheid + uitleg.
@@ -889,8 +933,12 @@ Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
       RPE-invoer in Voortgang.
 - [x] **Blessure-preventie-advies** — ACWR voedt de coach (`acwrZone` → conservatiever
       bij risico) en toont waarschuwing in `BelastingKaart`.
-- [ ] **Trainingsblokken / periodisering** (expliciete opbouw- vs deload-weken) — nog
-      open; ACWR geeft nu al de richting.
+- [x] **Trainingsblokken / periodisering** (expliciete opbouw- vs deload-weken) —
+      `services/periodisering.js` → `periodiseringBepalen`: vaste, kalenderbepaalde
+      cyclus van 4 weken (3× opbouw + 1× deload), geen instelling/data-gok nodig.
+      Tempert de coach altijd van 'hard' naar 'matig' in een deload-week, getoond in
+      `BelastingKaart` ("Trainingscyclus", week X/4 + waarom + meetlat). Zie §4.6
+      voor de afweging "voorspelbare regel" vs. "data-heuristiek".
 
 ### Fase 5.5 — Blessures & revalidatie ✓ (af)
 Volledig blessuremodel + reva-therapietrouw, audit-gedreven (zie §4.5 voor de
@@ -928,7 +976,7 @@ twee gefixte bugs in deze feature):
 ```bash
 npm install
 npm run dev      # lokaal draaien
-npm test         # 119 unit-tests
+npm test         # 135 unit-tests
 npm run build    # productie-build (genereert ook firebase-messaging-sw.js)
 ```
 
@@ -958,8 +1006,12 @@ streaks/voortgang.
 Daarnaast fungeert de app als **persoonlijke sportcoach**: ze leest je **Garmin**-
 data (readiness, body battery, slaap, HRV) en je **zelfrapportage** (energie, pijn)
 uit om elke dag een **uitlegbaar** trainingsadvies te geven (welk niveau, hoeveel
-tijd, waarom), houdt je **trainingsbelasting bij (ACWR)** om overbelasting/
-blessures te helpen voorkomen, en volgt actieve **blessures met
+tijd, waarom), houdt je **trainingsbelasting bij (ACWR)** én plant een vaste
+**opbouw-/deload-cyclus** (3 weken opbouw, dan 1 hersteller) om overbelasting/
+blessures te helpen voorkomen. Tijdens **groot verlof** (in te stellen bij Week →
+vakantieperiode) sport je vaak met meer tijd thuis, maar niet als je in het
+**buitenland** bent — dat geef je apart aan, en de coach verlengt de sessieduur
+enkel bij verlof thuis. De app volgt ook actieve **blessures met
 revalidatie-oefeningen** op (per blessure een eigen oefenschema, met een
 **North Star-therapietrouwscore** die toont hoe consequent je je reva volhoudt).
 Bij gemiste reva-sessies of een afgelopen blessure die niet bevestigd is, krijg je
@@ -1007,7 +1059,7 @@ schrijven.
 | **Week** | Per dag aanduiden: thuiswerk, kantoor (auto/fiets), verlof of vrij. Vakantieweek aanvinken (dan valt judoles-geven weg). De dagplanning past zich automatisch aan. |
 | **Taken** | Gewoontes/taken beheren met streaks (bv. water drinken, niet scrollen). |
 | **Gezondheid** | Garmin-samenvatting (readiness, body battery, slaap, rust-HR, HRV, stappen) + dagelijkse check-in (slaap/energie/pijn). **Sportcoach**: per dag een uitlegbaar trainingsadvies (niveau + duur + waarom/databronnen/zekerheid), aangepast aan je doel (afvallen/kracht/uithouding/herstel/algemeen). **Blessures & revalidatie**: blessures aanmaken/afsluiten met regio, per blessure een eigen oefenlijst die round-robin in de dagplanning verschijnt; een actieve blessure of zelf-gerapporteerde pijn (≥3/5) dwingt de coach altijd naar "herstel", en een blessure-regio kan specifieke sporten (bv. fietsen bij een knieblessure) afraden. |
-| **Voortgang** | **North Star-score** (therapietrouw/consistentie over de afgelopen week) + apart een **reva-therapietrouwscore** zodra je actieve blessures hebt, plus ACWR-trainingsbelasting (laag/optimaal/verhoogd/risico). |
+| **Voortgang** | **North Star-score** (therapietrouw/consistentie over de afgelopen week) + apart een **reva-therapietrouwscore** zodra je actieve blessures hebt, plus ACWR-trainingsbelasting (laag/optimaal/verhoogd/risico) en je huidige **trainingscyclusweek** (opbouw of deload). |
 | **Beheer** | Alle instellingen no-code: thema, meldingen, werkuren, reistijden, sport, voeding, agenda-link. |
 | **Push** | Ochtendbriefing, readiness-check, herinnering per tijdslot, avondvooruitblik, anti-scroll nudges, **en een melding als een blessure is afgelopen maar nog niet bevestigd in de app**. Intensiteit instelbaar (streng → soepel). |
 
@@ -3207,9 +3259,13 @@ import { belastingStatus } from '../services/belasting';
 
 const ZEKERHEID_LABEL = { hoog: 'hoge zekerheid', gemiddeld: 'gemiddelde zekerheid', laag: 'lage zekerheid' };
 
+const PERIODISERING_KLEUR = { opbouw: 'var(--success)', deload: 'var(--warning)' };
+const PERIODISERING_TITEL = { opbouw: 'Opbouwweek', deload: 'Deload-week' };
+
 // Belasting/herstel in mensentaal — op basis van Garmin-trainingsstatus + trend,
-// plus (Fase 5) de uitlegbare ACWR-belastingsratio voor blessurepreventie.
-export default function BelastingKaart({ garmin, readinessReeks = [], acwr = null }) {
+// plus (Fase 5) de uitlegbare ACWR-belastingsratio en de vaste periodisering
+// (expliciete opbouw-/deload-cyclus) voor blessurepreventie.
+export default function BelastingKaart({ garmin, readinessReeks = [], acwr = null, periodisering = null }) {
   const b = belastingStatus({ trainingStatus: garmin?.trainingStatus, readinessReeks });
   return (
     <section className="card stack" style={{ gap: 8 }}>
@@ -3243,6 +3299,22 @@ export default function BelastingKaart({ garmin, readinessReeks = [], acwr = nul
             <div className="dim" style={{ marginTop: 6 }}>
               {acwr.waarom}<br />{acwr.meetlat}
             </div>
+          </details>
+        </div>
+      )}
+
+      {periodisering && (
+        <div className="stack" style={{ gap: 6, marginTop: 4, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+          <div className="row between">
+            <span className="small" style={{ fontWeight: 600 }}>Trainingscyclus</span>
+            <span className="badge" style={{ color: PERIODISERING_KLEUR[periodisering.fase], borderColor: 'color-mix(in srgb, currentColor 40%, var(--border))' }}>
+              Week {periodisering.weekInCyclus}/{periodisering.cyclusLengte} · {PERIODISERING_TITEL[periodisering.fase]}
+            </span>
+          </div>
+          <p className="small muted" style={{ margin: 0 }}>{periodisering.waarom}</p>
+          <details className="small">
+            <summary className="dim" style={{ cursor: 'pointer' }}>Hoe berekend?</summary>
+            <div className="dim" style={{ marginTop: 6 }}>{periodisering.meetlat}</div>
           </details>
         </div>
       )}
@@ -3411,7 +3483,7 @@ const ZEKERHEID_KLEUR = { hoog: 'var(--success)', gemiddeld: 'var(--warning)', l
 // Premium-principe: elk advies is uitlegbaar — waarom, welke data, hoe zeker, hoe
 // succes gemeten wordt. Veiligheidsslot: bij overbelasting wint herstel; bij weinig
 // data adviseert de coach bewust voorzichtiger.
-export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false, energie = null, acwrZone = null, pijn = null }) {
+export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false, energie = null, acwrZone = null, pijn = null, periodiseringFase = null, vakantieType = null }) {
   const overbelast = belastingStatus({ trainingStatus: garmin?.trainingStatus }).key === 'overbelast';
   const a = coachAdvies({
     readiness: garmin?.readiness ?? null,
@@ -3419,7 +3491,7 @@ export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief =
     slaapUren: garmin?.slaapUren ?? null,
     hrvStatus: garmin?.hrvStatus ?? null,
     energie,
-    goal, blessureActief, overbelast, acwrZone, pijn,
+    goal, blessureActief, overbelast, acwrZone, pijn, periodiseringFase, vakantieType,
   });
 
   return (
@@ -4134,6 +4206,7 @@ import { coachAdvies } from '../services/coach';
 import { isBlessureActief, vermijdSportenVanBlessures } from '../services/blessures';
 import { revaTherapietrouw } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting, belastingStatus } from '../services/belasting';
+import { periodiseringBepalen } from '../services/periodisering';
 import { datumKey, dagKortVanDatum, weekKey, toMin, toHHMM, nuMin } from '../services/tijd';
 
 // Past een handmatige slaap-correctie toe op de Garmin-samenvatting (begin/eind
@@ -4179,7 +4252,8 @@ export function useDagPlan(datumObj = new Date()) {
       ]);
 
       // Vlaggen over ÁLLE overlappende vakantieperiodes (zie vakantieFlags).
-      const { verlof, geenJudo } = vakantieFlags(vakanties, datum);
+      const { verlof, geenJudo, buitenland } = vakantieFlags(vakanties, datum);
+      const vakantieType = verlof ? (buitenland ? 'buitenland' : 'thuis') : null;
       const isWeekend = dagKort === 'za' || dagKort === 'zo';
       // Effectief dagtype: verlofperiode wint altijd, ook over een eerder gezette
       // expliciete dagmodus (retroactief verlof mag geen ingepland werk laten staan).
@@ -4211,6 +4285,7 @@ export function useDagPlan(datumObj = new Date()) {
       const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
       const acwr = acwrBerekenen(sessieBelasting(acts, rpeMap));
       const overbelast = belastingStatus({ trainingStatus: garminSam?.trainingStatus }).key === 'overbelast';
+      const periodisering = periodiseringBepalen(datumObj);
       const advies = coachAdvies({
         readiness: garminSam?.readiness ?? null,
         bodyBattery: garminSam?.bodyBattery ?? null,
@@ -4220,6 +4295,8 @@ export function useDagPlan(datumObj = new Date()) {
         goal: instellingen.gezondheid?.doel,
         blessureActief, overbelast, acwrZone: acwr?.zone,
         pijn: typeof dag?.checkin?.pijn === 'number' && dag.checkin.pijn > 0 ? dag.checkin.pijn : null,
+        periodiseringFase: periodisering.fase,
+        vakantieType,
       });
 
       const plan = genereerDagPlan({
@@ -4241,7 +4318,7 @@ export function useDagPlan(datumObj = new Date()) {
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
-        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, advies, weer,
+        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, periodisering, advies, weer, vakantieType,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen
@@ -4973,7 +5050,7 @@ export default function Dashboard() {
   const isFuture = datumKey(datumObj) > datumKey(new Date());
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
 
-  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin, acwr } = useDagPlan(datumObj);
+  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin, acwr, periodisering, vakantieType } = useDagPlan(datumObj);
   const { user } = useAuth();
   const [popId, setPopId] = useState(null);
   const [ns, setNs] = useState(null);
@@ -5078,11 +5155,11 @@ export default function Dashboard() {
       {isToday && (garmin?.readiness != null || garmin?.bodyBattery != null || blessureActief || checkin?.pijn > 0) && (
         <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel}
           blessureActief={blessureActief} energie={checkin?.ochtend?.energie} acwrZone={acwr?.zone}
-          pijn={checkin?.pijn > 0 ? checkin.pijn : null} />
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering?.fase} vakantieType={vakantieType} />
       )}
 
       {/* Belasting & herstel — enkel vandaag */}
-      {isToday && (garmin?.trainingStatus || (acwr && acwr.ratio != null)) && <BelastingKaart garmin={garmin} acwr={acwr} />}
+      {isToday && (garmin?.trainingStatus || (acwr && acwr.ratio != null)) && <BelastingKaart garmin={garmin} acwr={acwr} periodisering={periodisering} />}
 
       {/* Advies */}
       {plan.advies?.tekst?.length > 0 && (
@@ -5335,7 +5412,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   getGarminDag, getDocById, saveDag, subscribeCollection,
-  addItem, updateItem, deleteItem, getLaatsteGarminSync, getCollection,
+  addItem, updateItem, deleteItem, getLaatsteGarminSync, getCollection, getVakanties,
 } from '../services/data';
 import { useSettings } from '../contexts/SettingsContext';
 import { garminSamenvatting, syncStatus } from '../services/garmin';
@@ -5343,6 +5420,8 @@ import { DOELEN } from '../services/coach';
 import { isBlessureActief, isVerlopenNietGemeld } from '../services/blessures';
 import { BLESSURE_REGIOS } from '../config/appConfig';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
+import { periodiseringBepalen } from '../services/periodisering';
+import { vakantieFlags } from '../services/vakanties';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
 import Gauge from '../components/Gauge';
@@ -5359,9 +5438,11 @@ export default function Gezondheid() {
   const [nieuweBlessure, setNieuweBlessure] = useState('');
   const [sync, setSync] = useState(null);
   const [acwr, setAcwr] = useState(null);
+  const [vakantieType, setVakantieType] = useState(null);
   const [klaar, setKlaar] = useState(false);
   const [blessuresKlaar, setBlessuresKlaar] = useState(false);
   const doel = instellingen?.gezondheid?.doel || 'algemeen';
+  const periodisering = periodiseringBepalen(new Date());
 
   // Alle losse fetches landen samen vóór we de coach-kaart tonen — anders
   // verschijnt eerst de blessure-zin en springt het advies even later naar de
@@ -5375,12 +5456,15 @@ export default function Gezondheid() {
       getDocById(user.uid, 'dagen', datum),
       getCollection(user.uid, 'garminActivities'),
       getCollection(user.uid, 'activiteitLog'),
-    ]).then(([g, s, d, acts, logs]) => {
+      getVakanties(user.uid),
+    ]).then(([g, s, d, acts, logs, vakanties]) => {
       setGarmin(garminSamenvatting(g));
       setSync(s);
       if (d?.checkin) setCheckin(d.checkin);
       const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
       setAcwr(acwrBerekenen(sessieBelasting(acts, rpeMap)));
+      const { verlof, buitenland } = vakantieFlags(vakanties, datum);
+      setVakantieType(verlof ? (buitenland ? 'buitenland' : 'thuis') : null);
       setKlaar(true);
     });
     setBlessuresKlaar(false);
@@ -5466,7 +5550,7 @@ export default function Gezondheid() {
       {klaar && blessuresKlaar && (garmin || blessureActief) && (
         <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief}
           energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null}
-          pijn={checkin?.pijn > 0 ? checkin.pijn : null} />
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering.fase} vakantieType={vakantieType} />
       )}
 
       {/* Garmin: gauges + profiel */}
@@ -6034,6 +6118,7 @@ import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
 import { reflectieSamenvatting, stemmingInfo } from '../services/reflectie';
 import { noordster, revaTherapietrouw } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
+import { periodiseringBepalen } from '../services/periodisering';
 import { datumKey } from '../services/tijd';
 import NoordsterKaart from '../components/NoordsterKaart';
 import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash, IcoBike, IcoEdit } from '../components/Icons';
@@ -6117,6 +6202,7 @@ export default function Voortgang() {
   // ACWR (opbouw-ratio) uit sRPE-belasting van de activiteiten — herberekent als
   // er RPE's bijkomen. Uitlegbaar + veilige terugval bij te weinig data.
   const acwr = useMemo(() => acwrBerekenen(sessieBelasting(activiteiten, rpe)), [activiteiten, rpe]);
+  const periodisering = periodiseringBepalen(new Date());
 
   const startBewerken = (d) => {
     setEditId(d.id);
@@ -6174,7 +6260,7 @@ export default function Voortgang() {
 
       <NoordsterKaart ns={ns} />
 
-      <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} acwr={acwr} />
+      <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} acwr={acwr} periodisering={periodisering} />
 
       {/* Mindset-weekreview */}
       {mind && mind.aantal > 0 && (
@@ -6410,7 +6496,7 @@ function maandagVan(d) {
   x.setHours(12, 0, 0, 0);
   return x;
 }
-const LEEG_PERIODE = { naam: '', van: '', tot: '', geenJudo: true, verlof: true };
+const LEEG_PERIODE = { naam: '', van: '', tot: '', geenJudo: true, verlof: true, buitenland: false };
 
 export default function Week() {
   const { user } = useAuth();
@@ -6477,7 +6563,7 @@ export default function Week() {
   const startBewerken = (v) => {
     setEditId(v.id);
     setNieuw({ naam: v.naam || '', van: v.van || '', tot: v.tot || '',
-      geenJudo: v.geenJudo !== false, verlof: v.verlof !== false });
+      geenJudo: v.geenJudo !== false, verlof: v.verlof !== false, buitenland: v.buitenland === true });
     setFormOpen(true);
   };
 
@@ -6659,6 +6745,13 @@ export default function Week() {
               <input type="checkbox" checked={nieuw.verlof}
                 onChange={(e) => setNieuw({ ...nieuw, verlof: e.target.checked })} style={{ width: 22, height: 22 }} />
             </label>
+            {nieuw.verlof && (
+              <label className="row between">
+                <span>In het buitenland (coach houdt duur standaard, geen extra tijd)</span>
+                <input type="checkbox" checked={nieuw.buitenland}
+                  onChange={(e) => setNieuw({ ...nieuw, buitenland: e.target.checked })} style={{ width: 22, height: 22 }} />
+              </label>
+            )}
             <div className="row between">
               <button className="btn ghost" onClick={sluitForm}>Annuleren</button>
               <button className="btn primary" onClick={bewaarPeriode}>{editId ? 'Bewaren' : 'Toevoegen'}</button>
@@ -6973,6 +7066,7 @@ const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
 export function coachAdvies({
   readiness = null, bodyBattery = null, slaapUren = null, energie = null, hrvStatus = null,
   goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null, pijn = null,
+  periodiseringFase = null, vakantieType = null,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
   let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
@@ -6989,7 +7083,25 @@ export function coachAdvies({
   } else if (acwrZone === 'verhoogd' && niveau === 'hard') {
     niveau = 'matig'; acwrRem = 'verhoogd';
   }
+
+  // Periodisering: vaste deload-week in de trainingscyclus temperen we altijd
+  // af van 'hard', los van hoe de losse meetdata vandaag uitvallen — dit is een
+  // structureel vangnet, niet een schatting (zie services/periodisering.js).
+  let deload = false;
+  if (periodiseringFase === 'deload' && niveau === 'hard') { niveau = 'matig'; deload = true; }
+
   const advies = MATRIX[doel][niveau];
+
+  // Groot verlof: thuis heb je vaak meer tijd om te sporten dan een gewone dag;
+  // we verlengen de sessie licht (niet bij 'herstel' — dat blijft kort, dat is
+  // net het punt). In het buitenland verandert er bewust niets: geen aanname
+  // over beschikbare tijd/faciliteiten daar, dus standaardduur.
+  let duurMin = advies.duurMin;
+  let verlofBonus = false;
+  if (vakantieType === 'thuis' && niveau !== 'herstel') {
+    duurMin = advies.duurMin + 15;
+    verlofBonus = true;
+  }
 
   // "Waarom": de signalen die het advies dragen (mensbaar geformuleerd).
   const waarom = [];
@@ -7004,6 +7116,9 @@ export function coachAdvies({
   if (hrvStatus) waarom.push(`HRV-status: ${hrvStatus}.`);
   if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
   if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
+  if (deload) waarom.push('Deze week is een ingeplande hersteller in je trainingscyclus — geen volle gas, ook niet als je je goed voelt.');
+  if (verlofBonus) waarom.push('Je bent met verlof thuis — meer tijd dan gewoonlijk, dus iets langere sessie.');
+  else if (vakantieType === 'buitenland') waarom.push('Je bent met verlof in het buitenland — we houden de duur standaard, geen aanname over faciliteiten daar.');
   if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
   if (!waarom.length) waarom.push('Nog geen meetdata vandaag — dit is een veilig algemeen advies.');
 
@@ -7027,7 +7142,7 @@ export function coachAdvies({
   return {
     niveau, titel,
     sport: advies.sport,
-    duurMin: advies.duurMin,
+    duurMin,
     doelLabel: DOELEN[doel],
     waarom,
     databronnen,
@@ -7517,6 +7632,46 @@ export function noordster(dagen) {
     waarom: `Gemeten aan ${totGedaan}/${totKern} afgevinkte sleutelblokken over ${metData.length} ${metData.length === 1 ? 'dag' : 'dagen'}`
       + (checkinDagen ? `, en ${checkinDagen} dag(en) met een check-in.` : '.'),
     meetlat: 'Consistentie = welk deel van je geplande sleutelblokken je afvinkt.',
+  };
+}
+
+```
+
+## `src/services/periodisering.js`
+
+```js
+// Periodisering: expliciete trainingsblokken (opbouw- vs deload-weken).
+// Bewust een vaste, voorspelbare kalendercyclus (geen losse instelling, geen
+// data-afhankelijke gok) — premium-principe 2: "vertrouwen > intelligentie",
+// liever voorspelbaar dan verrassend. ACWR (services/belasting.js) blijft de
+// dynamische, data-gedreven laag; periodisering is de structurele laag erboven:
+// elke Nde week (standaard 4) is een ingeplande hersteller, los van hoe de
+// belasting die week toevallig uitviel.
+
+const CYCLUS_LENGTE_DEFAULT = 4; // 3 weken opbouw + 1 week deload
+
+// Maandag-gebaseerde, doorlopende weekindex (i.t.t. ISO-weeknummers loopt deze
+// door over jaargrenzen, anders zou de cyclus elk jaar rond nieuwjaar haperen).
+function weekIndex(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  const dagSindsMaandag = (x.getDay() + 6) % 7;
+  x.setDate(x.getDate() - dagSindsMaandag);
+  return Math.floor(x.getTime() / (7 * 86400000));
+}
+
+// Welke fase van de opbouw-/deloadcyclus valt op refDatum? Pure functie van de
+// datum — geen meetdata nodig, dus altijd hoge zekerheid.
+export function periodiseringBepalen(refDatum = new Date(), cyclusLengte = CYCLUS_LENGTE_DEFAULT) {
+  const idx = weekIndex(refDatum);
+  const weekInCyclus = (((idx % cyclusLengte) + cyclusLengte) % cyclusLengte) + 1; // 1..cyclusLengte
+  const fase = weekInCyclus >= cyclusLengte ? 'deload' : 'opbouw';
+  const waarom = fase === 'deload'
+    ? `Week ${weekInCyclus}/${cyclusLengte} van je trainingscyclus is een ingeplande hersteller — na ${cyclusLengte - 1} weken opbouwen bouwen we bewust af, los van hoe zwaar deze week toevallig aanvoelt.`
+    : `Week ${weekInCyclus}/${cyclusLengte} van je trainingscyclus — een opbouwweek, daarna volgt een hersteller.`;
+  return {
+    fase, weekInCyclus, cyclusLengte, zekerheid: 'hoog', waarom,
+    meetlat: `Vaste cyclus van ${cyclusLengte} weken: ${cyclusLengte - 1} weken opbouw, dan 1 week deload — onafhankelijk van ACWR, als structureel vangnet tegen sluipende overbelasting.`,
   };
 }
 
@@ -8192,15 +8347,16 @@ export function vakantieVoorDatum(lijst, datum) {
 // bij overlap: als één periode 'geenJudo' is en een andere 'verlof', gelden beide.
 // (Anders zou alleen de eerst-gevonden periode tellen en kon judovrij wegvallen.)
 export function vakantieFlags(lijst, datum) {
-  let verlof = false, geenJudo = false, periode = null;
+  let verlof = false, geenJudo = false, buitenland = false, periode = null;
   for (const v of lijst || []) {
     if (v.van && v.tot && datum >= v.van && datum <= v.tot) {
       if (!periode) periode = v;
       if (v.verlof) verlof = true;
       if (v.geenJudo) geenJudo = true;
+      if (v.buitenland) buitenland = true;
     }
   }
-  return { verlof, geenJudo, periode };
+  return { verlof, geenJudo, buitenland, periode };
 }
 
 // Eerste periode die een van de gegeven dagdatums overlapt (voor weekbanner).
@@ -8213,9 +8369,10 @@ export function vakantieInWeek(lijst, datums) {
 
 export function vakantieLabel(v) {
   if (!v) return '';
-  if (v.geenJudo && v.verlof) return 'Verlof + judovrij';
-  if (v.geenJudo) return 'Judovrij (clubs dicht)';
-  if (v.verlof) return 'Persoonlijk verlof';
+  const suffix = v.buitenland ? ' (buitenland)' : '';
+  if (v.geenJudo && v.verlof) return `Verlof + judovrij${suffix}`;
+  if (v.geenJudo) return `Judovrij (clubs dicht)${suffix}`;
+  if (v.verlof) return `Persoonlijk verlof${suffix}`;
   return 'Vakantie';
 }
 
@@ -9089,6 +9246,72 @@ describe('noordster — reva-blok met oefeningen-checklist', () => {
 
 ```
 
+## `test/periodisering.test.js`
+
+```js
+import { describe, it, expect } from 'vitest';
+import { periodiseringBepalen } from '../src/services/periodisering.js';
+
+// Maandag 2026-06-01 als ankerpunt.
+const maandag = (offsetWeken) => {
+  const d = new Date('2026-06-01T12:00:00'); // maandag
+  d.setDate(d.getDate() + offsetWeken * 7);
+  return d;
+};
+
+describe('periodiseringBepalen', () => {
+  it('precies 1 op elke cyclusLengte weken is deload, de rest opbouw', () => {
+    const fases = Array.from({ length: 12 }, (_, w) => periodiseringBepalen(maandag(w)).fase);
+    const deloads = fases.filter((f) => f === 'deload').length;
+    expect(deloads).toBe(3); // 12 weken / cyclus van 4
+    expect(fases.every((f) => f === 'opbouw' || f === 'deload')).toBe(true);
+  });
+
+  it('herhaalt zich exact elke cyclusLengte weken', () => {
+    const eerste = periodiseringBepalen(maandag(0));
+    const zelfdeFaseLater = periodiseringBepalen(maandag(eerste.cyclusLengte));
+    expect(zelfdeFaseLater.fase).toBe(eerste.fase);
+    expect(zelfdeFaseLater.weekInCyclus).toBe(eerste.weekInCyclus);
+  });
+
+  it('weekInCyclus telt op van 1 t.e.m. cyclusLengte en dan opnieuw 1', () => {
+    const eerste = periodiseringBepalen(maandag(0));
+    const volgende = periodiseringBepalen(maandag(1));
+    const verwacht = (eerste.weekInCyclus % eerste.cyclusLengte) + 1;
+    expect(volgende.weekInCyclus).toBe(verwacht);
+    expect(volgende.fase).toBe(verwacht >= eerste.cyclusLengte ? 'deload' : 'opbouw');
+  });
+
+  it('is identiek voor elke dag binnen dezelfde week', () => {
+    const ref = periodiseringBepalen(maandag(2));
+    const zondag = new Date(maandag(2));
+    zondag.setDate(zondag.getDate() + 6);
+    expect(periodiseringBepalen(zondag).fase).toBe(ref.fase);
+    expect(periodiseringBepalen(zondag).weekInCyclus).toBe(ref.weekInCyclus);
+  });
+
+  it('blijft consistent over een jaargrens (geen reset zoals bij ISO-weeknummers)', () => {
+    const voorJaarwisseling = periodiseringBepalen(new Date('2026-12-28T12:00:00')); // maandag
+    const naJaarwisseling = periodiseringBepalen(new Date('2027-01-04T12:00:00')); // maandag erna
+    const verwacht = (voorJaarwisseling.weekInCyclus % voorJaarwisseling.cyclusLengte) + 1;
+    expect(naJaarwisseling.weekInCyclus).toBe(verwacht);
+  });
+
+  it('respecteert een andere cycluslengte', () => {
+    const fases = Array.from({ length: 6 }, (_, w) => periodiseringBepalen(maandag(w), 3).fase);
+    expect(fases.filter((f) => f === 'deload').length).toBe(2); // 6 weken / cyclus van 3
+  });
+
+  it('is altijd hoog zeker (kalenderregel, geen meetdata nodig) en uitlegbaar', () => {
+    const r = periodiseringBepalen(maandag(0));
+    expect(r.zekerheid).toBe('hoog');
+    expect(r.waarom).toBeTruthy();
+    expect(r.meetlat).toBeTruthy();
+  });
+});
+
+```
+
 ## `test/planner.test.js`
 
 ```js
@@ -9408,6 +9631,51 @@ describe('coach — uitlegbaarheid & veilige terugval (Fase 4.5)', () => {
     expect(rang[risico.niveau]).toBeLessThan(rang[vol.niveau]);
     expect(risico.waarom.join(' ')).toMatch(/blessurerisico/i);
   });
+
+  it('deload-week (Fase 5 — periodisering) tempert "hard" naar "matig", los van ACWR', () => {
+    const vol = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht' });
+    const deload = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht', periodiseringFase: 'deload' });
+    expect(vol.niveau).toBe('hard');
+    expect(deload.niveau).toBe('matig');
+    expect(deload.waarom.join(' ')).toMatch(/hersteller/i);
+  });
+
+  it('deload-week verlaagt "rustig" of "matig" niet verder (enkel een rem op vol gas)', () => {
+    const matig = coachAdvies({ readiness: 55, bodyBattery: 55, slaapUren: 7, energie: 3, goal: 'kracht' });
+    const matigMetDeload = coachAdvies({ readiness: 55, bodyBattery: 55, slaapUren: 7, energie: 3, goal: 'kracht', periodiseringFase: 'deload' });
+    expect(matigMetDeload.niveau).toBe(matig.niveau);
+  });
+});
+
+describe('coach — groot verlof (thuis vs. buitenland)', () => {
+  const basis = { readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht' };
+
+  it('verlof thuis verlengt de sessieduur t.o.v. een gewone dag', () => {
+    const normaal = coachAdvies(basis);
+    const thuis = coachAdvies({ ...basis, vakantieType: 'thuis' });
+    expect(thuis.duurMin).toBeGreaterThan(normaal.duurMin);
+    expect(thuis.waarom.join(' ')).toMatch(/meer tijd/i);
+  });
+
+  it('verlof in het buitenland laat de duur standaard (geen aanname over faciliteiten)', () => {
+    const normaal = coachAdvies(basis);
+    const buitenland = coachAdvies({ ...basis, vakantieType: 'buitenland' });
+    expect(buitenland.duurMin).toBe(normaal.duurMin);
+    expect(buitenland.waarom.join(' ')).toMatch(/buitenland/i);
+  });
+
+  it('bij niveau "herstel" telt de verlof-bonus niet — herstel blijft kort', () => {
+    const herstel = coachAdvies({ goal: 'kracht', blessureActief: true });
+    const herstelThuis = coachAdvies({ goal: 'kracht', blessureActief: true, vakantieType: 'thuis' });
+    expect(herstelThuis.niveau).toBe('herstel');
+    expect(herstelThuis.duurMin).toBe(herstel.duurMin);
+  });
+
+  it('herhaalde aanroepen muteren de gedeelde MATRIX niet (geen lekkende state)', () => {
+    coachAdvies({ ...basis, vakantieType: 'thuis' });
+    const normaalNa = coachAdvies(basis);
+    expect(normaalNa.duurMin).toBe(60); // ongewijzigde 'kracht'/'hard'-waarde uit MATRIX
+  });
 });
 
 ```
@@ -9540,7 +9808,7 @@ describe('tijd-helpers', () => {
 
 ```js
 import { describe, it, expect } from 'vitest';
-import { vakantieVoorDatum, vakantieFlags } from '../src/services/vakanties.js';
+import { vakantieVoorDatum, vakantieFlags, vakantieLabel } from '../src/services/vakanties.js';
 
 // Twee overlappende periodes zoals in de praktijk: een ziekteverlof én een
 // langere judovrije periode die elkaar op één dag overlappen.
@@ -9570,7 +9838,30 @@ describe('vakantieFlags — combineert overlappende periodes', () => {
 
   it('1 sept: buiten alle periodes', () => {
     const f = vakantieFlags(periodes, '2026-09-01');
-    expect(f).toEqual({ verlof: false, geenJudo: false, periode: null });
+    expect(f).toEqual({ verlof: false, geenJudo: false, buitenland: false, periode: null });
+  });
+});
+
+describe('vakantieFlags — buitenland', () => {
+  const buitenPeriodes = [
+    { naam: 'Spanje', van: '2026-07-01', tot: '2026-07-14', verlof: true, geenJudo: true, buitenland: true },
+  ];
+
+  it('buitenland-vlag wordt overgenomen tijdens de periode', () => {
+    const f = vakantieFlags(buitenPeriodes, '2026-07-05');
+    expect(f.buitenland).toBe(true);
+  });
+
+  it('buitenland-vlag staat uit buiten de periode', () => {
+    const f = vakantieFlags(buitenPeriodes, '2026-08-01');
+    expect(f.buitenland).toBe(false);
+  });
+});
+
+describe('vakantieLabel — buitenland-suffix', () => {
+  it('voegt "(buitenland)" toe als de periode buitenland is', () => {
+    expect(vakantieLabel({ verlof: true, geenJudo: false, buitenland: true })).toBe('Persoonlijk verlof (buitenland)');
+    expect(vakantieLabel({ verlof: true, geenJudo: false, buitenland: false })).toBe('Persoonlijk verlof');
   });
 });
 
