@@ -140,6 +140,25 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
   5. **Blessure-afloop wordt niet stilzwijgend genegeerd**: de dispatcher
      (`functions/index.js`, ochtend-blok) stuurt een push als een blessure z'n
      `eindDatum` voorbij is maar nog niet bevestigd (`eindeGemeld`).
+  - **Reva-blok plant zelf rond werk/judo/agenda i.p.v. enkel een conflict te
+    melden** (gebruikersfeedback: een reva-sessie kwam standaard op
+    `opstaan + 60 min` te liggen, wat bij een laat opstaan-uur middenin de
+    werkdag terechtkwam — de planner zag het conflict wél, maar deed er niets
+    mee). `planner.js` → nieuwe `vindVrijSlot(blok, vanaf, duurMin)` scant
+    vooruit langs de al geplande "belangrijke" blokken (`vast` of bron
+    werk/judo/lesgeven/woonwerk/agenda) en geeft het eerste vrije moment van de
+    juiste duur terug. De reva-sectie (5c) probeert eerst een slot **na het
+    ontbijt en vóór het werk**, anders **na het werk**, telkens via
+    `vindVrijSlot` om al ingeplande blokken heen geschoven. Een **expliciet
+    gekozen** `blessure.tijd` blijft bewust ongewijzigd — dat is een bewuste
+    keuze van de gebruiker, conflictdetectie blijft daar het vangnet. Ook de
+    losse, verouderde 7u-"Reva-oefeningen"-gewoonte uit de eerste-login-seed
+    (`services/data.js` → `seedDefaultsIfNeeded`) is verwijderd: die was een
+    legacy-overblijfsel van vóór het blessuremodel (Fase 5.5) en boekte dubbel
+    met het nieuwe auto-blok. **Let op:** dit verwijdert enkel de seed voor
+    *nieuwe* gebruikers — een al bestaande, eerder geseede "Reva-oefeningen"-taak
+    in Firestore moet de gebruiker zelf verwijderen/deactiveren via de
+    Taken-pagina.
   - **Coach-kaart-flicker (Gezondheid-pagina) — twee opeenvolgende bugs, allebei
     gefixt:**
     (a) de pagina las Garmin/check-in/blessures via losse, ongecoördineerde
@@ -161,7 +180,7 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
     is read-only en geeft géén foutmelding in de UI, enkel een stille
     write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 135 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 138 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 

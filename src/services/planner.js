@@ -31,6 +31,21 @@ function maakBlok(arr, start, eind, titel, type, opts = {}) {
   });
 }
 
+// Zoekt, vanaf een voorkeurstijd, het eerstvolgende moment van duurMin
+// minuten dat geen vaste/belangrijke blokken overlapt — zo plant de planner
+// zelf rond werk/judo/agenda i.p.v. enkel een conflict te melden.
+function vindVrijSlot(blok, vanaf, duurMin) {
+  const belangrijk = blok
+    .filter((b) => b.vast || ['werk', 'judo', 'lesgeven', 'woonwerk', 'agenda'].includes(b.bron))
+    .slice().sort((a, b) => toMin(a.start) - toMin(b.start));
+  let kandidaat = vanaf;
+  for (const b of belangrijk) {
+    if (toMin(addMin(kandidaat, duurMin)) <= toMin(b.start)) return kandidaat;
+    if (toMin(kandidaat) < toMin(b.eind)) kandidaat = b.eind;
+  }
+  return kandidaat;
+}
+
 // Fietsadvies op basis van blessure, Garmin-readiness en weer.
 export function berekenFietsAdvies({ sport, blessureActief, vermijdSporten = [], garmin, weer }) {
   if (!sport?.fietsAlsSport) return { fiets: false, reden: 'Fietsen-als-sport staat uit.' };
@@ -64,6 +79,7 @@ export function genereerDagPlan({
   const blok = [];
   const advies = { tekst: [] };
   let werkEindTijd = null;
+  let werkStartTijd = null;
 
   const isWo = dagKort === 'wo';
 
@@ -93,6 +109,9 @@ export function genereerDagPlan({
       maakBlok(blok, addMin(start, -reis), start,
         fiets ? 'Fietsen naar werk' : 'Rijden naar werk', fiets ? 'sport' : 'woonwerk',
         { bron: 'woonwerk', detail: fiets ? 'Telt als training' : null });
+      werkStartTijd = addMin(start, -reis);
+    } else {
+      werkStartTijd = start;
     }
 
     // Werk opsplitsen rond de middagpauze
@@ -203,7 +222,20 @@ export function genereerDagPlan({
     const oefeningen = kiesOefeningenVanDag({ oefeningen: b.oefeningen || [], aantalPerDag: b.aantalPerDag, datum });
     if (!oefeningen.length) return;
     const duurMin = blessureBlokDuur(oefeningen.length);
-    const start = b.tijd || addMin(opstaan, 60);
+    // Geen vaste tijd gekozen: de planner plant zelf rond werk/judo/agenda in
+    // plaats van enkel een conflict te melden — bij voorkeur vóór het werk
+    // begint (na het ontbijt), anders na het werk, telkens om vaste blokken
+    // heen geschoven. Een expliciet gekozen tijd (b.tijd) blijft gerespecteerd
+    // — die kiest de gebruiker bewust, daar schuift de planner niet aan.
+    let start;
+    if (b.tijd) {
+      start = b.tijd;
+    } else {
+      const naOntbijt = addMin(opstaan, 45);
+      const pastVoorWerk = !werkStartTijd || toMin(addMin(naOntbijt, duurMin)) <= toMin(werkStartTijd);
+      const voorkeur = pastVoorWerk ? naOntbijt : (werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 60));
+      start = vindVrijSlot(blok, voorkeur, duurMin);
+    }
     maakBlok(blok, start, addMin(start, duurMin), `Reva — ${b.titel || b.naam || 'oefeningen'}`, 'reva', {
       bron: 'reva', id: `reva-${b.id || i}`, blessureId: b.id || null,
       oefeningen: oefeningen.map((o) => ({ id: o.id, naam: o.naam, sets: o.sets || null })),
