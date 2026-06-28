@@ -12,6 +12,7 @@ import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
 import CheckinKaart from '../components/CheckinKaart';
 import NoordsterKaart from '../components/NoordsterKaart';
+import Daypicker from '../components/Daypicker';
 
 function tijdvak() {
   const h = new Date().getHours();
@@ -26,8 +27,8 @@ const datumLabel = (d = new Date()) =>
 export default function Dashboard() {
   const [datumObj, setDatumObj] = useState(() => new Date());
   const isToday = datumKey(datumObj) === datumKey(new Date());
+  const isFuture = datumKey(datumObj) > datumKey(new Date());
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
-  const kiesDatum = (str) => str && setDatumObj(new Date(str + 'T12:00:00'));
 
   const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan(datumObj);
   const { user } = useAuth();
@@ -93,9 +94,10 @@ export default function Dashboard() {
   };
 
   // Gemiste sleutelblokken: vandaag enkel de voorbije + niet-afgevinkte; op een
-  // voorbije dag is de hele dag al "voorbij", dus telt elk nog open blok.
-  const gemist = isToday
-    ? checkbare.filter((b) => toMin(b.eind) <= now && !gedaan?.[b.id])
+  // voorbije dag is de hele dag al "voorbij", dus telt elk nog open blok. Op een
+  // toekomstige dag is nog niets "gemist" — die dag is nog niet aan de beurt.
+  const gemist = isFuture ? []
+    : isToday ? checkbare.filter((b) => toMin(b.eind) <= now && !gedaan?.[b.id])
     : checkbare.filter((b) => !gedaan?.[b.id]);
 
   return (
@@ -105,23 +107,23 @@ export default function Dashboard() {
         <span className="muted" style={{ textTransform: 'capitalize' }}>{datumLabel(datumObj)}</span>
       </header>
 
-      {/* Datumkiezer: vorige/volgende dag of vrij kiezen, om correcties op voorbije dagen door te voeren */}
+      {/* Datumkiezer: vorige/volgende dag, vrij kiezen via kalender, of terug naar vandaag —
+          zowel voor correcties op voorbije dagen als om toekomstige planning te bekijken */}
       <div className="row between" style={{ '--i': 0, gap: 8 }}>
         <button className="icon-btn" aria-label="Vorige dag" onClick={() => naarDag(-1)}>
           <IcoChevron width={18} height={18} style={{ transform: 'rotate(180deg)' }} />
         </button>
-        <input type="date" className="input sm" style={{ maxWidth: 170, textAlign: 'center' }}
-          value={datumKey(datumObj)} max={datumKey(new Date())}
-          onChange={(e) => kiesDatum(e.target.value)} />
-        <button className="icon-btn" aria-label="Volgende dag" onClick={() => naarDag(1)} disabled={isToday}>
+        <Daypicker datum={datumObj} onKies={setDatumObj} />
+        <button className="icon-btn" aria-label="Volgende dag" onClick={() => naarDag(1)}>
           <IcoChevron width={18} height={18} />
         </button>
-        {!isToday && <button className="btn sm" onClick={() => setDatumObj(new Date())}>Vandaag</button>}
+        <button className="btn sm" disabled={isToday} onClick={() => setDatumObj(new Date())}>Vandaag</button>
       </div>
       {!isToday && (
         <p className="small muted" style={{ margin: 0 }}>
-          Je bekijkt een voorbije dag — vink blokken af om die dag te corrigeren. Wijzigingen aan
-          gewoonte-taken kunnen de streak-telling beïnvloeden.
+          {isFuture
+            ? 'Je bekijkt een toekomstige dag — dit is je geplande dag, nog niets om af te vinken.'
+            : 'Je bekijkt een voorbije dag — vink blokken af om die dag te corrigeren. Wijzigingen aan gewoonte-taken kunnen de streak-telling beïnvloeden.'}
         </p>
       )}
 
@@ -269,7 +271,7 @@ export default function Dashboard() {
                       <IcoEdit width={16} height={16} />
                     </button>
                   )}
-                  {checkbaar && !bewerkt && (
+                  {checkbaar && !bewerkt && !isFuture && (
                     <button className={'tl-check' + (on ? ' on' : '') + (popId === b.id ? ' pop' : '')}
                       onClick={() => tik(b.id, b.taakId)}
                       aria-label={on ? 'Ongedaan maken' : 'Afvinken'}>

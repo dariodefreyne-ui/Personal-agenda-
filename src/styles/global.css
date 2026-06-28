@@ -133,6 +133,23 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: transparent; border: 1px solid transparent; border-radius: 12px; cursor: pointer; color: var(--text-muted); }
 .icon-btn:hover { color: var(--text); background: var(--surface-2); }
 
+/* ---- Daypicker (kalender-popover) ---- */
+.daypicker { position: relative; }
+.daypicker-pop {
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  z-index: 40; width: 280px; padding: 14px; box-shadow: var(--shadow);
+}
+.daypicker-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.daypicker-wd { text-align: center; padding: 4px 0; text-transform: uppercase; }
+.daypicker-dag {
+  aspect-ratio: 1; min-height: 0; display: grid; place-items: center;
+  background: transparent; border: 1px solid transparent; border-radius: 10px;
+  color: var(--text); cursor: pointer; font-size: .88rem;
+}
+.daypicker-dag:hover { background: var(--surface-2); }
+.daypicker-dag.vandaag { border-color: var(--text-dim); }
+.daypicker-dag.on { background: var(--primary); color: var(--on-primary); font-weight: 600; border-color: transparent; }
+
 /* ---- Formulier ---- */
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: .85rem; color: var(--text-muted); }
