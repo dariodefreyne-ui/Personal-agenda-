@@ -4,11 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   getGarminDag, getDocById, saveDag, subscribeCollection,
-  addItem, updateItem, deleteItem, getLaatsteGarminSync,
+  addItem, updateItem, deleteItem, getLaatsteGarminSync, getCollection,
 } from '../services/data';
 import { useSettings } from '../contexts/SettingsContext';
 import { garminSamenvatting, syncStatus } from '../services/garmin';
-import { coachAdvies, DOELEN } from '../services/coach';
+import { DOELEN } from '../services/coach';
+import { acwrBerekenen, sessieBelasting } from '../services/belasting';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
 import Gauge from '../components/Gauge';
@@ -24,6 +25,7 @@ export default function Gezondheid() {
   const [reva, setReva] = useState([]);
   const [nieuwReva, setNieuwReva] = useState('');
   const [sync, setSync] = useState(null);
+  const [acwr, setAcwr] = useState(null);
   const doel = instellingen?.gezondheid?.doel || 'algemeen';
 
   useEffect(() => {
@@ -31,6 +33,11 @@ export default function Gezondheid() {
     getGarminDag(user.uid, datum).then((g) => setGarmin(garminSamenvatting(g)));
     getLaatsteGarminSync(user.uid).then(setSync);
     getDocById(user.uid, 'dagen', datum).then((d) => { if (d?.checkin) setCheckin(d.checkin); });
+    Promise.all([getCollection(user.uid, 'garminActivities'), getCollection(user.uid, 'activiteitLog')])
+      .then(([acts, logs]) => {
+        const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
+        setAcwr(acwrBerekenen(sessieBelasting(acts, rpeMap)));
+      });
     return subscribeCollection(user.uid, 'reva', setReva);
   }, [user, datum]);
 
@@ -73,7 +80,8 @@ export default function Gezondheid() {
 
       {/* Coach-advies */}
       {(garmin || blessureActief) && (
-        <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief} />
+        <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief}
+          energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null} />
       )}
 
       {/* Garmin: gauges + profiel */}
