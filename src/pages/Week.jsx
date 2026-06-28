@@ -15,7 +15,7 @@ function maandagVan(d) {
   x.setHours(12, 0, 0, 0);
   return x;
 }
-const LEEG_PERIODE = { naam: '', van: '', tot: '', geenJudo: true, verlof: true };
+const LEEG_PERIODE = { naam: '', van: '', tot: '', geenJudo: true, verlof: true, buitenland: false };
 
 export default function Week() {
   const { user } = useAuth();
@@ -82,7 +82,7 @@ export default function Week() {
   const startBewerken = (v) => {
     setEditId(v.id);
     setNieuw({ naam: v.naam || '', van: v.van || '', tot: v.tot || '',
-      geenJudo: v.geenJudo !== false, verlof: v.verlof !== false });
+      geenJudo: v.geenJudo !== false, verlof: v.verlof !== false, buitenland: v.buitenland === true });
     setFormOpen(true);
   };
 
@@ -264,6 +264,13 @@ export default function Week() {
               <input type="checkbox" checked={nieuw.verlof}
                 onChange={(e) => setNieuw({ ...nieuw, verlof: e.target.checked })} style={{ width: 22, height: 22 }} />
             </label>
+            {nieuw.verlof && (
+              <label className="row between">
+                <span>In het buitenland (coach houdt duur standaard, geen extra tijd)</span>
+                <input type="checkbox" checked={nieuw.buitenland}
+                  onChange={(e) => setNieuw({ ...nieuw, buitenland: e.target.checked })} style={{ width: 22, height: 22 }} />
+              </label>
+            )}
             <div className="row between">
               <button className="btn ghost" onClick={sluitForm}>Annuleren</button>
               <button className="btn primary" onClick={bewaarPeriode}>{editId ? 'Bewaren' : 'Toevoegen'}</button>

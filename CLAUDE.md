@@ -130,6 +130,12 @@ Volgende fases:
   principe "vertrouwen > intelligentie"). Een deload-week tempert de coach altijd
   van 'hard' naar 'matig', los van ACWR/Garmin; getoond in `BelastingKaart`
   ("Trainingscyclus"). Veilige terugval bij weinig data blijft via ACWR/zekerheid.
+  Ook **groot verlof**: een vakantieperiode (`Week.jsx` → `vakanties/{id}`) kan
+  naast judovrij/verlof ook **buitenland** aanvinden. Thuis met verlof verlengt
+  de coach de sessieduur licht (meer tijd dan gewoonlijk, behalve bij niveau
+  'herstel'); in het buitenland blijft de duur standaard (geen aanname over
+  faciliteiten daar). `vakantieFlags()` geeft dit door als `vakantieType`
+  ('thuis'/'buitenland'/null) aan `coachAdvies()`, met uitleg in `waarom`.
 - **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
 - **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —

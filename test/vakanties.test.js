@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { vakantieVoorDatum, vakantieFlags } from '../src/services/vakanties.js';
+import { vakantieVoorDatum, vakantieFlags, vakantieLabel } from '../src/services/vakanties.js';
 
 // Twee overlappende periodes zoals in de praktijk: een ziekteverlof én een
 // langere judovrije periode die elkaar op één dag overlappen.
@@ -29,6 +29,29 @@ describe('vakantieFlags — combineert overlappende periodes', () => {
 
   it('1 sept: buiten alle periodes', () => {
     const f = vakantieFlags(periodes, '2026-09-01');
-    expect(f).toEqual({ verlof: false, geenJudo: false, periode: null });
+    expect(f).toEqual({ verlof: false, geenJudo: false, buitenland: false, periode: null });
+  });
+});
+
+describe('vakantieFlags — buitenland', () => {
+  const buitenPeriodes = [
+    { naam: 'Spanje', van: '2026-07-01', tot: '2026-07-14', verlof: true, geenJudo: true, buitenland: true },
+  ];
+
+  it('buitenland-vlag wordt overgenomen tijdens de periode', () => {
+    const f = vakantieFlags(buitenPeriodes, '2026-07-05');
+    expect(f.buitenland).toBe(true);
+  });
+
+  it('buitenland-vlag staat uit buiten de periode', () => {
+    const f = vakantieFlags(buitenPeriodes, '2026-08-01');
+    expect(f.buitenland).toBe(false);
+  });
+});
+
+describe('vakantieLabel — buitenland-suffix', () => {
+  it('voegt "(buitenland)" toe als de periode buitenland is', () => {
+    expect(vakantieLabel({ verlof: true, geenJudo: false, buitenland: true })).toBe('Persoonlijk verlof (buitenland)');
+    expect(vakantieLabel({ verlof: true, geenJudo: false, buitenland: false })).toBe('Persoonlijk verlof');
   });
 });

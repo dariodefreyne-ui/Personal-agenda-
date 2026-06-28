@@ -10,7 +10,7 @@ const ZEKERHEID_KLEUR = { hoog: 'var(--success)', gemiddeld: 'var(--warning)', l
 // Premium-principe: elk advies is uitlegbaar — waarom, welke data, hoe zeker, hoe
 // succes gemeten wordt. Veiligheidsslot: bij overbelasting wint herstel; bij weinig
 // data adviseert de coach bewust voorzichtiger.
-export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false, energie = null, acwrZone = null, pijn = null, periodiseringFase = null }) {
+export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false, energie = null, acwrZone = null, pijn = null, periodiseringFase = null, vakantieType = null }) {
   const overbelast = belastingStatus({ trainingStatus: garmin?.trainingStatus }).key === 'overbelast';
   const a = coachAdvies({
     readiness: garmin?.readiness ?? null,
@@ -18,7 +18,7 @@ export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief =
     slaapUren: garmin?.slaapUren ?? null,
     hrvStatus: garmin?.hrvStatus ?? null,
     energie,
-    goal, blessureActief, overbelast, acwrZone, pijn, periodiseringFase,
+    goal, blessureActief, overbelast, acwrZone, pijn, periodiseringFase, vakantieType,
   });
 
   return (

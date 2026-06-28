@@ -29,7 +29,7 @@ export default function Dashboard() {
   const isFuture = datumKey(datumObj) > datumKey(new Date());
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
 
-  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin, acwr, periodisering } = useDagPlan(datumObj);
+  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin, acwr, periodisering, vakantieType } = useDagPlan(datumObj);
   const { user } = useAuth();
   const [popId, setPopId] = useState(null);
   const [ns, setNs] = useState(null);
@@ -134,7 +134,7 @@ export default function Dashboard() {
       {isToday && (garmin?.readiness != null || garmin?.bodyBattery != null || blessureActief || checkin?.pijn > 0) && (
         <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel}
           blessureActief={blessureActief} energie={checkin?.ochtend?.energie} acwrZone={acwr?.zone}
-          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering?.fase} />
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering?.fase} vakantieType={vakantieType} />
       )}
 
       {/* Belasting & herstel — enkel vandaag */}

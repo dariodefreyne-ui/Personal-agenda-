@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   getGarminDag, getDocById, saveDag, subscribeCollection,
-  addItem, updateItem, deleteItem, getLaatsteGarminSync, getCollection,
+  addItem, updateItem, deleteItem, getLaatsteGarminSync, getCollection, getVakanties,
 } from '../services/data';
 import { useSettings } from '../contexts/SettingsContext';
 import { garminSamenvatting, syncStatus } from '../services/garmin';
@@ -13,6 +13,7 @@ import { isBlessureActief, isVerlopenNietGemeld } from '../services/blessures';
 import { BLESSURE_REGIOS } from '../config/appConfig';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
 import { periodiseringBepalen } from '../services/periodisering';
+import { vakantieFlags } from '../services/vakanties';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
 import Gauge from '../components/Gauge';
@@ -29,6 +30,7 @@ export default function Gezondheid() {
   const [nieuweBlessure, setNieuweBlessure] = useState('');
   const [sync, setSync] = useState(null);
   const [acwr, setAcwr] = useState(null);
+  const [vakantieType, setVakantieType] = useState(null);
   const [klaar, setKlaar] = useState(false);
   const [blessuresKlaar, setBlessuresKlaar] = useState(false);
   const doel = instellingen?.gezondheid?.doel || 'algemeen';
@@ -46,12 +48,15 @@ export default function Gezondheid() {
       getDocById(user.uid, 'dagen', datum),
       getCollection(user.uid, 'garminActivities'),
       getCollection(user.uid, 'activiteitLog'),
-    ]).then(([g, s, d, acts, logs]) => {
+      getVakanties(user.uid),
+    ]).then(([g, s, d, acts, logs, vakanties]) => {
       setGarmin(garminSamenvatting(g));
       setSync(s);
       if (d?.checkin) setCheckin(d.checkin);
       const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
       setAcwr(acwrBerekenen(sessieBelasting(acts, rpeMap)));
+      const { verlof, buitenland } = vakantieFlags(vakanties, datum);
+      setVakantieType(verlof ? (buitenland ? 'buitenland' : 'thuis') : null);
       setKlaar(true);
     });
     setBlessuresKlaar(false);
@@ -137,7 +142,7 @@ export default function Gezondheid() {
       {klaar && blessuresKlaar && (garmin || blessureActief) && (
         <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief}
           energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null}
-          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering.fase} />
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering.fase} vakantieType={vakantieType} />
       )}
 
       {/* Garmin: gauges + profiel */}

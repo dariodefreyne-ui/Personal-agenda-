@@ -60,7 +60,8 @@ export function useDagPlan(datumObj = new Date()) {
       ]);
 
       // Vlaggen over ÁLLE overlappende vakantieperiodes (zie vakantieFlags).
-      const { verlof, geenJudo } = vakantieFlags(vakanties, datum);
+      const { verlof, geenJudo, buitenland } = vakantieFlags(vakanties, datum);
+      const vakantieType = verlof ? (buitenland ? 'buitenland' : 'thuis') : null;
       const isWeekend = dagKort === 'za' || dagKort === 'zo';
       // Effectief dagtype: verlofperiode wint altijd, ook over een eerder gezette
       // expliciete dagmodus (retroactief verlof mag geen ingepland werk laten staan).
@@ -103,6 +104,7 @@ export function useDagPlan(datumObj = new Date()) {
         blessureActief, overbelast, acwrZone: acwr?.zone,
         pijn: typeof dag?.checkin?.pijn === 'number' && dag.checkin.pijn > 0 ? dag.checkin.pijn : null,
         periodiseringFase: periodisering.fase,
+        vakantieType,
       });
 
       const plan = genereerDagPlan({
@@ -124,7 +126,7 @@ export function useDagPlan(datumObj = new Date()) {
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
-        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, periodisering, advies, weer,
+        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, periodisering, advies, weer, vakantieType,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen

@@ -567,6 +567,12 @@ Volgende fases:
   principe "vertrouwen > intelligentie"). Een deload-week tempert de coach altijd
   van 'hard' naar 'matig', los van ACWR/Garmin; getoond in `BelastingKaart`
   ("Trainingscyclus"). Veilige terugval bij weinig data blijft via ACWR/zekerheid.
+  Ook **groot verlof**: een vakantieperiode (`Week.jsx` → `vakanties/{id}`) kan
+  naast judovrij/verlof ook **buitenland** aanvinden. Thuis met verlof verlengt
+  de coach de sessieduur licht (meer tijd dan gewoonlijk, behalve bij niveau
+  'herstel'); in het buitenland blijft de duur standaard (geen aanname over
+  faciliteiten daar). `vakantieFlags()` geeft dit door als `vakantieType`
+  ('thuis'/'buitenland'/null) aan `coachAdvies()`, met uitleg in `waarom`.
 - **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
 - **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —
@@ -621,6 +627,11 @@ De app is **niet langer alleen een planner**: ze werkt sinds Fase 5/5.5 ook als
   "Trainingscyclus". Tempert de coach altijd van 'hard' naar 'matig' in een
   deload-week, los van ACWR/Garmin-signalen — bewust géén data-gok maar een
   voorspelbaar structureel vangnet (zie §4.6).
+- **Groot verlof** (`services/vakanties.js`, `pages/Week.jsx`): een
+  vakantieperiode kan naast judovrij/verlof ook **buitenland** aanvinden. Verlof
+  thuis verlengt de coach-sessieduur licht (niet bij niveau 'herstel'); in het
+  buitenland blijft de duur standaard. Doorgegeven als `vakantieType`
+  ('thuis'/'buitenland'/null) via `vakantieFlags()` → `coachAdvies()`.
 - **North Star-consistentiescore** (`services/noordster.js`): één score voor
   "ben ik consequent", plus een apart **reva-trouw**-getal zodra er actieve
   blessures zijn.
@@ -744,7 +755,7 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
     is read-only en geeft géén foutmelding in de UI, enkel een stille
     write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 128 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 135 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -965,7 +976,7 @@ twee gefixte bugs in deze feature):
 ```bash
 npm install
 npm run dev      # lokaal draaien
-npm test         # 128 unit-tests
+npm test         # 135 unit-tests
 npm run build    # productie-build (genereert ook firebase-messaging-sw.js)
 ```
 
@@ -997,7 +1008,10 @@ data (readiness, body battery, slaap, HRV) en je **zelfrapportage** (energie, pi
 uit om elke dag een **uitlegbaar** trainingsadvies te geven (welk niveau, hoeveel
 tijd, waarom), houdt je **trainingsbelasting bij (ACWR)** én plant een vaste
 **opbouw-/deload-cyclus** (3 weken opbouw, dan 1 hersteller) om overbelasting/
-blessures te helpen voorkomen, en volgt actieve **blessures met
+blessures te helpen voorkomen. Tijdens **groot verlof** (in te stellen bij Week →
+vakantieperiode) sport je vaak met meer tijd thuis, maar niet als je in het
+**buitenland** bent — dat geef je apart aan, en de coach verlengt de sessieduur
+enkel bij verlof thuis. De app volgt ook actieve **blessures met
 revalidatie-oefeningen** op (per blessure een eigen oefenschema, met een
 **North Star-therapietrouwscore** die toont hoe consequent je je reva volhoudt).
 Bij gemiste reva-sessies of een afgelopen blessure die niet bevestigd is, krijg je
@@ -3469,7 +3483,7 @@ const ZEKERHEID_KLEUR = { hoog: 'var(--success)', gemiddeld: 'var(--warning)', l
 // Premium-principe: elk advies is uitlegbaar — waarom, welke data, hoe zeker, hoe
 // succes gemeten wordt. Veiligheidsslot: bij overbelasting wint herstel; bij weinig
 // data adviseert de coach bewust voorzichtiger.
-export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false, energie = null, acwrZone = null, pijn = null, periodiseringFase = null }) {
+export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief = false, energie = null, acwrZone = null, pijn = null, periodiseringFase = null, vakantieType = null }) {
   const overbelast = belastingStatus({ trainingStatus: garmin?.trainingStatus }).key === 'overbelast';
   const a = coachAdvies({
     readiness: garmin?.readiness ?? null,
@@ -3477,7 +3491,7 @@ export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief =
     slaapUren: garmin?.slaapUren ?? null,
     hrvStatus: garmin?.hrvStatus ?? null,
     energie,
-    goal, blessureActief, overbelast, acwrZone, pijn, periodiseringFase,
+    goal, blessureActief, overbelast, acwrZone, pijn, periodiseringFase, vakantieType,
   });
 
   return (
@@ -4238,7 +4252,8 @@ export function useDagPlan(datumObj = new Date()) {
       ]);
 
       // Vlaggen over ÁLLE overlappende vakantieperiodes (zie vakantieFlags).
-      const { verlof, geenJudo } = vakantieFlags(vakanties, datum);
+      const { verlof, geenJudo, buitenland } = vakantieFlags(vakanties, datum);
+      const vakantieType = verlof ? (buitenland ? 'buitenland' : 'thuis') : null;
       const isWeekend = dagKort === 'za' || dagKort === 'zo';
       // Effectief dagtype: verlofperiode wint altijd, ook over een eerder gezette
       // expliciete dagmodus (retroactief verlof mag geen ingepland werk laten staan).
@@ -4281,6 +4296,7 @@ export function useDagPlan(datumObj = new Date()) {
         blessureActief, overbelast, acwrZone: acwr?.zone,
         pijn: typeof dag?.checkin?.pijn === 'number' && dag.checkin.pijn > 0 ? dag.checkin.pijn : null,
         periodiseringFase: periodisering.fase,
+        vakantieType,
       });
 
       const plan = genereerDagPlan({
@@ -4302,7 +4318,7 @@ export function useDagPlan(datumObj = new Date()) {
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
-        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, periodisering, advies, weer,
+        werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, periodisering, advies, weer, vakantieType,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen
@@ -5034,7 +5050,7 @@ export default function Dashboard() {
   const isFuture = datumKey(datumObj) > datumKey(new Date());
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
 
-  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin, acwr, periodisering } = useDagPlan(datumObj);
+  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin, acwr, periodisering, vakantieType } = useDagPlan(datumObj);
   const { user } = useAuth();
   const [popId, setPopId] = useState(null);
   const [ns, setNs] = useState(null);
@@ -5139,7 +5155,7 @@ export default function Dashboard() {
       {isToday && (garmin?.readiness != null || garmin?.bodyBattery != null || blessureActief || checkin?.pijn > 0) && (
         <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel}
           blessureActief={blessureActief} energie={checkin?.ochtend?.energie} acwrZone={acwr?.zone}
-          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering?.fase} />
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering?.fase} vakantieType={vakantieType} />
       )}
 
       {/* Belasting & herstel — enkel vandaag */}
@@ -5396,7 +5412,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   getGarminDag, getDocById, saveDag, subscribeCollection,
-  addItem, updateItem, deleteItem, getLaatsteGarminSync, getCollection,
+  addItem, updateItem, deleteItem, getLaatsteGarminSync, getCollection, getVakanties,
 } from '../services/data';
 import { useSettings } from '../contexts/SettingsContext';
 import { garminSamenvatting, syncStatus } from '../services/garmin';
@@ -5405,6 +5421,7 @@ import { isBlessureActief, isVerlopenNietGemeld } from '../services/blessures';
 import { BLESSURE_REGIOS } from '../config/appConfig';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
 import { periodiseringBepalen } from '../services/periodisering';
+import { vakantieFlags } from '../services/vakanties';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
 import Gauge from '../components/Gauge';
@@ -5421,6 +5438,7 @@ export default function Gezondheid() {
   const [nieuweBlessure, setNieuweBlessure] = useState('');
   const [sync, setSync] = useState(null);
   const [acwr, setAcwr] = useState(null);
+  const [vakantieType, setVakantieType] = useState(null);
   const [klaar, setKlaar] = useState(false);
   const [blessuresKlaar, setBlessuresKlaar] = useState(false);
   const doel = instellingen?.gezondheid?.doel || 'algemeen';
@@ -5438,12 +5456,15 @@ export default function Gezondheid() {
       getDocById(user.uid, 'dagen', datum),
       getCollection(user.uid, 'garminActivities'),
       getCollection(user.uid, 'activiteitLog'),
-    ]).then(([g, s, d, acts, logs]) => {
+      getVakanties(user.uid),
+    ]).then(([g, s, d, acts, logs, vakanties]) => {
       setGarmin(garminSamenvatting(g));
       setSync(s);
       if (d?.checkin) setCheckin(d.checkin);
       const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
       setAcwr(acwrBerekenen(sessieBelasting(acts, rpeMap)));
+      const { verlof, buitenland } = vakantieFlags(vakanties, datum);
+      setVakantieType(verlof ? (buitenland ? 'buitenland' : 'thuis') : null);
       setKlaar(true);
     });
     setBlessuresKlaar(false);
@@ -5529,7 +5550,7 @@ export default function Gezondheid() {
       {klaar && blessuresKlaar && (garmin || blessureActief) && (
         <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief}
           energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null}
-          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering.fase} />
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering.fase} vakantieType={vakantieType} />
       )}
 
       {/* Garmin: gauges + profiel */}
@@ -6475,7 +6496,7 @@ function maandagVan(d) {
   x.setHours(12, 0, 0, 0);
   return x;
 }
-const LEEG_PERIODE = { naam: '', van: '', tot: '', geenJudo: true, verlof: true };
+const LEEG_PERIODE = { naam: '', van: '', tot: '', geenJudo: true, verlof: true, buitenland: false };
 
 export default function Week() {
   const { user } = useAuth();
@@ -6542,7 +6563,7 @@ export default function Week() {
   const startBewerken = (v) => {
     setEditId(v.id);
     setNieuw({ naam: v.naam || '', van: v.van || '', tot: v.tot || '',
-      geenJudo: v.geenJudo !== false, verlof: v.verlof !== false });
+      geenJudo: v.geenJudo !== false, verlof: v.verlof !== false, buitenland: v.buitenland === true });
     setFormOpen(true);
   };
 
@@ -6724,6 +6745,13 @@ export default function Week() {
               <input type="checkbox" checked={nieuw.verlof}
                 onChange={(e) => setNieuw({ ...nieuw, verlof: e.target.checked })} style={{ width: 22, height: 22 }} />
             </label>
+            {nieuw.verlof && (
+              <label className="row between">
+                <span>In het buitenland (coach houdt duur standaard, geen extra tijd)</span>
+                <input type="checkbox" checked={nieuw.buitenland}
+                  onChange={(e) => setNieuw({ ...nieuw, buitenland: e.target.checked })} style={{ width: 22, height: 22 }} />
+              </label>
+            )}
             <div className="row between">
               <button className="btn ghost" onClick={sluitForm}>Annuleren</button>
               <button className="btn primary" onClick={bewaarPeriode}>{editId ? 'Bewaren' : 'Toevoegen'}</button>
@@ -7038,7 +7066,7 @@ const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
 export function coachAdvies({
   readiness = null, bodyBattery = null, slaapUren = null, energie = null, hrvStatus = null,
   goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null, pijn = null,
-  periodiseringFase = null,
+  periodiseringFase = null, vakantieType = null,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
   let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
@@ -7064,6 +7092,17 @@ export function coachAdvies({
 
   const advies = MATRIX[doel][niveau];
 
+  // Groot verlof: thuis heb je vaak meer tijd om te sporten dan een gewone dag;
+  // we verlengen de sessie licht (niet bij 'herstel' — dat blijft kort, dat is
+  // net het punt). In het buitenland verandert er bewust niets: geen aanname
+  // over beschikbare tijd/faciliteiten daar, dus standaardduur.
+  let duurMin = advies.duurMin;
+  let verlofBonus = false;
+  if (vakantieType === 'thuis' && niveau !== 'herstel') {
+    duurMin = advies.duurMin + 15;
+    verlofBonus = true;
+  }
+
   // "Waarom": de signalen die het advies dragen (mensbaar geformuleerd).
   const waarom = [];
   if (overbelast) waarom.push('Garmin meldt overbelasting — herstel gaat voor.');
@@ -7078,6 +7117,8 @@ export function coachAdvies({
   if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
   if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
   if (deload) waarom.push('Deze week is een ingeplande hersteller in je trainingscyclus — geen volle gas, ook niet als je je goed voelt.');
+  if (verlofBonus) waarom.push('Je bent met verlof thuis — meer tijd dan gewoonlijk, dus iets langere sessie.');
+  else if (vakantieType === 'buitenland') waarom.push('Je bent met verlof in het buitenland — we houden de duur standaard, geen aanname over faciliteiten daar.');
   if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
   if (!waarom.length) waarom.push('Nog geen meetdata vandaag — dit is een veilig algemeen advies.');
 
@@ -7101,7 +7142,7 @@ export function coachAdvies({
   return {
     niveau, titel,
     sport: advies.sport,
-    duurMin: advies.duurMin,
+    duurMin,
     doelLabel: DOELEN[doel],
     waarom,
     databronnen,
@@ -8306,15 +8347,16 @@ export function vakantieVoorDatum(lijst, datum) {
 // bij overlap: als één periode 'geenJudo' is en een andere 'verlof', gelden beide.
 // (Anders zou alleen de eerst-gevonden periode tellen en kon judovrij wegvallen.)
 export function vakantieFlags(lijst, datum) {
-  let verlof = false, geenJudo = false, periode = null;
+  let verlof = false, geenJudo = false, buitenland = false, periode = null;
   for (const v of lijst || []) {
     if (v.van && v.tot && datum >= v.van && datum <= v.tot) {
       if (!periode) periode = v;
       if (v.verlof) verlof = true;
       if (v.geenJudo) geenJudo = true;
+      if (v.buitenland) buitenland = true;
     }
   }
-  return { verlof, geenJudo, periode };
+  return { verlof, geenJudo, buitenland, periode };
 }
 
 // Eerste periode die een van de gegeven dagdatums overlapt (voor weekbanner).
@@ -8327,9 +8369,10 @@ export function vakantieInWeek(lijst, datums) {
 
 export function vakantieLabel(v) {
   if (!v) return '';
-  if (v.geenJudo && v.verlof) return 'Verlof + judovrij';
-  if (v.geenJudo) return 'Judovrij (clubs dicht)';
-  if (v.verlof) return 'Persoonlijk verlof';
+  const suffix = v.buitenland ? ' (buitenland)' : '';
+  if (v.geenJudo && v.verlof) return `Verlof + judovrij${suffix}`;
+  if (v.geenJudo) return `Judovrij (clubs dicht)${suffix}`;
+  if (v.verlof) return `Persoonlijk verlof${suffix}`;
   return 'Vakantie';
 }
 
@@ -9604,6 +9647,37 @@ describe('coach — uitlegbaarheid & veilige terugval (Fase 4.5)', () => {
   });
 });
 
+describe('coach — groot verlof (thuis vs. buitenland)', () => {
+  const basis = { readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht' };
+
+  it('verlof thuis verlengt de sessieduur t.o.v. een gewone dag', () => {
+    const normaal = coachAdvies(basis);
+    const thuis = coachAdvies({ ...basis, vakantieType: 'thuis' });
+    expect(thuis.duurMin).toBeGreaterThan(normaal.duurMin);
+    expect(thuis.waarom.join(' ')).toMatch(/meer tijd/i);
+  });
+
+  it('verlof in het buitenland laat de duur standaard (geen aanname over faciliteiten)', () => {
+    const normaal = coachAdvies(basis);
+    const buitenland = coachAdvies({ ...basis, vakantieType: 'buitenland' });
+    expect(buitenland.duurMin).toBe(normaal.duurMin);
+    expect(buitenland.waarom.join(' ')).toMatch(/buitenland/i);
+  });
+
+  it('bij niveau "herstel" telt de verlof-bonus niet — herstel blijft kort', () => {
+    const herstel = coachAdvies({ goal: 'kracht', blessureActief: true });
+    const herstelThuis = coachAdvies({ goal: 'kracht', blessureActief: true, vakantieType: 'thuis' });
+    expect(herstelThuis.niveau).toBe('herstel');
+    expect(herstelThuis.duurMin).toBe(herstel.duurMin);
+  });
+
+  it('herhaalde aanroepen muteren de gedeelde MATRIX niet (geen lekkende state)', () => {
+    coachAdvies({ ...basis, vakantieType: 'thuis' });
+    const normaalNa = coachAdvies(basis);
+    expect(normaalNa.duurMin).toBe(60); // ongewijzigde 'kracht'/'hard'-waarde uit MATRIX
+  });
+});
+
 ```
 
 ## `test/sportcoach.test.js`
@@ -9734,7 +9808,7 @@ describe('tijd-helpers', () => {
 
 ```js
 import { describe, it, expect } from 'vitest';
-import { vakantieVoorDatum, vakantieFlags } from '../src/services/vakanties.js';
+import { vakantieVoorDatum, vakantieFlags, vakantieLabel } from '../src/services/vakanties.js';
 
 // Twee overlappende periodes zoals in de praktijk: een ziekteverlof én een
 // langere judovrije periode die elkaar op één dag overlappen.
@@ -9764,7 +9838,30 @@ describe('vakantieFlags — combineert overlappende periodes', () => {
 
   it('1 sept: buiten alle periodes', () => {
     const f = vakantieFlags(periodes, '2026-09-01');
-    expect(f).toEqual({ verlof: false, geenJudo: false, periode: null });
+    expect(f).toEqual({ verlof: false, geenJudo: false, buitenland: false, periode: null });
+  });
+});
+
+describe('vakantieFlags — buitenland', () => {
+  const buitenPeriodes = [
+    { naam: 'Spanje', van: '2026-07-01', tot: '2026-07-14', verlof: true, geenJudo: true, buitenland: true },
+  ];
+
+  it('buitenland-vlag wordt overgenomen tijdens de periode', () => {
+    const f = vakantieFlags(buitenPeriodes, '2026-07-05');
+    expect(f.buitenland).toBe(true);
+  });
+
+  it('buitenland-vlag staat uit buiten de periode', () => {
+    const f = vakantieFlags(buitenPeriodes, '2026-08-01');
+    expect(f.buitenland).toBe(false);
+  });
+});
+
+describe('vakantieLabel — buitenland-suffix', () => {
+  it('voegt "(buitenland)" toe als de periode buitenland is', () => {
+    expect(vakantieLabel({ verlof: true, geenJudo: false, buitenland: true })).toBe('Persoonlijk verlof (buitenland)');
+    expect(vakantieLabel({ verlof: true, geenJudo: false, buitenland: false })).toBe('Persoonlijk verlof');
   });
 });
 

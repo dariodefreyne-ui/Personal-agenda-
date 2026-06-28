@@ -33,6 +33,11 @@ De app is **niet langer alleen een planner**: ze werkt sinds Fase 5/5.5 ook als
   "Trainingscyclus". Tempert de coach altijd van 'hard' naar 'matig' in een
   deload-week, los van ACWR/Garmin-signalen — bewust géén data-gok maar een
   voorspelbaar structureel vangnet (zie §4.6).
+- **Groot verlof** (`services/vakanties.js`, `pages/Week.jsx`): een
+  vakantieperiode kan naast judovrij/verlof ook **buitenland** aanvinden. Verlof
+  thuis verlengt de coach-sessieduur licht (niet bij niveau 'herstel'); in het
+  buitenland blijft de duur standaard. Doorgegeven als `vakantieType`
+  ('thuis'/'buitenland'/null) via `vakantieFlags()` → `coachAdvies()`.
 - **North Star-consistentiescore** (`services/noordster.js`): één score voor
   "ben ik consequent", plus een apart **reva-trouw**-getal zodra er actieve
   blessures zijn.
@@ -156,7 +161,7 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
     is read-only en geeft géén foutmelding in de UI, enkel een stille
     write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 128 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 135 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -377,7 +382,7 @@ twee gefixte bugs in deze feature):
 ```bash
 npm install
 npm run dev      # lokaal draaien
-npm test         # 128 unit-tests
+npm test         # 135 unit-tests
 npm run build    # productie-build (genereert ook firebase-messaging-sw.js)
 ```
 

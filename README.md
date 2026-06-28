@@ -11,7 +11,10 @@ data (readiness, body battery, slaap, HRV) en je **zelfrapportage** (energie, pi
 uit om elke dag een **uitlegbaar** trainingsadvies te geven (welk niveau, hoeveel
 tijd, waarom), houdt je **trainingsbelasting bij (ACWR)** én plant een vaste
 **opbouw-/deload-cyclus** (3 weken opbouw, dan 1 hersteller) om overbelasting/
-blessures te helpen voorkomen, en volgt actieve **blessures met
+blessures te helpen voorkomen. Tijdens **groot verlof** (in te stellen bij Week →
+vakantieperiode) sport je vaak met meer tijd thuis, maar niet als je in het
+**buitenland** bent — dat geef je apart aan, en de coach verlengt de sessieduur
+enkel bij verlof thuis. De app volgt ook actieve **blessures met
 revalidatie-oefeningen** op (per blessure een eigen oefenschema, met een
 **North Star-therapietrouwscore** die toont hoe consequent je je reva volhoudt).
 Bij gemiste reva-sessies of een afgelopen blessure die niet bevestigd is, krijg je
