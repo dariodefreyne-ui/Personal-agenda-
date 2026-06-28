@@ -42,4 +42,18 @@ describe('coachAdvies', () => {
     expect(a.sport).toBeTruthy();
     expect(a.titel).toBeTruthy();
   });
+
+  it('dwingt herstel af bij hoge zelf-gerapporteerde pijn, ook zonder blessure', () => {
+    const a = coachAdvies({ readiness: 90, bodyBattery: 90, goal: 'kracht', pijn: 4 });
+    expect(a.niveau).toBe('herstel');
+    expect(a.zekerheid).toBe('hoog');
+    expect(a.waarom.some((w) => /pijn/i.test(w))).toBe(true);
+  });
+
+  it('temperen, niet forceren, bij lichte pijn (1-2)', () => {
+    const zonder = coachAdvies({ readiness: 64, bodyBattery: 64 });
+    const metPijn = coachAdvies({ readiness: 64, bodyBattery: 64, pijn: 2 });
+    const rang = { herstel: 0, rustig: 1, matig: 2, hard: 3 };
+    expect(rang[metPijn.niveau]).toBeLessThanOrEqual(rang[zonder.niveau]);
+  });
 });

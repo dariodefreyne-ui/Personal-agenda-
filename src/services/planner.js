@@ -54,7 +54,7 @@ export function genereerDagPlan({
   datum, dagKort, instellingen, werkModus,
   taken = [], reva = [], blessures = [], maaltijden = [], agendaEvents = [],
   garmin = null, weer = null, blessureActief = false, isVakantie = false, geenJudo = false,
-  coachNiveau = null,
+  coachNiveau = null, revaTrouw = null,
 }) {
   const I = instellingen || {};
   const alg = I.algemeen || {};
@@ -164,6 +164,12 @@ export function genereerDagPlan({
       advies.tekst.push(`ℹ️ Blessure “${b.titel || b.naam || 'onbenoemd'}” liep af op ${b.eindDatum} — controleer of die echt voorbij is.`);
     }
   });
+  // Adaptieve feedback-loop: structureel gemiste reva (<50% de voorbije dagen)
+  // melden we, zonder te straffen — een blessure die je niet naleeft is precies
+  // het risico dat de reva moet voorkomen.
+  if (typeof revaTrouw === 'number' && revaTrouw < 50) {
+    advies.tekst.push(`⚠️ Je reva-oefeningen lukten de voorbije dagen maar ${revaTrouw}% — overweeg het aantal of de duur te verlagen in Gezondheid, zodat je het wél haalt.`);
+  }
 
   // 5b) Sportcoach: concreet trainingsblok voor vandaag, zodat het advies van
   //     de coach ook echt in het dagschema staat (niet enkel op de coach-pagina).
@@ -267,7 +273,7 @@ export function genereerDagPlan({
 
 function detecteerConflicten(blok) {
   const belangrijk = blok.filter((b) =>
-    b.vast || ['judo', 'agenda', 'werk'].includes(b.bron) || ['judo', 'lesgeven', 'voetbal', 'sport'].includes(b.type)
+    b.vast || ['judo', 'agenda', 'werk', 'reva'].includes(b.bron) || ['judo', 'lesgeven', 'voetbal', 'sport', 'reva'].includes(b.type)
   );
   const conflicten = [];
   for (let i = 0; i < belangrijk.length; i++) {

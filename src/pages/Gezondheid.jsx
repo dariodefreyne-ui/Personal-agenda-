@@ -121,7 +121,8 @@ export default function Gezondheid() {
       {/* Coach-advies */}
       {(garmin || blessureActief) && (
         <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief}
-          energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null} />
+          energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null}
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} />
       )}
 
       {/* Garmin: gauges + profiel */}

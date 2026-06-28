@@ -79,6 +79,17 @@ describe('genereerDagPlan', () => {
     expect(plan.blokken.some((b) => b.conflict)).toBe(true);
   });
 
+  it('detecteert ook conflicten tussen een reva-blok en een vast agenda-item', () => {
+    const blessures = [{
+      id: 'b1', titel: 'Knie', regio: 'knie', actief: true, tijd: '20:15', aantalPerDag: 1,
+      oefeningen: [{ id: 'o1', naam: 'Quad sets', actief: true }],
+    }];
+    const agenda = [{ titel: 'RSCA match', start: '20:00', eind: '22:00' }];
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures, agendaEvents: agenda });
+    const revaBlok = plan.blokken.find((b) => b.bron === 'reva');
+    expect(revaBlok.conflict).toBe(true);
+  });
+
   it('taken zonder tijd komen in todos, met tijd worden blokken', () => {
     const taken = [
       { id: 'a', titel: 'Water drinken', actief: true, dagen: ['ma'] },
@@ -163,6 +174,16 @@ describe('genereerDagPlan — blessures', () => {
     const verlopenNietGemeld = [{ ...blessures[0], eindDatum: '2026-06-01', eindeGemeld: false }];
     const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures: verlopenNietGemeld });
     expect(plan.advies.tekst.some((t) => /liep af op/.test(t))).toBe(true);
+  });
+
+  it('signaleert structureel gemiste reva (adaptieve feedback-loop) zonder te straffen', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures, revaTrouw: 30 });
+    expect(plan.advies.tekst.some((t) => /30%/.test(t))).toBe(true);
+  });
+
+  it('zegt niets over reva-trouw als die hoog genoeg is', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', blessures, revaTrouw: 80 });
+    expect(plan.advies.tekst.some((t) => /reva-oefeningen lukten/.test(t))).toBe(false);
   });
 });
 

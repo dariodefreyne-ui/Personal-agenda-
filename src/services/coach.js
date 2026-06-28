@@ -59,8 +59,13 @@ function hrvBijstelling(hrvStatus) {
   return 0;
 }
 
-function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast }) {
-  if (blessureActief || overbelast) return 'herstel';
+// Zelf-gerapporteerde pijn (0-5) bij de ochtend-check-in. Vanaf 3 wegen we dit
+// even zwaar als een actieve blessure — pijn is een hard veiligheidssignaal,
+// ook als er nog geen blessure is aangemaakt.
+const PIJN_HERSTEL_DREMPEL = 3;
+
+function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn }) {
+  if (blessureActief || overbelast || (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL)) return 'herstel';
   const r = readiness ?? 55;
   const bb = bodyBattery ?? 60;
   let score = r * 0.6 + bb * 0.4;
@@ -71,6 +76,7 @@ function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, b
   if (typeof energie === 'number') {
     score += { 1: -16, 2: -8, 3: 0, 4: 6, 5: 10 }[energie] ?? 0;
   }
+  if (typeof pijn === 'number' && pijn > 0) score -= pijn * 6;
   score += hrvBijstelling(hrvStatus);
   if (score >= 65) return 'hard';
   if (score >= 45) return 'matig';
@@ -80,15 +86,16 @@ function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, b
 
 // Hoeveel echte meetsignalen zitten er achter het advies? Bepaalt de zekerheid.
 // Weinig data -> lage zekerheid -> we adviseren bewust voorzichtiger (zie cap).
-function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast }) {
-  // Blessure/overbelasting is een duidelijk, hard veiligheidssignaal.
-  if (blessureActief || overbelast) return 'hoog';
+function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn }) {
+  // Blessure/overbelasting/pijn is een duidelijk, hard veiligheidssignaal.
+  if (blessureActief || overbelast || (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL)) return 'hoog';
   let n = 0;
   if (readiness != null) n += 1;
   if (bodyBattery != null) n += 1;
   if (typeof slaapUren === 'number') n += 1;
   if (typeof energie === 'number') n += 1;
   if (hrvStatus) n += 1;
+  if (typeof pijn === 'number' && pijn > 0) n += 1;
   // ≥2 elkaar bevestigende signalen = hoog; één los getal kan ruis zijn.
   if (n >= 2) return 'hoog';
   if (n === 1) return 'gemiddeld';
@@ -99,11 +106,11 @@ const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
 
 export function coachAdvies({
   readiness = null, bodyBattery = null, slaapUren = null, energie = null, hrvStatus = null,
-  goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null,
+  goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null, pijn = null,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
-  let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast });
-  const zekerheid = bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast });
+  let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
+  const zekerheid = bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
 
   // Beoordeeld op je slechtste advies: 'hard' enkel bij hoge zekerheid (≥2 signalen).
   let voorzichtig = false;
@@ -122,6 +129,8 @@ export function coachAdvies({
   const waarom = [];
   if (overbelast) waarom.push('Garmin meldt overbelasting — herstel gaat voor.');
   if (blessureActief) waarom.push('Blessure actief — we beschermen je herstel.');
+  if (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL) waarom.push(`Je gaf pijn ${pijn}/5 op — we kiezen voor herstel.`);
+  else if (typeof pijn === 'number' && pijn > 0) waarom.push(`Je gaf pijn ${pijn}/5 op — we temperen het advies.`);
   if (readiness != null) waarom.push(`Readiness ${Math.round(readiness)}/100.`);
   if (bodyBattery != null) waarom.push(`Body battery ${Math.round(bodyBattery)}.`);
   if (typeof slaapUren === 'number') waarom.push(`${slaapUren.toFixed(1)}u slaap.`);
@@ -139,6 +148,7 @@ export function coachAdvies({
   if (typeof slaapUren === 'number') databronnen.push('Slaap');
   if (typeof energie === 'number') databronnen.push('Zelf-gerapporteerde energie');
   if (hrvStatus) databronnen.push('HRV-status');
+  if (typeof pijn === 'number' && pijn > 0) databronnen.push('Zelf-gerapporteerde pijn');
   if (!databronnen.length) databronnen.push('Geen meetdata');
 
   const titel = {

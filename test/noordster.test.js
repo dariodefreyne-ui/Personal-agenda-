@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dagTherapietrouw, noordster } from '../src/services/noordster.js';
+import { dagTherapietrouw, noordster, dagRevaTherapietrouw, revaTherapietrouw } from '../src/services/noordster.js';
 
 const dag = (blokken, gedaan = {}, checkin = null) => ({ plan: blokken, gedaan, checkin });
 
@@ -51,5 +51,41 @@ describe('noordster — samengestelde score', () => {
     ]);
     expect(ns.score).toBe(100);
     expect(ns.checkinDagen).toBe(1);
+  });
+});
+
+describe('noordster — reva-blok met oefeningen-checklist', () => {
+  it('telt pas als gedaan als alle oefeningen zijn afgevinkt', () => {
+    const d = dag([{ id: 'reva-1', type: 'reva', checkbaar: true, oefeningen: ['o1', 'o2'] }], {
+      'reva-1::o1': true, // maar o2 niet
+    });
+    expect(dagTherapietrouw(d)).toEqual({ ratio: 0, gedaan: 0, totaal: 1 });
+  });
+
+  it('telt als gedaan zodra alle oefeningen zijn afgevinkt', () => {
+    const d = dag([{ id: 'reva-1', type: 'reva', checkbaar: true, oefeningen: ['o1', 'o2'] }], {
+      'reva-1::o1': true, 'reva-1::o2': true,
+    });
+    expect(dagTherapietrouw(d)).toEqual({ ratio: 1, gedaan: 1, totaal: 1 });
+  });
+
+  it('dagRevaTherapietrouw negeert niet-reva-blokken en geeft null zonder reva', () => {
+    expect(dagRevaTherapietrouw(dag([{ id: 'j', type: 'judo' }], { j: true }))).toBe(null);
+  });
+
+  it('revaTherapietrouw valt veilig terug zonder reva-data', () => {
+    const r = revaTherapietrouw([dag([{ id: 'j', type: 'judo' }])]);
+    expect(r.score).toBe(null);
+    expect(r.dagenMetReva).toBe(0);
+  });
+
+  it('revaTherapietrouw berekent een score over meerdere dagen', () => {
+    const dagen = [
+      dag([{ id: 'reva-1', type: 'reva', oefeningen: ['o1'] }], { 'reva-1::o1': true }), // 100%
+      dag([{ id: 'reva-1', type: 'reva', oefeningen: ['o1'] }], {}), // 0%
+    ];
+    const r = revaTherapietrouw(dagen);
+    expect(r.score).toBe(50);
+    expect(r.dagenMetReva).toBe(2);
   });
 });

@@ -5,7 +5,7 @@ import { getGarminDagCached, getDagCached, getCollection, subscribeCollection, a
 import { garminSamenvatting } from '../services/garmin';
 import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
 import { reflectieSamenvatting, stemmingInfo } from '../services/reflectie';
-import { noordster } from '../services/noordster';
+import { noordster, revaTherapietrouw } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
 import { datumKey } from '../services/tijd';
 import NoordsterKaart from '../components/NoordsterKaart';
@@ -45,6 +45,7 @@ export default function Voortgang() {
   const [reeks, setReeks] = useState([]);
   const [mind, setMind] = useState(null);
   const [ns, setNs] = useState(null);
+  const [revaTrouw, setRevaTrouw] = useState(null);
   const [taken, setTaken] = useState([]);
   const [doelen, setDoelen] = useState([]);
   const [garminVandaag, setGarminVandaag] = useState(null);
@@ -71,6 +72,7 @@ export default function Voortgang() {
         checkin: dagDocs[i]?.checkin,
       }))));
       setNs(noordster(dagDocs));
+      setRevaTrouw(revaTherapietrouw(dagDocs));
       setTaken((await getCollection(user.uid, 'taken')).filter((t) => t.type === 'gewoonte'));
       const acts = (await getCollection(user.uid, 'garminActivities')).map(activiteitInfo)
         .filter((a) => a.datum).sort((a, b) => b.datum.localeCompare(a.datum));
@@ -159,6 +161,18 @@ export default function Voortgang() {
           <p className="small dim" style={{ margin: 0 }}>
             Gemiddelde over {mind.aantal} {mind.aantal === 1 ? 'dag' : 'dagen'} met een check-in.
           </p>
+        </section>
+      )}
+
+      {/* Reva-therapietrouw — enkel relevant als er deze week reva gepland stond */}
+      {revaTrouw && revaTrouw.dagenMetReva > 0 && (
+        <section className="card stack">
+          <div className="card-title">Reva · deze week</div>
+          <div className="row" style={{ gap: 14, alignItems: 'center' }}>
+            <Gauge val={revaTrouw.score} size={64} label="" sub={`${revaTrouw.score}%`}
+              kleur={revaTrouw.score >= 80 ? 'var(--success)' : revaTrouw.score >= 50 ? 'var(--warning)' : 'var(--danger)'} />
+            <p className="small dim grow" style={{ margin: 0 }}>{revaTrouw.waarom}</p>
+          </div>
         </section>
       )}
 

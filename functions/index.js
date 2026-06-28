@@ -132,6 +132,23 @@ exports.dispatcher = onSchedule(
         await stuurPush(uid, tokens, 'Klaar om te trainen? 🏋️', body, { url: '/gezondheid' });
       }
 
+      // 2b) Blessure-afloop niet stil laten verlopen: als een blessure een
+      // verstreken einddatum heeft maar nog niet bevestigd is in de app,
+      // stuur een herinnering (anders ziet de gebruiker dit pas als hij
+      // toevallig Gezondheid opent).
+      if (cat.ochtend !== false && due(push.ochtendBriefing || '07:00')) {
+        const blessuresSnap = await db.collection('users').doc(uid).collection('blessures').get();
+        for (const doc of blessuresSnap.docs) {
+          const b = doc.data();
+          if (b.actief === false || !b.eindDatum || b.eindDatum >= nu.datum || b.eindeGemeld) continue;
+          const sl = `blessure-afloop-${doc.id}`;
+          if (await alGestuurd(uid, nu.datum, sl)) continue;
+          await stuurPush(uid, tokens, 'Blessure-update nodig',
+            `"${b.titel || b.naam || 'Blessure'}" liep af op ${b.eindDatum} — bevestig in de app of zet ze terug actief.`,
+            { url: '/gezondheid' });
+        }
+      }
+
       // 3) Per-slot herinneringen
       if (intensiteit !== 'minimaal' && cat.slot !== false) {
         const plan = await getPlan(uid, nu.datum);

@@ -131,9 +131,10 @@ export default function Dashboard() {
       {isToday && ns && ns.score != null && <NoordsterKaart ns={ns} i={2} />}
 
       {/* Coach-advies van de dag — enkel vandaag */}
-      {isToday && garmin && (garmin.readiness != null || garmin.bodyBattery != null || blessureActief) && (
+      {isToday && (garmin?.readiness != null || garmin?.bodyBattery != null || blessureActief || checkin?.pijn > 0) && (
         <CoachKaart garmin={garmin} goal={instellingen?.gezondheid?.doel}
-          blessureActief={blessureActief} energie={checkin?.ochtend?.energie} acwrZone={acwr?.zone} />
+          blessureActief={blessureActief} energie={checkin?.ochtend?.energie} acwrZone={acwr?.zone}
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} />
       )}
 
       {/* Belasting & herstel — enkel vandaag */}
