@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import {
-  getCollection, getDocById, getGarminDag,
+  getCollection, getDocById, getGarminDag, getWeer,
   getAgendaEventsVoorDag, saveDag, getLaatsteGarminSync, getVakanties, verwijderVerzet,
   verwijderSlaapOverride,
 } from '../services/data';
@@ -10,6 +10,8 @@ import { genereerDagPlan } from '../services/planner';
 import { garminSamenvatting } from '../services/garmin';
 import { vakantieFlags } from '../services/vakanties';
 import { zetTaakGedaan } from '../services/taken';
+import { coachAdvies } from '../services/coach';
+import { acwrBerekenen, sessieBelasting, belastingStatus } from '../services/belasting';
 import { datumKey, dagKortVanDatum, weekKey, toMin, toHHMM, nuMin } from '../services/tijd';
 
 // Past een handmatige slaap-correctie toe op de Garmin-samenvatting (begin/eind
@@ -38,7 +40,7 @@ export function useDagPlan(datumObj = new Date()) {
     let actief = true;
     (async () => {
       setStaat((s) => ({ ...s, laden: true }));
-      const [taken, reva, maaltijden, garmin, agendaEvents, dag, week, vakanties, garminSync] = await Promise.all([
+      const [taken, reva, maaltijden, garmin, agendaEvents, dag, week, vakanties, garminSync, weer, acts, logs] = await Promise.all([
         getCollection(uid, 'taken'),
         getCollection(uid, 'reva'),
         getCollection(uid, 'maaltijden'),
@@ -48,6 +50,9 @@ export function useDagPlan(datumObj = new Date()) {
         getDocById(uid, 'weken', weekKey(datumObj)),
         getVakanties(uid),
         getLaatsteGarminSync(uid),
+        getWeer(uid, datum),
+        getCollection(uid, 'garminActivities'),
+        getCollection(uid, 'activiteitLog'),
       ]);
 
       // Vlaggen over ÁLLE overlappende vakantieperiodes (zie vakantieFlags).
@@ -62,10 +67,25 @@ export function useDagPlan(datumObj = new Date()) {
       const isVakantie = !!week?.vakantie || verlof;
       const garminSam = metSlaapOverride(garminSamenvatting(garmin), dag?.slaapOverride);
 
+      // Periodisering (ACWR) + overbelasting: dezelfde signalen die de coach op
+      // het Dashboard al gebruikt, zodat het sportadvies overal consistent is.
+      const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
+      const acwr = acwrBerekenen(sessieBelasting(acts, rpeMap));
+      const overbelast = belastingStatus({ trainingStatus: garminSam?.trainingStatus }).key === 'overbelast';
+      const advies = coachAdvies({
+        readiness: garminSam?.readiness ?? null,
+        bodyBattery: garminSam?.bodyBattery ?? null,
+        slaapUren: garminSam?.slaapUren ?? null,
+        energie: dag?.checkin?.ochtend?.energie ?? null,
+        hrvStatus: garminSam?.hrvStatus ?? null,
+        goal: instellingen.gezondheid?.doel,
+        blessureActief, overbelast, acwrZone: acwr?.zone,
+      });
+
       const plan = genereerDagPlan({
         datum, dagKort, instellingen, werkModus,
         taken, reva, maaltijden, agendaEvents, garmin: garminSam,
-        weer: null, blessureActief, isVakantie, geenJudo,
+        weer, blessureActief, isVakantie, geenJudo, coachNiveau: advies.niveau,
       });
 
       // Adaptief: verzette (ingehaalde) blokken krijgen hun nieuwe tijd. Zo "faalt"
@@ -81,7 +101,7 @@ export function useDagPlan(datumObj = new Date()) {
       setStaat({
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
-        werkModus, datum, dagKort, blessureActief, garminSync,
+        werkModus, datum, dagKort, blessureActief, garminSync, acwr, advies, weer,
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen

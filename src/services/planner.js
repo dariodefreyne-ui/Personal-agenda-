@@ -8,8 +8,9 @@
 //     todos:   [{taakId,titel,...}],   // taken zonder vast tijdslot
 //     advies:  { fiets, sport, slaap, tekst[] } }
 // =========================================================================
-import { BLOK_TYPES } from '../config/appConfig';
+import { BLOK_TYPES, SPORTEN } from '../config/appConfig';
 import { toMin, toHHMM, addMin } from './tijd';
+import { kiesSportVanDag, genereerSportInhoud } from './sportcoach';
 
 const kleurVoor = (type) => (BLOK_TYPES[type]?.kleur || BLOK_TYPES.routine.kleur);
 
@@ -50,13 +51,16 @@ export function genereerDagPlan({
   datum, dagKort, instellingen, werkModus,
   taken = [], reva = [], maaltijden = [], agendaEvents = [],
   garmin = null, weer = null, blessureActief = false, isVakantie = false, geenJudo = false,
+  coachNiveau = null,
 }) {
   const I = instellingen || {};
   const alg = I.algemeen || {};
   const werk = I.werk || {};
   const sport = I.sport || {};
+  const gezondheid = I.gezondheid || {};
   const blok = [];
   const advies = { tekst: [] };
+  let werkEindTijd = null;
 
   const isWo = dagKort === 'wo';
 
@@ -103,6 +107,9 @@ export function genereerDagPlan({
       const reis = fiets ? (werk.fietsReisMin || 45) : (werk.autoReisMin || 45);
       maakBlok(blok, eind, addMin(eind, reis),
         fiets ? 'Fietsen naar huis' : 'Rijden naar huis', fiets ? 'sport' : 'woonwerk', { bron: 'woonwerk' });
+      werkEindTijd = addMin(eind, reis);
+    } else {
+      werkEindTijd = eind;
     }
     // doel-uren feedback
     if (werk.doelUrenPerDag) advies.tekst.push(`Streef naar ±${werk.doelUrenPerDag}u werk (recuperatie-uren).`);
@@ -141,6 +148,31 @@ export function genereerDagPlan({
     || (sport.judoLesgeven || []).some((l) => l.dag === dagKort);
   if (geenJudo && judoVandaag) {
     advies.tekst.push('🥋 Judovrij (vakantie) — geen training of les vandaag.');
+  }
+
+  // 5b) Sportcoach: concreet trainingsblok voor vandaag, zodat het advies van
+  //     de coach ook echt in het dagschema staat (niet enkel op de coach-pagina).
+  //     Judo heeft hierboven al een eigen vast blok; rustdagen krijgen geen blok.
+  if (coachNiveau) {
+    const keuze = kiesSportVanDag({ dagKort, weekSchema: sport.weekSchema, niveau: coachNiveau, judoVandaag: judoVandaag && !geenJudo, weer });
+    if (keuze.sport !== 'rust' && keuze.sport !== 'judo') {
+      const inhoud = genereerSportInhoud({
+        sport: keuze.sport, niveau: coachNiveau, oefeningen: sport.oefeningen,
+        garmin, stappenDoel: gezondheid.stappenDoel, datum, weer,
+      });
+      const duurMin = inhoud.minuten || { hard: 50, matig: 40, rustig: 30, herstel: 20 }[coachNiveau] || 40;
+      const sportStart = werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 90);
+      const detail = inhoud.type === 'homefitness'
+        ? (inhoud.oefeningen.length ? inhoud.oefeningen.map((o) => `${o.naam} ${o.sets}×${o.reps}`).join(', ') : inhoud.waarom[0])
+        : inhoud.type === 'fietsen'
+          ? `±${inhoud.km} km (~${inhoud.minuten} min) · ${inhoud.zoneTekst}`
+          : inhoud.stappenAdvies != null
+            ? `Nog ±${Math.round(inhoud.stappenAdvies).toLocaleString('nl-BE')} stappen (±${inhoud.km} km)`
+            : `±${inhoud.km} km`;
+      maakBlok(blok, sportStart, addMin(sportStart, duurMin), SPORTEN[keuze.sport]?.naam || 'Training', 'sport',
+        { bron: 'sportcoach', detail, id: 'sportcoach-blok' });
+      if (keuze.overschreven) advies.tekst.push(`🏋️ ${keuze.waarom.join(' ')}`);
+    }
   }
 
   // 6) Reva + gewoontes met vast tijdslot worden blokken; rest -> todos

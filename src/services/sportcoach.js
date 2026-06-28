@@ -10,7 +10,7 @@ const SPORT_INTENSITEIT = { rust: 0, wandelen: 1, homefitness: 2, fietsen: 3 };
 
 // Hybride: vast weekschema, met override naar een lichtere sport bij laag
 // herstel — nooit zomaar schrappen, altijd met uitleg.
-export function kiesSportVanDag({ dagKort, weekSchema, niveau, judoVandaag }) {
+export function kiesSportVanDag({ dagKort, weekSchema, niveau, judoVandaag, weer = null }) {
   if (judoVandaag) return { sport: 'judo', gepland: 'judo', overschreven: false, waarom: [] };
 
   const gepland = weekSchema?.[dagKort] || 'rust';
@@ -25,6 +25,12 @@ export function kiesSportVanDag({ dagKort, weekSchema, niveau, judoVandaag }) {
   } else if (niveau === 'rustig' && geplandeIntensiteit >= 3) {
     sport = 'homefitness';
     waarom.push('Fietsen stond gepland, maar gezien je matige belastbaarheid kiezen we een rustigere home fitness-sessie.');
+  } else if (gepland === 'fietsen' && sport === 'fietsen') {
+    const weerReden = slechtFietsWeer(weer);
+    if (weerReden) {
+      sport = 'homefitness';
+      waarom.push(`Fietsen stond gepland, maar ${weerReden} — een home fitness-sessie in plaats daarvan.`);
+    }
   }
   return { sport, gepland, overschreven: sport !== gepland, waarom };
 }
@@ -55,7 +61,19 @@ export function genereerHomeFitness({ oefeningen = [], niveau, datum }) {
   };
 }
 
-export function genereerFietsAdvies({ niveau }) {
+// Slecht fietsweer (veel regen/harde wind) -> binnen blijven kan geen kwaad,
+// maar we vervangen het advies bewust door een evenwaardige home fitness-sessie
+// in plaats van de gebruiker zonder alternatief te laten staan.
+function slechtFietsWeer(weer) {
+  if (!weer) return null;
+  const regen = weer.neerslagKans ?? weer.precipProb ?? 0;
+  const wind = weer.windKmh ?? weer.wind ?? 0;
+  if (regen >= 60) return `veel kans op regen (${regen}%)`;
+  if (wind >= 45) return `harde wind (${wind} km/u)`;
+  return null;
+}
+
+export function genereerFietsAdvies({ niveau, weer = null }) {
   const minuten = { hard: 75, matig: 50, rustig: 35, herstel: 25 }[niveau] ?? 45;
   const km = Math.round((minuten / 60) * 22); // ±22 km/u gemiddeld
   const zoneTekst = {
@@ -64,9 +82,12 @@ export function genereerFietsAdvies({ niveau }) {
     rustig: 'Hartslagzone 1-2, comfortabel tempo',
     herstel: 'Hartslagzone 1, heel licht — vooral de benen losrijden',
   }[niveau] || 'Hartslagzone 2, rustig tempo';
+  const weerReden = slechtFietsWeer(weer);
   return {
-    km, minuten, zoneTekst,
-    waarom: [`±${km} km (~${minuten} min) past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}.`],
+    km, minuten, zoneTekst, weerWaarschuwing: weerReden,
+    waarom: weerReden
+      ? [`±${km} km (~${minuten} min) past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}, maar ${weerReden} — overweeg binnen te trainen.`]
+      : [`±${km} km (~${minuten} min) past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}.`],
   };
 }
 
@@ -83,9 +104,9 @@ export function genereerWandelAdvies({ niveau, garmin, stappenDoel }) {
   return { km, stappenAdvies: null, waarom: [`±${km} km past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}.`] };
 }
 
-export function genereerSportInhoud({ sport, niveau, oefeningen = [], garmin = null, stappenDoel = null, datum }) {
+export function genereerSportInhoud({ sport, niveau, oefeningen = [], garmin = null, stappenDoel = null, datum, weer = null }) {
   if (sport === 'homefitness') return { type: 'homefitness', ...genereerHomeFitness({ oefeningen, niveau, datum }) };
-  if (sport === 'fietsen') return { type: 'fietsen', ...genereerFietsAdvies({ niveau }) };
+  if (sport === 'fietsen') return { type: 'fietsen', ...genereerFietsAdvies({ niveau, weer }) };
   if (sport === 'wandelen') return { type: 'wandelen', ...genereerWandelAdvies({ niveau, garmin, stappenDoel }) };
   if (sport === 'judo') return { type: 'judo', waarom: ['Vaste judotraining/-les — geen extra invulling nodig.'] };
   return { type: 'rust', waarom: ['Geplande rustdag — geen training nodig.'] };

@@ -131,6 +131,11 @@ export async function getGarminDag(uid, datum) {
   return getDocById(uid, 'garminDaily', datum);
 }
 
+// ---- Weer (alleen-lezen, server geschreven door weerSync) ----
+export async function getWeer(uid, datum) {
+  return getDocById(uid, 'weer', datum);
+}
+
 // Garmin-dag uit cache eerst (historische dagen wijzigen nooit → bespaart reads).
 export async function getGarminDagCached(uid, datum) {
   const ref = doc(db, ...u(uid, 'garminDaily', datum));
