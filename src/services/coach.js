@@ -107,6 +107,7 @@ const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
 export function coachAdvies({
   readiness = null, bodyBattery = null, slaapUren = null, energie = null, hrvStatus = null,
   goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null, pijn = null,
+  periodiseringFase = null,
 } = {}) {
   const doel = MATRIX[goal] ? goal : 'algemeen';
   let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
@@ -123,6 +124,13 @@ export function coachAdvies({
   } else if (acwrZone === 'verhoogd' && niveau === 'hard') {
     niveau = 'matig'; acwrRem = 'verhoogd';
   }
+
+  // Periodisering: vaste deload-week in de trainingscyclus temperen we altijd
+  // af van 'hard', los van hoe de losse meetdata vandaag uitvallen — dit is een
+  // structureel vangnet, niet een schatting (zie services/periodisering.js).
+  let deload = false;
+  if (periodiseringFase === 'deload' && niveau === 'hard') { niveau = 'matig'; deload = true; }
+
   const advies = MATRIX[doel][niveau];
 
   // "Waarom": de signalen die het advies dragen (mensbaar geformuleerd).
@@ -138,6 +146,7 @@ export function coachAdvies({
   if (hrvStatus) waarom.push(`HRV-status: ${hrvStatus}.`);
   if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
   if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
+  if (deload) waarom.push('Deze week is een ingeplande hersteller in je trainingscyclus — geen volle gas, ook niet als je je goed voelt.');
   if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
   if (!waarom.length) waarom.push('Nog geen meetdata vandaag — dit is een veilig algemeen advies.');
 

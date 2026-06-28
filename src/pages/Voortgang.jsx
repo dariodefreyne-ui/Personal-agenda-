@@ -7,6 +7,7 @@ import { doelProgress, doelKleur, METRIEKEN } from '../services/doelen';
 import { reflectieSamenvatting, stemmingInfo } from '../services/reflectie';
 import { noordster, revaTherapietrouw } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
+import { periodiseringBepalen } from '../services/periodisering';
 import { datumKey } from '../services/tijd';
 import NoordsterKaart from '../components/NoordsterKaart';
 import { IcoFlame, IcoBolt, IcoMoon, IcoPlus, IcoTrash, IcoBike, IcoEdit } from '../components/Icons';
@@ -90,6 +91,7 @@ export default function Voortgang() {
   // ACWR (opbouw-ratio) uit sRPE-belasting van de activiteiten — herberekent als
   // er RPE's bijkomen. Uitlegbaar + veilige terugval bij te weinig data.
   const acwr = useMemo(() => acwrBerekenen(sessieBelasting(activiteiten, rpe)), [activiteiten, rpe]);
+  const periodisering = periodiseringBepalen(new Date());
 
   const startBewerken = (d) => {
     setEditId(d.id);
@@ -147,7 +149,7 @@ export default function Voortgang() {
 
       <NoordsterKaart ns={ns} />
 
-      <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} acwr={acwr} />
+      <BelastingKaart garmin={garminVandaag} readinessReeks={readinessReeks} acwr={acwr} periodisering={periodisering} />
 
       {/* Mindset-weekreview */}
       {mind && mind.aantal > 0 && (

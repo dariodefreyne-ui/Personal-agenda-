@@ -12,6 +12,7 @@ import { DOELEN } from '../services/coach';
 import { isBlessureActief, isVerlopenNietGemeld } from '../services/blessures';
 import { BLESSURE_REGIOS } from '../config/appConfig';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
+import { periodiseringBepalen } from '../services/periodisering';
 import { datumKey } from '../services/tijd';
 import { IcoPlus, IcoTrash, IcoMoon, IcoHeart, IcoFlame } from '../components/Icons';
 import Gauge from '../components/Gauge';
@@ -31,6 +32,7 @@ export default function Gezondheid() {
   const [klaar, setKlaar] = useState(false);
   const [blessuresKlaar, setBlessuresKlaar] = useState(false);
   const doel = instellingen?.gezondheid?.doel || 'algemeen';
+  const periodisering = periodiseringBepalen(new Date());
 
   // Alle losse fetches landen samen vóór we de coach-kaart tonen — anders
   // verschijnt eerst de blessure-zin en springt het advies even later naar de
@@ -135,7 +137,7 @@ export default function Gezondheid() {
       {klaar && blessuresKlaar && (garmin || blessureActief) && (
         <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief}
           energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null}
-          pijn={checkin?.pijn > 0 ? checkin.pijn : null} />
+          pijn={checkin?.pijn > 0 ? checkin.pijn : null} periodiseringFase={periodisering.fase} />
       )}
 
       {/* Garmin: gauges + profiel */}

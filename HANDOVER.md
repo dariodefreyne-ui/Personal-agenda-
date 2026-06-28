@@ -28,6 +28,11 @@ De app is **niet langer alleen een planner**: ze werkt sinds Fase 5/5.5 ook als
   (`services/planner.js`), met therapietrouw-tracking per oefening.
 - **Trainingsbelasting (ACWR)** (`services/belasting.js`): acute:chronic-ratio
   uit RPE-gewogen sessiebelasting, met zones en blessurepreventie-advies.
+- **Periodisering** (`services/periodisering.js`): vaste, kalenderbepaalde cyclus
+  van 4 weken (3× opbouw + 1× deload), getoond in `BelastingKaart` als
+  "Trainingscyclus". Tempert de coach altijd van 'hard' naar 'matig' in een
+  deload-week, los van ACWR/Garmin-signalen — bewust géén data-gok maar een
+  voorspelbaar structureel vangnet (zie §4.6).
 - **North Star-consistentiescore** (`services/noordster.js`): één score voor
   "ben ik consequent", plus een apart **reva-trouw**-getal zodra er actieve
   blessures zijn.
@@ -69,9 +74,12 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
   `zekerheid`/`meetlat` + UI-uitklap), veilige terugval, **North Star-consistentie-
   score** (`services/noordster.js`) op Dashboard + Voortgang, en **adaptief inhalen**
   van gemiste blokken (`dagen/{datum}.verzet`).
-- **Fase 5 — Periodisering (grotendeels):** **ACWR** uit RPE-gewogen belasting
+- **Fase 5 — Periodisering (af):** **ACWR** uit RPE-gewogen belasting
   (`services/belasting.js`), uitlegbaar, voedt de coach (blessurepreventie) en
-  toont in `BelastingKaart`.
+  toont in `BelastingKaart`. Daarbij **expliciete trainingsblokken**
+  (`services/periodisering.js`): een vaste 4-wekencyclus (3× opbouw + 1× deload),
+  puur kalenderbepaald (geen instelling, geen data-gok), die de coach altijd
+  van 'hard' naar 'matig' tempert in een deload-week — zie §4.6.
 - **Garmin — HRV + stappen in de UI:** `services/garmin.js` leest nu ook
   HRV-status/-gemiddelde uit; getoond op Dashboard en Gezondheid naast stappen
   (die er al stonden). De coach (`services/coach.js`) neemt HRV mee in zowel
@@ -148,7 +156,7 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
     is read-only en geeft géén foutmelding in de UI, enkel een stille
     write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 119 unit-tests groen (`npm test`). Build groen (`npm run build`).
+Tests: 128 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -249,6 +257,24 @@ op een write geeft in de UI géén foutmelding, enkel een stille rollback. Check
 bij elke nieuwe top-level subcollectie meteen of `firestore.rules` een regel
 heeft (de catch-all onderaan is bewust read-only).
 
+### 4.6 Periodisering: bewust géén heuristiek, maar een vaste kalenderregel
+Bij het afwerken van Fase 5 (expliciete opbouw-/deload-weken) was de eerste
+ingeving een *data-gedreven* heuristiek: tel hoeveel weken op rij de
+trainingsbelasting steeg (uit `sessieBelasting`) en leid daaruit af of een
+deload "verdiend" is. Bewust **niet** gedaan: zo'n streak-detectie is fragiel
+(ruis in 1 week breekt de telling), moeilijk uitlegbaar ("waarom precies nu?")
+en — belangrijker — in tegenspraak met premium-principe 2 ("vertrouwen >
+intelligentie", liever voorspelbaar dan slim). Gekozen oplossing
+(`services/periodisering.js` → `periodiseringBepalen`): een **vaste,
+kalenderbepaalde cyclus** van 4 weken (3× opbouw, dan 1× deload), als pure
+functie van de datum — geen instelling, geen meetdata nodig, dus altijd
+`zekerheid: 'hoog'`. ACWR (`services/belasting.js`) blijft de dynamische,
+data-gedreven laag die per dag bijstuurt; periodisering is de structurele laag
+daarboven die onafhankelijk daarvan een deload-week afdwingt. **Les:** bij
+twijfel tussen "slimmer" (heuristiek/streak/score) en "voorspelbaarder" (vaste
+regel) voor een coach-achtige beslissing, kies voorspelbaar — dat is letterlijk
+premium-principe 2, en het scheelt ook fors in testbaarheid.
+
 ---
 
 ## 4b. Productrichting — premium = vertrouwen, niet intelligentie
@@ -300,7 +326,7 @@ Het bestaande uitlegbaar gemaakt — de grootste hefboom voor "premium":
       in-app badge/toast bij het behalen ervan — gebruiker koos expliciet voor
       in-app i.p.v. push-notificatie.
 
-### Fase 5 — Periodisering & slimme coach (grotendeels af)
+### Fase 5 — Periodisering & slimme coach ✓ (af)
 Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
 - [x] **Acute:Chronic load-ratio (ACWR)** — `services/belasting.js` → `acwrBerekenen`,
       met zones (laag/optimaal/verhoogd/risico), zekerheid + uitleg.
@@ -308,8 +334,12 @@ Van "plannen" naar echte sportopbouw — **elk signaal uitlegbaar onderbouwd**:
       RPE-invoer in Voortgang.
 - [x] **Blessure-preventie-advies** — ACWR voedt de coach (`acwrZone` → conservatiever
       bij risico) en toont waarschuwing in `BelastingKaart`.
-- [ ] **Trainingsblokken / periodisering** (expliciete opbouw- vs deload-weken) — nog
-      open; ACWR geeft nu al de richting.
+- [x] **Trainingsblokken / periodisering** (expliciete opbouw- vs deload-weken) —
+      `services/periodisering.js` → `periodiseringBepalen`: vaste, kalenderbepaalde
+      cyclus van 4 weken (3× opbouw + 1× deload), geen instelling/data-gok nodig.
+      Tempert de coach altijd van 'hard' naar 'matig' in een deload-week, getoond in
+      `BelastingKaart` ("Trainingscyclus", week X/4 + waarom + meetlat). Zie §4.6
+      voor de afweging "voorspelbare regel" vs. "data-heuristiek".
 
 ### Fase 5.5 — Blessures & revalidatie ✓ (af)
 Volledig blessuremodel + reva-therapietrouw, audit-gedreven (zie §4.5 voor de
@@ -347,7 +377,7 @@ twee gefixte bugs in deze feature):
 ```bash
 npm install
 npm run dev      # lokaal draaien
-npm test         # 119 unit-tests
+npm test         # 128 unit-tests
 npm run build    # productie-build (genereert ook firebase-messaging-sw.js)
 ```
 

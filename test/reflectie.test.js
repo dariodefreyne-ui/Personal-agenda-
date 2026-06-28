@@ -97,4 +97,18 @@ describe('coach — uitlegbaarheid & veilige terugval (Fase 4.5)', () => {
     expect(rang[risico.niveau]).toBeLessThan(rang[vol.niveau]);
     expect(risico.waarom.join(' ')).toMatch(/blessurerisico/i);
   });
+
+  it('deload-week (Fase 5 — periodisering) tempert "hard" naar "matig", los van ACWR', () => {
+    const vol = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht' });
+    const deload = coachAdvies({ readiness: 80, bodyBattery: 80, slaapUren: 8, goal: 'kracht', periodiseringFase: 'deload' });
+    expect(vol.niveau).toBe('hard');
+    expect(deload.niveau).toBe('matig');
+    expect(deload.waarom.join(' ')).toMatch(/hersteller/i);
+  });
+
+  it('deload-week verlaagt "rustig" of "matig" niet verder (enkel een rem op vol gas)', () => {
+    const matig = coachAdvies({ readiness: 55, bodyBattery: 55, slaapUren: 7, energie: 3, goal: 'kracht' });
+    const matigMetDeload = coachAdvies({ readiness: 55, bodyBattery: 55, slaapUren: 7, energie: 3, goal: 'kracht', periodiseringFase: 'deload' });
+    expect(matigMetDeload.niveau).toBe(matig.niveau);
+  });
 });
