@@ -7,7 +7,7 @@ import { syncStatus } from '../services/garmin';
 import { getDagCached, getCollection } from '../services/data';
 import { noordster } from '../services/noordster';
 import { acwrBerekenen, sessieBelasting } from '../services/belasting';
-import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock, IcoPulse, IcoChevron, IcoEdit } from '../components/Icons';
+import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock, IcoPulse, IcoChevron, IcoEdit, IcoBadge } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
 import CheckinKaart from '../components/CheckinKaart';
@@ -30,7 +30,7 @@ export default function Dashboard() {
   const isFuture = datumKey(datumObj) > datumKey(new Date());
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
 
-  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan(datumObj);
+  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan(datumObj);
   const { user } = useAuth();
   const [popId, setPopId] = useState(null);
   const [ns, setNs] = useState(null);
@@ -128,7 +128,8 @@ export default function Dashboard() {
       )}
 
       {/* Gezondheid: ring + inline stats (geen 4 identieke kaartjes) */}
-      <GezondheidKaart garmin={garmin} garminSync={garminSync} i={1} />
+      <GezondheidKaart garmin={garmin} garminSync={garminSync} stappenDoel={instellingen?.gezondheid?.stappenDoel}
+        wijzigSlaap={wijzigSlaap} herstelSlaap={herstelSlaap} i={1} />
 
       {/* Dagelijkse check-in (stemming/energie 's ochtends, reflectie 's avonds) — enkel vandaag */}
       {isToday && <CheckinKaart checkin={checkin} bewaar={bewaarCheckin} i={2} />}
@@ -288,8 +289,11 @@ export default function Dashboard() {
   );
 }
 
-function GezondheidKaart({ garmin, garminSync, i }) {
+function GezondheidKaart({ garmin, garminSync, stappenDoel, wijzigSlaap, herstelSlaap, i }) {
   const s = syncStatus(garminSync);
+  const [slaapBewerken, setSlaapBewerken] = useState(false);
+  const [begin, setBegin] = useState('');
+  const [eind, setEind] = useState('');
   if (!garmin || (garmin.readiness == null && garmin.slaapUren == null)) {
     return (
       <section className="card" style={{ '--i': i }}>
@@ -304,6 +308,9 @@ function GezondheidKaart({ garmin, garminSync, i }) {
   }
   const r = garmin.readiness;
   const kleur = r == null ? 'var(--text-dim)' : r >= 65 ? 'var(--success)' : r >= 40 ? 'var(--warning)' : 'var(--danger)';
+  const doelBehaald = stappenDoel && garmin.stappen != null && garmin.stappen >= stappenDoel;
+  const beginSlaapBewerken = () => { setBegin(garmin.slaapBegin || '23:00'); setEind(garmin.slaapEind || '07:00'); setSlaapBewerken(true); };
+  const bewaarSlaap = () => { wijzigSlaap(begin, eind); setSlaapBewerken(false); };
   return (
     <section className="card stack" style={{ '--i': i, gap: 12 }}>
       <div className="row" style={{ gap: 18, alignItems: 'center' }}>
@@ -321,11 +328,37 @@ function GezondheidKaart({ garmin, garminSync, i }) {
             <span className="sv">{garmin.rustHr ?? '—'}</span><span className="sl">rust-HR</span></div>
           <div className="stat"><IcoFlame className="si" width={16} height={16} />
             <span className="sv">{garmin.stappen != null ? (garmin.stappen / 1000).toFixed(1) + 'k' : '—'}</span>
-            <span className="sl">stappen</span></div>
+            <span className="sl">stappen</span>
+            {doelBehaald && <IcoBadge width={15} height={15} style={{ color: 'var(--warning)' }} aria-label="Stappendoel behaald" />}
+          </div>
           <div className="stat"><IcoPulse className="si" width={16} height={16} />
             <span className="sv">{garmin.hrvStatus || '—'}</span><span className="sl">HRV</span></div>
         </div>
       </div>
+      {wijzigSlaap && (garmin.slaapBegin || garmin.slaapEind || garmin.slaapUren != null) && (
+        slaapBewerken ? (
+          <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+            <input className="input" type="time" value={begin} onChange={(e) => setBegin(e.target.value)} style={{ minHeight: 36, width: 110 }} />
+            <span className="small dim">tot</span>
+            <input className="input" type="time" value={eind} onChange={(e) => setEind(e.target.value)} style={{ minHeight: 36, width: 110 }} />
+            <button className="btn sm primary" onClick={bewaarSlaap}>Bewaar</button>
+            <button className="btn sm" onClick={() => setSlaapBewerken(false)}>Annuleer</button>
+          </div>
+        ) : (
+          <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+            <span className="small dim">
+              {garmin.slaapBegin && garmin.slaapEind ? `Geslapen: ${garmin.slaapBegin} – ${garmin.slaapEind}` : 'Slaaptijden onbekend'}
+              {garmin.slaapOverride && ' (handmatig gecorrigeerd)'}
+            </span>
+            <button className="icon-btn" aria-label="Slaaptijden corrigeren" onClick={beginSlaapBewerken}>
+              <IcoEdit width={15} height={15} />
+            </button>
+            {garmin.slaapOverride && (
+              <button className="btn sm ghost" onClick={herstelSlaap}>Terug naar Garmin-data</button>
+            )}
+          </div>
+        )
+      )}
       {s.stale && !s.leeg && (
         <div className="small" style={{ color: 'var(--warning)', margin: 0 }}>⚠ {s.tekst} — Garmin-sync hapert mogelijk.</div>
       )}

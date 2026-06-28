@@ -95,6 +95,7 @@ export const DEFAULT_INSTELLINGEN = {
     eiwitDoelG: 110,
     waterDoelL: 2.5,
     schermtijdDoelMin: 120,
+    stappenDoel: 8000,
     voedingTips: true,
     doel: 'algemeen',   // coach-doel: afvallen|kracht|uithouding|herstel|algemeen
   },

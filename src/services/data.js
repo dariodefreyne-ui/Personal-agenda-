@@ -109,6 +109,12 @@ export async function verwijderVerzet(uid, datum, blokId) {
     { [`verzet.${blokId}`]: deleteField(), bijgewerktOp: serverTimestamp() }, { merge: true });
 }
 
+// Verwijdert een handmatige slaap-correctie (terug naar wat Garmin meet).
+export async function verwijderSlaapOverride(uid, datum) {
+  await setDoc(doc(db, ...u(uid, 'dagen', datum)),
+    { slaapOverride: deleteField(), bijgewerktOp: serverTimestamp() }, { merge: true });
+}
+
 // Dag-doc cache-eerst (historische dagen wijzigen niet meer → bespaart reads).
 export async function getDagCached(uid, datum) {
   const ref = doc(db, ...u(uid, 'dagen', datum));

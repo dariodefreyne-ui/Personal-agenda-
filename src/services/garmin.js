@@ -10,6 +10,14 @@ function eersteGetal(...kandidaten) {
   return null;
 }
 
+// Garmin's "Local"-timestamps zijn epoch-ms die het lokale kloktijdstip
+// coderen alsof het UTC is — dus UTC-getters gebruiken, geen lokale tijdzone.
+function tijdVanEpochLocal(ms) {
+  if (!Number.isFinite(ms)) return null;
+  const d = new Date(ms);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
 // Vertaalt de laatste-sync-info naar leesbare status + staleness-vlag.
 export function syncStatus(laatsteSync) {
   if (!laatsteSync || !laatsteSync.datum) return { tekst: 'Nog niet gesynct', stale: true, leeg: true };
@@ -32,6 +40,16 @@ export function garminSamenvatting(g) {
     g.sleep?.sleepTimeSeconds,
   );
   const slaapUren = slaapSec ? slaapSec / 3600 : null;
+
+  const dailySleep = g.sleep?.dailySleepDTO || g.sleep;
+  const slaapBegin = tijdVanEpochLocal(eersteGetal(
+    dailySleep?.sleepStartTimestampLocal,
+    g.sleep?.sleepStartTimestampLocal,
+  ));
+  const slaapEind = tijdVanEpochLocal(eersteGetal(
+    dailySleep?.sleepEndTimestampLocal,
+    g.sleep?.sleepEndTimestampLocal,
+  ));
 
   // trainingReadiness is meestal een lijst met één object.
   const tr = Array.isArray(g.trainingReadiness) ? g.trainingReadiness[0] : g.trainingReadiness;
@@ -83,6 +101,8 @@ export function garminSamenvatting(g) {
   return {
     stappen,
     slaapUren,
+    slaapBegin,
+    slaapEind,
     readiness,
     readinessLabel,
     rustHr,

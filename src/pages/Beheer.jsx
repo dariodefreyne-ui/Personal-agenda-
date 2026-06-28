@@ -363,6 +363,13 @@ function SubVoeding() {
           <input className="input" type="number" defaultValue={I.gezondheid.schermtijdDoelMin}
             onBlur={(e) => bewaarMelding('gezondheid', { schermtijdDoelMin: Number(e.target.value) })} />
         </Veld>
+        <Veld label="Stappendoel (per dag)">
+          <input className="input" type="number" defaultValue={I.gezondheid.stappenDoel ?? 8000}
+            onBlur={(e) => bewaarMelding('gezondheid', { stappenDoel: Number(e.target.value) })} />
+        </Veld>
+        <p className="small dim" style={{ margin: 0 }}>
+          Bij dit aantal stappen verschijnt een badge bij “stappen” op het Dashboard.
+        </p>
       </section>
     </Sub>
   );
