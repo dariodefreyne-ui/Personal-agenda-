@@ -4,9 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { BLOK_TYPES } from '../config/appConfig';
 import { toMin, nuMin, toHHMM, datumKey } from '../services/tijd';
 import { syncStatus } from '../services/garmin';
-import { getDagCached, getCollection } from '../services/data';
+import { getDagCached } from '../services/data';
 import { noordster } from '../services/noordster';
-import { acwrBerekenen, sessieBelasting } from '../services/belasting';
 import { IcoCheck, IcoMoon, IcoHeart, IcoFlame, IcoClock, IcoPulse, IcoChevron, IcoEdit, IcoBadge } from '../components/Icons';
 import CoachKaart from '../components/CoachKaart';
 import BelastingKaart from '../components/BelastingKaart';
@@ -30,29 +29,13 @@ export default function Dashboard() {
   const isFuture = datumKey(datumObj) > datumKey(new Date());
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
 
-  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin } = useDagPlan(datumObj);
+  const { laden, plan, garmin, gedaan, toggleBlok, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, instellingen, blessureActief, garminSync, checkin, bewaarCheckin, acwr } = useDagPlan(datumObj);
   const { user } = useAuth();
   const [popId, setPopId] = useState(null);
   const [ns, setNs] = useState(null);
-  const [acwr, setAcwr] = useState(null);
   const [editId, setEditId] = useState(null);
   const [editStart, setEditStart] = useState('');
   const [editEind, setEditEind] = useState('');
-
-  // Opbouw-ratio (ACWR) voor de coach — 1× per sessie laden (geen herlaad bij toggle).
-  useEffect(() => {
-    if (!user) return;
-    let actief = true;
-    (async () => {
-      const [acts, logs] = await Promise.all([
-        getCollection(user.uid, 'garminActivities'),
-        getCollection(user.uid, 'activiteitLog'),
-      ]);
-      const rpe = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
-      if (actief) setAcwr(acwrBerekenen(sessieBelasting(acts, rpe)));
-    })();
-    return () => { actief = false; };
-  }, [user]);
 
   // North Star (consistentie) over de laatste 7 dagen — cache-eerst, dus goedkoop.
   useEffect(() => {

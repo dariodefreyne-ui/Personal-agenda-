@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useDagPlan } from '../hooks/useDagPlan';
 import { datumKey, dagKortVanDatum } from '../services/tijd';
-import { coachAdvies } from '../services/coach';
 import { kiesSportVanDag, genereerSportInhoud } from '../services/sportcoach';
 import { SPORTEN } from '../config/appConfig';
 import Daypicker from '../components/Daypicker';
@@ -16,7 +15,7 @@ export default function Coach() {
   const isToday = datumKey(datumObj) === datumKey(new Date());
   const naarDag = (delta) => setDatumObj((d) => { const nd = new Date(d); nd.setDate(nd.getDate() + delta); return nd; });
 
-  const { laden, plan, garmin, instellingen, blessureActief, checkin } = useDagPlan(datumObj);
+  const { laden, plan, garmin, instellingen, advies, weer } = useDagPlan(datumObj);
 
   return (
     <div className="stack reveal">
@@ -33,38 +32,28 @@ export default function Coach() {
       <h1 style={{ margin: 0 }}>Coach</h1>
       <p className="small dim" style={{ margin: 0, textTransform: 'capitalize' }}>{datumLabel(datumObj)}</p>
 
-      {laden || !instellingen ? (
+      {laden || !instellingen || !advies ? (
         <div className="empty">Laden…</div>
       ) : (
         <CoachInhoud datumObj={datumObj} plan={plan} garmin={garmin} instellingen={instellingen}
-          blessureActief={blessureActief} checkin={checkin} />
+          advies={advies} weer={weer} />
       )}
     </div>
   );
 }
 
-function CoachInhoud({ datumObj, plan, garmin, instellingen, blessureActief, checkin }) {
+function CoachInhoud({ datumObj, plan, garmin, instellingen, advies, weer }) {
   const dagKort = dagKortVanDatum(datumObj);
   const datum = datumKey(datumObj);
   const judoVandaag = (plan?.blokken || []).some((b) => b.type === 'judo' || b.type === 'lesgeven');
 
-  const advies = coachAdvies({
-    readiness: garmin?.readiness ?? null,
-    bodyBattery: garmin?.bodyBattery ?? null,
-    slaapUren: garmin?.slaapUren ?? null,
-    energie: checkin?.ochtend?.energie ?? null,
-    hrvStatus: garmin?.hrvStatus ?? null,
-    goal: instellingen.gezondheid?.doel,
-    blessureActief,
-  });
-
   const keuze = kiesSportVanDag({
-    dagKort, weekSchema: instellingen.sport?.weekSchema, niveau: advies.niveau, judoVandaag,
+    dagKort, weekSchema: instellingen.sport?.weekSchema, niveau: advies.niveau, judoVandaag, weer,
   });
 
   const inhoud = genereerSportInhoud({
     sport: keuze.sport, niveau: advies.niveau, oefeningen: instellingen.sport?.oefeningen,
-    garmin, stappenDoel: instellingen.gezondheid?.stappenDoel, datum,
+    garmin, stappenDoel: instellingen.gezondheid?.stappenDoel, datum, weer,
   });
 
   const Icoon = SPORT_ICOON[keuze.sport];

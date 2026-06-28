@@ -90,6 +90,39 @@ describe('genereerDagPlan', () => {
   });
 });
 
+describe('genereerDagPlan — sportcoach-integratie', () => {
+  it('voegt een sportblok toe als de coach een niveau meegeeft', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', coachNiveau: 'matig' });
+    const sportBlok = plan.blokken.find((b) => b.bron === 'sportcoach');
+    expect(sportBlok).toBeTruthy();
+    expect(sportBlok.type).toBe('sport');
+    expect(sportBlok.titel).toBe('Home fitness');
+    expect(sportBlok.detail).toBeTruthy();
+  });
+
+  it('voegt geen sportblok toe zonder coachNiveau (backwards-compatibel)', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis' });
+    expect(plan.blokken.some((b) => b.bron === 'sportcoach')).toBe(false);
+  });
+
+  it('voegt geen los sportblok toe op een rustdag uit het weekschema', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-26', dagKort: 'vr', instellingen: I, werkModus: 'thuis', coachNiveau: 'hard' });
+    expect(plan.blokken.some((b) => b.bron === 'sportcoach')).toBe(false);
+  });
+
+  it('judo wint nog steeds van het sportcoach-blok op een judodag', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'thuis', coachNiveau: 'hard' });
+    expect(plan.blokken.some((b) => b.bron === 'sportcoach')).toBe(false);
+    expect(plan.blokken.some((b) => /Judoles geven/.test(b.titel))).toBe(true);
+  });
+
+  it('geenJudo (vakantie) laat het sportcoach-blok wél door in plaats van judo', () => {
+    const metWoSport = { ...I, sport: { ...I.sport, weekSchema: { ...I.sport.weekSchema, wo: 'homefitness' } } };
+    const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: metWoSport, werkModus: 'thuis', geenJudo: true, coachNiveau: 'matig' });
+    expect(plan.blokken.some((b) => b.bron === 'sportcoach')).toBe(true);
+  });
+});
+
 describe('berekenFietsAdvies', () => {
   it('raadt fietsen af bij actieve blessure', () => {
     const a = berekenFietsAdvies({ sport: I.sport, blessureActief: true });
