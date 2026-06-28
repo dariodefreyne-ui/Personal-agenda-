@@ -28,19 +28,32 @@ export default function Gezondheid() {
   const [nieuweBlessure, setNieuweBlessure] = useState('');
   const [sync, setSync] = useState(null);
   const [acwr, setAcwr] = useState(null);
+  const [klaar, setKlaar] = useState(false);
+  const [blessuresKlaar, setBlessuresKlaar] = useState(false);
   const doel = instellingen?.gezondheid?.doel || 'algemeen';
 
+  // Alle losse fetches landen samen vóór we de coach-kaart tonen — anders
+  // verschijnt eerst de blessure-zin en springt het advies even later naar de
+  // pijn-zin zodra de check-in binnenkomt, wat de hele pagina laat "flashen".
   useEffect(() => {
     if (!user) return;
-    getGarminDag(user.uid, datum).then((g) => setGarmin(garminSamenvatting(g)));
-    getLaatsteGarminSync(user.uid).then(setSync);
-    getDocById(user.uid, 'dagen', datum).then((d) => { if (d?.checkin) setCheckin(d.checkin); });
-    Promise.all([getCollection(user.uid, 'garminActivities'), getCollection(user.uid, 'activiteitLog')])
-      .then(([acts, logs]) => {
-        const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
-        setAcwr(acwrBerekenen(sessieBelasting(acts, rpeMap)));
-      });
-    return subscribeCollection(user.uid, 'blessures', setBlessures);
+    setKlaar(false);
+    Promise.all([
+      getGarminDag(user.uid, datum),
+      getLaatsteGarminSync(user.uid),
+      getDocById(user.uid, 'dagen', datum),
+      getCollection(user.uid, 'garminActivities'),
+      getCollection(user.uid, 'activiteitLog'),
+    ]).then(([g, s, d, acts, logs]) => {
+      setGarmin(garminSamenvatting(g));
+      setSync(s);
+      if (d?.checkin) setCheckin(d.checkin);
+      const rpeMap = Object.fromEntries((logs || []).map((l) => [l.id, l.rpe]));
+      setAcwr(acwrBerekenen(sessieBelasting(acts, rpeMap)));
+      setKlaar(true);
+    });
+    setBlessuresKlaar(false);
+    return subscribeCollection(user.uid, 'blessures', (bs) => { setBlessures(bs); setBlessuresKlaar(true); });
   }, [user, datum]);
 
   // Eenmalige migratie: oude losse reva-oefeningen (vóór het blessure-model)
@@ -119,7 +132,7 @@ export default function Gezondheid() {
       </section>
 
       {/* Coach-advies */}
-      {(garmin || blessureActief) && (
+      {klaar && blessuresKlaar && (garmin || blessureActief) && (
         <CoachKaart garmin={garmin} goal={doel} blessureActief={blessureActief}
           energie={checkin?.ochtend?.energie ?? checkin?.energie ?? null} acwrZone={acwr?.zone ?? null}
           pijn={checkin?.pijn > 0 ? checkin.pijn : null} />
