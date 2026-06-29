@@ -8,6 +8,7 @@
     "build": "node scripts/generateMessagingSw.mjs && vite build",
     "preview": "vite preview",
     "gen:sw": "node scripts/generateMessagingSw.mjs",
+    "gen:codes": "bash scripts/gen_codes.sh",
     "test": "vitest run"
   },
   "dependencies": {

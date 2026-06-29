@@ -64,8 +64,15 @@ functions/                Cloud Functions (CommonJS, Node 22)
   index.js                dispatcher(10'), icsSync(3u), weerSync(05:30), weekMail(zo)
   lib/ics.js              minimale ICS-parser
 garmin/                   Python-pijplijn (dagelijkse GitHub Action)
-scripts/                  generateMessagingSw.mjs (build), gen_icons.py
+scripts/                  generateMessagingSw.mjs (build), gen_icons.py,
+                          gen_codes.sh (regenereert codes.md, zie hieronder)
 ```
+
+`codes.md` is een gegenereerde audit-bundel (volledige broncode, gegroepeerd in
+Config/Backend/Garmin-pijplijn/Frontend/Services/Tests, met ★ voor critical-logic
+services) zodat een AI-assistent de hele codebase in 1 bestand kan inlezen.
+Regenereren via `npm run gen:codes`; nieuwe/verwijderde bestanden eerst bijwerken
+in `scripts/codes_file_meta.tsv`.
 
 ## Firestore-datamodel (onder `users/{uid}`)
 ```

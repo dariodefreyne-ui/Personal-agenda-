@@ -2,107 +2,171 @@
 
 Automatisch gegenereerd bestand. Bevat de volledige inhoud van alle
 relevante bron-, config- en testbestanden uit deze repository, samengevoegd
-in 1 bestand voor een externe audit. Genereer opnieuw indien verouderd.
+in 1 bestand zodat een AI-assistent (of externe auditor) de hele codebase
+in 1 keer kan inlezen en zelfstandig kan navigeren/aanpassen. Genereer
+opnieuw met `npm run gen:codes` (= `scripts/gen_codes.sh`) zodra dit
+verouderd is — voeg nieuwe/verwijderde bestanden eerst toe aan/verwijder
+uit `scripts/codes_file_meta.tsv` (pad + categorie + 1-regel-omschrijving,
+★-prefix voor critical logic).
 
 Branch: `claude/caveman-full-4o2v2o`
 
-## Inhoudsopgave
+## STRUCTUUR
 
-- `.env.example`
-- `.firebaserc`
-- `.github/workflows/deploy.yml`
-- `.github/workflows/garmin-auth.yml`
-- `.github/workflows/garmin-backfill.yml`
-- `.github/workflows/garmin-daily.yml`
-- `.gitignore`
-- `CLAUDE.md`
-- `HANDOVER.md`
-- `README.md`
-- `firebase.json`
-- `firestore.indexes.json`
-- `firestore.rules`
-- `storage.rules`
-- `package.json`
-- `vite.config.js`
-- `index.html`
-- `requirements.txt`
-- `functions/index.js`
-- `functions/lib/ics.js`
-- `functions/package.json`
-- `garmin/__init__.py`
-- `garmin/auth.py`
-- `garmin/auth_ci.py`
-- `garmin/backfill.py`
-- `garmin/client.py`
-- `garmin/config.py`
-- `garmin/fetchers.py`
-- `garmin/firestore_db.py`
-- `garmin/import_export.py`
-- `garmin/sync_daily.py`
-- `scripts/gen_icons.py`
-- `scripts/generateMessagingSw.mjs`
-- `src/App.jsx`
-- `src/main.jsx`
-- `src/firebase.js`
-- `src/components/BelastingKaart.jsx`
-- `src/components/CheckinKaart.jsx`
-- `src/components/CoachKaart.jsx`
-- `src/components/Daypicker.jsx`
-- `src/components/ErrorBoundary.jsx`
-- `src/components/Gauge.jsx`
-- `src/components/Icons.jsx`
-- `src/components/NoordsterKaart.jsx`
-- `src/components/Shell.jsx`
-- `src/components/Sparkline.jsx`
-- `src/components/UpdateBanner.jsx`
-- `src/config/appConfig.js`
-- `src/contexts/AuthContext.jsx`
-- `src/contexts/SettingsContext.jsx`
-- `src/contexts/ThemeContext.jsx`
-- `src/contexts/ToastContext.jsx`
-- `src/hooks/useDagPlan.js`
-- `src/pages/Beheer.jsx`
-- `src/pages/Coach.jsx`
-- `src/pages/Dashboard.jsx`
-- `src/pages/Gezondheid.jsx`
-- `src/pages/Login.jsx`
-- `src/pages/Maaltijden.jsx`
-- `src/pages/Taken.jsx`
-- `src/pages/Voortgang.jsx`
-- `src/pages/Week.jsx`
-- `src/services/agenda.js`
-- `src/services/belasting.js`
-- `src/services/blessures.js`
-- `src/services/coach.js`
-- `src/services/data.js`
-- `src/services/doelen.js`
-- `src/services/garmin.js`
-- `src/services/maaltijden.js`
-- `src/services/noordster.js`
-- `src/services/periodisering.js`
-- `src/services/planner.js`
-- `src/services/push.js`
-- `src/services/reflectie.js`
-- `src/services/sportcoach.js`
-- `src/services/taken.js`
-- `src/services/tijd.js`
-- `src/services/vakanties.js`
-- `src/styles/global.css`
-- `test/belasting.test.js`
-- `test/blessures.test.js`
-- `test/coach.test.js`
-- `test/doelen.test.js`
-- `test/ics.test.js`
-- `test/maaltijden.test.js`
-- `test/noordster.test.js`
-- `test/periodisering.test.js`
-- `test/planner.test.js`
-- `test/reflectie.test.js`
-- `test/sportcoach.test.js`
-- `test/tijd.test.js`
-- `test/vakanties.test.js`
+Categorieën (in deze volgorde door dit document heen):
 
-## `.env.example`
+- **Config** — buildtools, CI, Firebase/Firestore-config, security-rules, docs.
+- **Backend** — Cloud Functions (`functions/`, CommonJS, Node 22): dispatcher,
+  icsSync, weerSync, weekMail.
+- **Garmin-pijplijn** — losstaande Python-pijplijn (`garmin/`, dagelijkse
+  GitHub Action) die Garmin Connect-data naar Firestore (`garminDaily/{datum}`,
+  server-only) synct.
+- **Frontend** — React/Vite-PWA (`src/components`, `src/contexts`,
+  `src/pages`, `src/config`, `src/hooks`, `src/styles`): UI, routing, state.
+- **Services** — `src/services/*.js`, de kernlogica van de app. Bestanden
+  gemarkeerd met ★ zijn **critical logic**: planning/scheduling- en
+  beslissings-engines waar bugs direct zichtbaar/voelbaar advies beïnvloeden.
+  Alle andere services zijn data-/CRUD-/util-laag rond die kernlogica.
+- **Tests** — `test/*.test.js` (Vitest), 1 testbestand per service in
+  `src/services`.
+
+Belangrijkste call-keten (boven naar onder = wie roept wie aan):
+
+```
+useDagPlan.js (hook, leest/schrijft dagen/{datum})
+  └─ planner.js          ★ genereert het dagplan (blokken, tijden, bron)
+       ├─ sportcoach.js  ★ welke sport + wat die dag concreet inhoudt
+       ├─ coach.js       ★ Garmin + zelfrapportage -> sportadvies
+       │    └─ belasting.js   ★ ACWR uit RPE-gewogen sRPE-belasting
+       │    └─ periodisering.js ★ opbouw-/deload-weekcyclus
+       ├─ blessures.js   ★ reva-oefeningenrotatie bij actieve blessure
+       ├─ maaltijden.js  ★ receptsuggesties, schaling, boodschappenlijst
+       └─ vakanties.js, tijd.js, data.js (helpers/CRUD)
+  └─ noordster.js        ★ North Star-score, leest dagen/{datum}.plan[].checkbaar
+```
+
+Firestore-datamodel en productprincipes staan in `CLAUDE.md` (zie hieronder
+in de Config-sectie) — lees dat bestand eerst voor context voordat je code
+wijzigt.
+
+## FILE INDEX
+
+### Config
+
+- `.env.example` — Voorbeeld-env-variabelen (Firebase-config, secrets-placeholders)
+- `.firebaserc` — Firebase-project-alias
+- `.github/workflows/deploy.yml` — CI: build + deploy naar Firebase Hosting op push naar main
+- `.github/workflows/garmin-auth.yml` — CI: vernieuwt Garmin-sessietoken
+- `.github/workflows/garmin-backfill.yml` — CI: eenmalige/handmatige Garmin-historiek-import
+- `.github/workflows/garmin-daily.yml` — CI: dagelijkse Garmin-sync naar Firestore
+- `.gitignore` — Genegeerde paden
+- `CLAUDE.md` — Architectuur- en productprincipes-gids voor AI-assistenten
+- `HANDOVER.md` — Audit-/sessie-overdrachtslog (chronologisch)
+- `README.md` — Babyproof setup- en deploy-handleiding
+- `firebase.json` — Hosting/Functions/Firestore-deploytargets
+- `firestore.indexes.json` — Samengestelde Firestore-indexen
+- `firestore.rules` — Firestore-security-rules (per-user toegang)
+- `storage.rules` — Firebase Storage-security-rules
+- `package.json` — Frontend-dependencies + npm-scripts
+- `vite.config.js` — Vite/PWA-buildconfiguratie
+- `index.html` — App-entry-HTML
+- `requirements.txt` — Python-dependencies (Garmin-pijplijn)
+
+### Backend
+
+- `functions/index.js` — Cloud Functions-dispatcher: push-dispatcher(10'), icsSync(3u), weerSync(05:30), weekMail(zo)
+- `functions/lib/ics.js` — Minimale ICS-kalenderparser (gebruikt door icsSync)
+- `functions/package.json` — Cloud Functions-dependencies (Node 22, CommonJS)
+
+### Garmin-pijplijn
+
+- `garmin/__init__.py` — Python-package-init
+- `garmin/auth.py` — Garmin-login/sessiebeheer (interactief)
+- `garmin/auth_ci.py` — Garmin-login voor CI (non-interactief, token uit secret)
+- `garmin/backfill.py` — Historische Garmin-data eenmalig importeren
+- `garmin/client.py` — Garmin Connect-API-client-wrapper
+- `garmin/config.py` — Configuratie/credentials-laadlogica
+- `garmin/fetchers.py` — Haalt specifieke Garmin-datasoorten op (slaap, HRV, activiteiten, ...)
+- `garmin/firestore_db.py` — Schrijft Garmin-data naar Firestore (Admin SDK)
+- `garmin/import_export.py` — Import/export-helpers voor Garmin-data
+- `garmin/sync_daily.py` — Dagelijkse sync-entrypoint (GitHub Action)
+- `scripts/gen_icons.py` — Genereert PWA-app-icons
+
+### Frontend
+
+- `scripts/generateMessagingSw.mjs` — Build-script: genereert public/firebase-messaging-sw.js
+- `src/App.jsx` — Root-component + routing
+- `src/main.jsx` — React-entrypoint
+- `src/firebase.js` — Firebase-SDK-init (app/auth/firestore/functions)
+- `src/components/BelastingKaart.jsx` — UI: ACWR-belasting + trainingscyclus-kaart
+- `src/components/CheckinKaart.jsx` — UI: ochtend-check-in / avondreflectie
+- `src/components/CoachKaart.jsx` — UI: sportadvies-kaart (waarom/zekerheid-uitklap)
+- `src/components/Daypicker.jsx` — UI: datumkiezer
+- `src/components/ErrorBoundary.jsx` — UI: React-error-boundary
+- `src/components/Gauge.jsx` — UI: ronde meter (gebruikt door North Star e.d.)
+- `src/components/Icons.jsx` — UI: SVG-icoonset
+- `src/components/NoordsterKaart.jsx` — UI: North Star-scorekaart
+- `src/components/Shell.jsx` — UI: app-shell (navigatie/layout)
+- `src/components/Sparkline.jsx` — UI: kleine trendgrafiek
+- `src/components/UpdateBanner.jsx` — UI: "nieuwe versie beschikbaar"-banner
+- `src/config/appConfig.js` — Thema's, bloktypes, werkmodi, voedingsdoelen, DEFAULT_INSTELLINGEN
+- `src/contexts/AuthContext.jsx` — React-context: Firebase Auth-status
+- `src/contexts/SettingsContext.jsx` — React-context: instellingen-cache (beperkt Firestore-reads)
+- `src/contexts/ThemeContext.jsx` — React-context: thema (3 donkere varianten)
+- `src/contexts/ToastContext.jsx` — React-context: toast-notificaties
+- `src/hooks/useDagPlan.js` — Hook: laadt dagdata, berekent + persisteert het dagplan
+- `src/pages/Beheer.jsx` — Pagina: no-code instellingenbeheer (alle rubrieken)
+- `src/pages/Coach.jsx` — Pagina: sportcoach-advies + belasting
+- `src/pages/Dashboard.jsx` — Pagina: "Vandaag" — dagplan, check-in, North Star
+- `src/pages/Gezondheid.jsx` — Pagina: eiwit/water/schermtijd/stappen-tracker
+- `src/pages/Login.jsx` — Pagina: e-mail-login
+- `src/pages/Maaltijden.jsx` — Pagina: receptenbank, dagkeuze, boodschappenlijst
+- `src/pages/Taken.jsx` — Pagina: taken/gewoontes + streaks
+- `src/pages/Voortgang.jsx` — Pagina: weektrends/gemiddelden
+- `src/pages/Week.jsx` — Pagina: weekschema, werkmodi, vakanties
+- `src/styles/global.css` — Semantische CSS-tokens + thema's
+
+### Services
+
+- `src/services/agenda.js` — Client: roept icsSync Cloud Function aan
+- `src/services/belasting.js` — ★ ACWR (acute:chronic load ratio) uit RPE-gewogen sRPE-belasting
+- `src/services/blessures.js` — ★ Reva-oefeningenrotatie (dag-deterministisch) bij actieve blessure
+- `src/services/coach.js` — ★ Kernlogica: Garmin + zelfrapportage → sportadvies (waarom/databronnen/zekerheid)
+- `src/services/data.js` — Generieke Firestore-CRUD-laag (alles onder users/{uid}/...)
+- `src/services/doelen.js` — Lange-termijndoelen + Garmin-koppeling
+- `src/services/garmin.js` — Leest ruwe Garmin-dagdata uit tot samenvatting
+- `src/services/maaltijden.js` — ★ Kernlogica: dag-deterministische receptsuggesties, schaling, boodschappenlijst
+- `src/services/noordster.js` — ★ North Star-score (therapietrouw/consistentie) uit dagdata
+- `src/services/periodisering.js` — ★ Trainingscyclus (opbouw-/deload-weken), kalenderbepaald
+- `src/services/planner.js` — ★ Kernlogica: genereert dagindeling uit werkmodus + ankers + advies + maaltijden
+- `src/services/push.js` — Client: FCM-token registreren
+- `src/services/reflectie.js` — Stemming/energie/tevredenheid-schalen + trend-helpers
+- `src/services/sportcoach.js` — ★ Bepaalt WELKE sport + WAT die dag concreet inhoudt (vast schema + adaptieve override)
+- `src/services/taken.js` — Afvinken + streak-berekening
+- `src/services/tijd.js` — Tijd/datum/week-helpers (incl. dagOrdinal voor deterministische rotatie)
+- `src/services/vakanties.js` — Vakantieperiodes (verlof/geenJudo/buitenland) als datumreeksen
+
+### Tests
+
+- `test/belasting.test.js` — Unit-tests: belasting.js (ACWR)
+- `test/blessures.test.js` — Unit-tests: blessures.js (reva-rotatie)
+- `test/coach.test.js` — Unit-tests: coach.js (sportadvies)
+- `test/doelen.test.js` — Unit-tests: doelen.js
+- `test/ics.test.js` — Unit-tests: functions/lib/ics.js
+- `test/maaltijden.test.js` — Unit-tests: maaltijden.js (suggesties/boodschappenlijst)
+- `test/noordster.test.js` — Unit-tests: noordster.js (North Star-score)
+- `test/periodisering.test.js` — Unit-tests: periodisering.js (trainingscyclus)
+- `test/planner.test.js` — Unit-tests: planner.js (dagplan-generatie)
+- `test/reflectie.test.js` — Unit-tests: reflectie.js
+- `test/sportcoach.test.js` — Unit-tests: sportcoach.js
+- `test/tijd.test.js` — Unit-tests: tijd.js
+- `test/vakanties.test.js` — Unit-tests: vakanties.js
+
+## Config
+
+### `.env.example`
+
+Voorbeeld-env-variabelen (Firebase-config, secrets-placeholders)
 
 ```example
 # =========================================================================
@@ -133,7 +197,9 @@ VITE_THEME_COLOR=#0b1120
 
 ```
 
-## `.firebaserc`
+### `.firebaserc`
+
+Firebase-project-alias
 
 ```firebaserc
 {
@@ -144,7 +210,9 @@ VITE_THEME_COLOR=#0b1120
 
 ```
 
-## `.github/workflows/deploy.yml`
+### `.github/workflows/deploy.yml`
+
+CI: build + deploy naar Firebase Hosting op push naar main
 
 ```yml
 name: Deploy to Firebase
@@ -243,7 +311,9 @@ jobs:
 
 ```
 
-## `.github/workflows/garmin-auth.yml`
+### `.github/workflows/garmin-auth.yml`
+
+CI: vernieuwt Garmin-sessietoken
 
 ```yml
 name: Garmin Auth (token aanmaken)
@@ -293,7 +363,9 @@ jobs:
 
 ```
 
-## `.github/workflows/garmin-backfill.yml`
+### `.github/workflows/garmin-backfill.yml`
+
+CI: eenmalige/handmatige Garmin-historiek-import
 
 ```yml
 name: Garmin Backfill (historiek)
@@ -341,7 +413,9 @@ jobs:
 
 ```
 
-## `.github/workflows/garmin-daily.yml`
+### `.github/workflows/garmin-daily.yml`
+
+CI: dagelijkse Garmin-sync naar Firestore
 
 ```yml
 name: Garmin Daily Sync
@@ -384,7 +458,9 @@ jobs:
 
 ```
 
-## `.gitignore`
+### `.gitignore`
+
+Genegeerde paden
 
 ```gitignore
 # --- Node / Vite ---
@@ -432,7 +508,9 @@ public/firebase-messaging-sw.js
 
 ```
 
-## `CLAUDE.md`
+### `CLAUDE.md`
+
+Architectuur- en productprincipes-gids voor AI-assistenten
 
 ```md
 # Personal Agenda — Claude Code-gids
@@ -501,8 +579,15 @@ functions/                Cloud Functions (CommonJS, Node 22)
   index.js                dispatcher(10'), icsSync(3u), weerSync(05:30), weekMail(zo)
   lib/ics.js              minimale ICS-parser
 garmin/                   Python-pijplijn (dagelijkse GitHub Action)
-scripts/                  generateMessagingSw.mjs (build), gen_icons.py
+scripts/                  generateMessagingSw.mjs (build), gen_icons.py,
+                          gen_codes.sh (regenereert codes.md, zie hieronder)
 ```
+
+`codes.md` is een gegenereerde audit-bundel (volledige broncode, gegroepeerd in
+Config/Backend/Garmin-pijplijn/Frontend/Services/Tests, met ★ voor critical-logic
+services) zodat een AI-assistent de hele codebase in 1 bestand kan inlezen.
+Regenereren via `npm run gen:codes`; nieuwe/verwijderde bestanden eerst bijwerken
+in `scripts/codes_file_meta.tsv`.
 
 ## Firestore-datamodel (onder `users/{uid}`)
 ```
@@ -605,7 +690,9 @@ Volgende fases:
 
 ```
 
-## `HANDOVER.md`
+### `HANDOVER.md`
+
+Audit-/sessie-overdrachtslog (chronologisch)
 
 ```md
 # Handover — Personal Agenda
@@ -1059,7 +1146,9 @@ npm run build    # productie-build (genereert ook firebase-messaging-sw.js)
 
 ```
 
-## `README.md`
+### `README.md`
+
+Babyproof setup- en deploy-handleiding
 
 ```md
 # Personal Agenda
@@ -1461,7 +1550,9 @@ worden 60 dagen vooruit uitgeklapt.
 
 ```
 
-## `firebase.json`
+### `firebase.json`
+
+Hosting/Functions/Firestore-deploytargets
 
 ```json
 {
@@ -1501,7 +1592,9 @@ worden 60 dagen vooruit uitgeklapt.
 
 ```
 
-## `firestore.indexes.json`
+### `firestore.indexes.json`
+
+Samengestelde Firestore-indexen
 
 ```json
 {
@@ -1520,7 +1613,9 @@ worden 60 dagen vooruit uitgeklapt.
 
 ```
 
-## `firestore.rules`
+### `firestore.rules`
+
+Firestore-security-rules (per-user toegang)
 
 ```rules
 rules_version = '2';
@@ -1600,7 +1695,9 @@ service cloud.firestore {
 
 ```
 
-## `storage.rules`
+### `storage.rules`
+
+Firebase Storage-security-rules
 
 ```rules
 rules_version = '2';
@@ -1620,7 +1717,9 @@ service firebase.storage {
 
 ```
 
-## `package.json`
+### `package.json`
+
+Frontend-dependencies + npm-scripts
 
 ```json
 {
@@ -1633,6 +1732,7 @@ service firebase.storage {
     "build": "node scripts/generateMessagingSw.mjs && vite build",
     "preview": "vite preview",
     "gen:sw": "node scripts/generateMessagingSw.mjs",
+    "gen:codes": "bash scripts/gen_codes.sh",
     "test": "vitest run"
   },
   "dependencies": {
@@ -1653,7 +1753,9 @@ service firebase.storage {
 
 ```
 
-## `vite.config.js`
+### `vite.config.js`
+
+Vite/PWA-buildconfiguratie
 
 ```js
 import { defineConfig } from 'vite';
@@ -1720,7 +1822,9 @@ export default defineConfig({
 
 ```
 
-## `index.html`
+### `index.html`
+
+App-entry-HTML
 
 ```html
 <!doctype html>
@@ -1748,7 +1852,9 @@ export default defineConfig({
 
 ```
 
-## `requirements.txt`
+### `requirements.txt`
+
+Python-dependencies (Garmin-pijplijn)
 
 ```txt
 # Garmin -> Firestore sync pipeline
@@ -1760,7 +1866,11 @@ python-dotenv>=1.0.1
 
 ```
 
-## `functions/index.js`
+## Backend
+
+### `functions/index.js`
+
+Cloud Functions-dispatcher: push-dispatcher(10'), icsSync(3u), weerSync(05:30), weekMail(zo)
 
 ```js
 // =========================================================================
@@ -2119,7 +2229,9 @@ exports.weekMail = onSchedule(
 
 ```
 
-## `functions/lib/ics.js`
+### `functions/lib/ics.js`
+
+Minimale ICS-kalenderparser (gebruikt door icsSync)
 
 ```js
 // Minimale ICS-parser: haalt VEVENTs (SUMMARY, DTSTART, DTEND) eruit.
@@ -2301,7 +2413,9 @@ module.exports = { parseIcs, icsDiagnose };
 
 ```
 
-## `functions/package.json`
+### `functions/package.json`
+
+Cloud Functions-dependencies (Node 22, CommonJS)
 
 ```json
 {
@@ -2322,7 +2436,11 @@ module.exports = { parseIcs, icsDiagnose };
 
 ```
 
-## `garmin/__init__.py`
+## Garmin-pijplijn
+
+### `garmin/__init__.py`
+
+Python-package-init
 
 ```py
 """Garmin Connect -> Firestore sync pipeline.
@@ -2348,7 +2466,9 @@ __all__ = [
 
 ```
 
-## `garmin/auth.py`
+### `garmin/auth.py`
+
+Garmin-login/sessiebeheer (interactief)
 
 ```py
 """One-time interactive Garmin login.
@@ -2406,7 +2526,9 @@ if __name__ == "__main__":
 
 ```
 
-## `garmin/auth_ci.py`
+### `garmin/auth_ci.py`
+
+Garmin-login voor CI (non-interactief, token uit secret)
 
 ```py
 """CI-variant van de Garmin-login (geen interactieve prompts).
@@ -2471,7 +2593,9 @@ if __name__ == "__main__":
 
 ```
 
-## `garmin/backfill.py`
+### `garmin/backfill.py`
+
+Historische Garmin-data eenmalig importeren
 
 ```py
 """Backfill a full historical date range via the Garmin API.
@@ -2566,7 +2690,9 @@ if __name__ == "__main__":
 
 ```
 
-## `garmin/client.py`
+### `garmin/client.py`
+
+Garmin Connect-API-client-wrapper
 
 ```py
 """Builds an authenticated `garminconnect.Garmin` client.
@@ -2643,7 +2769,9 @@ def get_client() -> Garmin:
 
 ```
 
-## `garmin/config.py`
+### `garmin/config.py`
+
+Configuratie/credentials-laadlogica
 
 ```py
 """Configuration loaded from environment variables (and an optional .env)."""
@@ -2683,7 +2811,9 @@ ACTIVITIES_COLLECTION = os.getenv("FIRESTORE_ACTIVITIES_COLLECTION", "garminActi
 
 ```
 
-## `garmin/fetchers.py`
+### `garmin/fetchers.py`
+
+Haalt specifieke Garmin-datasoorten op (slaap, HRV, activiteiten, ...)
 
 ```py
 """Defensive fetchers: a single failing Garmin endpoint never aborts a sync."""
@@ -2729,7 +2859,9 @@ def fetch_activities(garmin, start_date: str, end_date: str) -> list:
 
 ```
 
-## `garmin/firestore_db.py`
+### `garmin/firestore_db.py`
+
+Schrijft Garmin-data naar Firestore (Admin SDK)
 
 ```py
 """Firestore connection and document writers.
@@ -2824,7 +2956,9 @@ def write_activity(activity_id, data: dict) -> None:
 
 ```
 
-## `garmin/import_export.py`
+### `garmin/import_export.py`
+
+Import/export-helpers voor Garmin-data
 
 ```py
 """Best-effort importer for Garmin's official \"Export Your Data\" archive.
@@ -2975,7 +3109,9 @@ if __name__ == "__main__":
 
 ```
 
-## `garmin/sync_daily.py`
+### `garmin/sync_daily.py`
+
+Dagelijkse sync-entrypoint (GitHub Action)
 
 ```py
 """Daily sync entry point.
@@ -3047,7 +3183,9 @@ if __name__ == "__main__":
 
 ```
 
-## `scripts/gen_icons.py`
+### `scripts/gen_icons.py`
+
+Genereert PWA-app-icons
 
 ```py
 #!/usr/bin/env python3
@@ -3112,7 +3250,11 @@ if __name__ == '__main__':
 
 ```
 
-## `scripts/generateMessagingSw.mjs`
+## Frontend
+
+### `scripts/generateMessagingSw.mjs`
+
+Build-script: genereert public/firebase-messaging-sw.js
 
 ```mjs
 // Genereert public/firebase-messaging-sw.js uit de VITE_FB_*-omgevingsvariabelen.
@@ -3184,7 +3326,9 @@ console.log('[generateMessagingSw] geschreven:', dest, cfg.projectId ? `(project
 
 ```
 
-## `src/App.jsx`
+### `src/App.jsx`
+
+Root-component + routing
 
 ```jsx
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -3235,7 +3379,9 @@ export default function App() {
 
 ```
 
-## `src/main.jsx`
+### `src/main.jsx`
+
+React-entrypoint
 
 ```jsx
 import React from 'react';
@@ -3269,7 +3415,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
 ```
 
-## `src/firebase.js`
+### `src/firebase.js`
+
+Firebase-SDK-init (app/auth/firestore/functions)
 
 ```js
 // src/firebase.js — centrale Firebase-initialisatie voor de browser.
@@ -3319,7 +3467,9 @@ export default app;
 
 ```
 
-## `src/components/BelastingKaart.jsx`
+### `src/components/BelastingKaart.jsx`
+
+UI: ACWR-belasting + trainingscyclus-kaart
 
 ```jsx
 import { belastingStatus } from '../services/belasting';
@@ -3391,7 +3541,9 @@ export default function BelastingKaart({ garmin, readinessReeks = [], acwr = nul
 
 ```
 
-## `src/components/CheckinKaart.jsx`
+### `src/components/CheckinKaart.jsx`
+
+UI: ochtend-check-in / avondreflectie
 
 ```jsx
 import { useState } from 'react';
@@ -3535,7 +3687,9 @@ function Samenvatting({ checkin, onBewerk, avondTijd, i }) {
 
 ```
 
-## `src/components/CoachKaart.jsx`
+### `src/components/CoachKaart.jsx`
+
+UI: sportadvies-kaart (waarom/zekerheid-uitklap)
 
 ```jsx
 import { coachAdvies } from '../services/coach';
@@ -3609,7 +3763,9 @@ export default function CoachKaart({ garmin, goal = 'algemeen', blessureActief =
 
 ```
 
-## `src/components/Daypicker.jsx`
+### `src/components/Daypicker.jsx`
+
+UI: datumkiezer
 
 ```jsx
 import { useEffect, useRef, useState } from 'react';
@@ -3696,7 +3852,9 @@ export default function Daypicker({ datum, onKies }) {
 
 ```
 
-## `src/components/ErrorBoundary.jsx`
+### `src/components/ErrorBoundary.jsx`
+
+UI: React-error-boundary
 
 ```jsx
 import { Component } from 'react';
@@ -3726,7 +3884,9 @@ export default class ErrorBoundary extends Component {
 
 ```
 
-## `src/components/Gauge.jsx`
+### `src/components/Gauge.jsx`
+
+UI: ronde meter (gebruikt door North Star e.d.)
 
 ```jsx
 // Kleine radiale gloei-meter (hergebruikt de .ring-stijl).
@@ -3745,7 +3905,9 @@ export default function Gauge({ val = 0, label, sub, size = 84, kleur }) {
 
 ```
 
-## `src/components/Icons.jsx`
+### `src/components/Icons.jsx`
+
+UI: SVG-icoonset
 
 ```jsx
 // Lichte SVG-iconenset (stroke-stijl, consistent). Geen emoji als icoon.
@@ -3778,7 +3940,9 @@ export const IcoWalk = (p) => (<svg {...base} {...p}><circle cx="13" cy="4.5" r=
 
 ```
 
-## `src/components/NoordsterKaart.jsx`
+### `src/components/NoordsterKaart.jsx`
+
+UI: North Star-scorekaart
 
 ```jsx
 import Gauge from './Gauge';
@@ -3812,7 +3976,9 @@ export default function NoordsterKaart({ ns, i }) {
 
 ```
 
-## `src/components/Shell.jsx`
+### `src/components/Shell.jsx`
+
+UI: app-shell (navigatie/layout)
 
 ```jsx
 import { useEffect } from 'react';
@@ -3889,7 +4055,9 @@ export default function Shell({ children }) {
 
 ```
 
-## `src/components/Sparkline.jsx`
+### `src/components/Sparkline.jsx`
+
+UI: kleine trendgrafiek
 
 ```jsx
 // Minimalistische trendlijn (SVG). Slaat lege punten over.
@@ -3912,7 +4080,9 @@ export default function Sparkline({ data = [], width = 130, height = 38, kleur =
 
 ```
 
-## `src/components/UpdateBanner.jsx`
+### `src/components/UpdateBanner.jsx`
+
+UI: "nieuwe versie beschikbaar"-banner
 
 ```jsx
 import { useRegisterSW } from 'virtual:pwa-register/react';
@@ -3939,7 +4109,9 @@ export default function UpdateBanner() {
 
 ```
 
-## `src/config/appConfig.js`
+### `src/config/appConfig.js`
+
+Thema's, bloktypes, werkmodi, voedingsdoelen, DEFAULT_INSTELLINGEN
 
 ```js
 // Centrale app-configuratie en standaardwaarden.
@@ -4107,7 +4279,9 @@ export const PUSH_INTENSITEIT = {
 
 ```
 
-## `src/contexts/AuthContext.jsx`
+### `src/contexts/AuthContext.jsx`
+
+React-context: Firebase Auth-status
 
 ```jsx
 import { createContext, useContext, useEffect, useState } from 'react';
@@ -4151,7 +4325,9 @@ export function AuthProvider({ children }) {
 
 ```
 
-## `src/contexts/SettingsContext.jsx`
+### `src/contexts/SettingsContext.jsx`
+
+React-context: instellingen-cache (beperkt Firestore-reads)
 
 ```jsx
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
@@ -4197,7 +4373,9 @@ export function SettingsProvider({ children }) {
 
 ```
 
-## `src/contexts/ThemeContext.jsx`
+### `src/contexts/ThemeContext.jsx`
+
+React-context: thema (3 donkere varianten)
 
 ```jsx
 import { createContext, useContext, useEffect, useState } from 'react';
@@ -4239,7 +4417,9 @@ export function ThemeProvider({ children }) {
 
 ```
 
-## `src/contexts/ToastContext.jsx`
+### `src/contexts/ToastContext.jsx`
+
+React-context: toast-notificaties
 
 ```jsx
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
@@ -4267,7 +4447,9 @@ export function ToastProvider({ children }) {
 
 ```
 
-## `src/hooks/useDagPlan.js`
+### `src/hooks/useDagPlan.js`
+
+Hook: laadt dagdata, berekent + persisteert het dagplan
 
 ```js
 import { useCallback, useEffect, useState } from 'react';
@@ -4518,7 +4700,9 @@ export function useDagPlan(datumObj = new Date()) {
 
 ```
 
-## `src/pages/Beheer.jsx`
+### `src/pages/Beheer.jsx`
+
+Pagina: no-code instellingenbeheer (alle rubrieken)
 
 ```jsx
 import { useState } from 'react';
@@ -5006,7 +5190,9 @@ function TweeTijd({ a, b }) {
 
 ```
 
-## `src/pages/Coach.jsx`
+### `src/pages/Coach.jsx`
+
+Pagina: sportcoach-advies + belasting
 
 ```jsx
 import { useState } from 'react';
@@ -5138,7 +5324,9 @@ function CoachInhoud({ datumObj, plan, garmin, instellingen, advies, weer, vermi
 
 ```
 
-## `src/pages/Dashboard.jsx`
+### `src/pages/Dashboard.jsx`
+
+Pagina: "Vandaag" — dagplan, check-in, North Star
 
 ```jsx
 import { useEffect, useMemo, useState } from 'react';
@@ -5525,7 +5713,9 @@ function GezondheidKaart({ garmin, garminSync, stappenDoel, wijzigSlaap, herstel
 
 ```
 
-## `src/pages/Gezondheid.jsx`
+### `src/pages/Gezondheid.jsx`
+
+Pagina: eiwit/water/schermtijd/stappen-tracker
 
 ```jsx
 import { useEffect, useState } from 'react';
@@ -5876,7 +6066,9 @@ function Schaal({ label, waarde, onChange, laag, hoog, max = 5 }) {
 
 ```
 
-## `src/pages/Login.jsx`
+### `src/pages/Login.jsx`
+
+Pagina: e-mail-login
 
 ```jsx
 import { useState } from 'react';
@@ -5953,7 +6145,9 @@ export default function Login() {
 
 ```
 
-## `src/pages/Maaltijden.jsx`
+### `src/pages/Maaltijden.jsx`
+
+Pagina: receptenbank, dagkeuze, boodschappenlijst
 
 ```jsx
 import { useEffect, useState } from 'react';
@@ -6266,7 +6460,9 @@ function Tracker({ label, waarde, doel, eenheid, pct, onPlus, onMin }) {
 
 ```
 
-## `src/pages/Taken.jsx`
+### `src/pages/Taken.jsx`
+
+Pagina: taken/gewoontes + streaks
 
 ```jsx
 import { useEffect, useState } from 'react';
@@ -6400,7 +6596,9 @@ export default function Taken() {
 
 ```
 
-## `src/pages/Voortgang.jsx`
+### `src/pages/Voortgang.jsx`
+
+Pagina: weektrends/gemiddelden
 
 ```jsx
 import { useEffect, useMemo, useState } from 'react';
@@ -6770,7 +6968,9 @@ function BarChart({ reeks, waarden, max, eenheid, decimal }) {
 
 ```
 
-## `src/pages/Week.jsx`
+### `src/pages/Week.jsx`
+
+Pagina: weekschema, werkmodi, vakanties
 
 ```jsx
 import { useEffect, useMemo, useState } from 'react';
@@ -7064,1798 +7264,9 @@ export default function Week() {
 
 ```
 
-## `src/services/agenda.js`
+### `src/styles/global.css`
 
-```js
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import app from '../firebase';
-
-// Roept de Cloud Function aan die de ICS-links nu meteen inleest.
-export async function syncAgendaNu() {
-  const fns = getFunctions(app, 'europe-west1');
-  const call = httpsCallable(fns, 'syncAgendaNu');
-  const res = await call();
-  return res.data; // { aantal, perLink: [{link, aantal|fout}], links }
-}
-
-```
-
-## `src/services/belasting.js`
-
-```js
-// Belasting/herstel-bewaker: vertaalt Garmin-trainingsstatus (en als back-up de
-// readiness-trend) naar mensentaal. Voorkomt overbelasting op weg naar elite.
-
-const STATUS = {
-  overbelast: { titel: 'Overbelast', kleur: 'var(--danger)', tekst: 'Je belasting is te hoog. Las 1-2 herstel- of rustdagen in.' },
-  herstel:    { titel: 'Herstellend', kleur: 'var(--warning)', tekst: 'Je lichaam herstelt. Hou het licht (wandelen, mobiliteit, reva).' },
-  inefficient:{ titel: 'Inefficiënt', kleur: 'var(--warning)', tekst: 'Veel inspanning, weinig winst. Check slaap, voeding en herstel.' },
-  opbouwen:   { titel: 'Opbouwend', kleur: 'var(--success)', tekst: 'Mooie progressie — je mag rustig blijven opbouwen.' },
-  balans:     { titel: 'In balans', kleur: 'var(--primary)', tekst: 'Je onderhoudt je niveau. Durf iets meer te pushen voor groei.' },
-  teweinig:   { titel: 'Te weinig prikkel', kleur: 'var(--primary-2)', tekst: 'Je traint te weinig om te groeien. Voeg een sessie toe.' },
-  onbekend:   { titel: 'Nog geen oordeel', kleur: 'var(--text-dim)', tekst: 'Te weinig data. Draag je horloge en sync dagelijks.' },
-};
-
-function avg(arr) { return arr.reduce((s, v) => s + v, 0) / arr.length; }
-
-// ── Periodisering: acute:chronic workload-ratio (ACWR) ────────────────────────
-// sRPE-belasting per sessie = duur (min) × RPE (zwaarte 1-10). Zonder RPE nemen we
-// een neutrale 5 (matig). Pure functies, makkelijk testbaar.
-
-// Garmin-activiteiten + RPE-map -> [{ datum:'YYYY-MM-DD', load }].
-export function sessieBelasting(activiteiten = [], rpeMap = {}) {
-  return (activiteiten || []).map((a) => {
-    const datum = (a.startTimeLocal || a.startTimeGMT || a.datum || '').slice(0, 10);
-    const duurMin = a.duration ? a.duration / 60 : (a.duurMin || 0);
-    const rpe = rpeMap[a.id] ?? rpeMap[a.activityId] ?? 5;
-    return { datum, load: Math.round(duurMin * rpe) };
-  }).filter((s) => s.datum && s.load > 0);
-}
-
-const ACWR_ZONES = {
-  laag:     { kleur: 'var(--primary-2)', titel: 'Lage belasting', tekst: 'Je trainingsprikkel daalt — ruimte om (voorzichtig) op te bouwen.' },
-  optimaal: { kleur: 'var(--success)',   titel: 'Optimale opbouw', tekst: 'Je belasting stijgt in een veilig tempo (sweet spot).' },
-  verhoogd: { kleur: 'var(--warning)',   titel: 'Verhoogd risico',  tekst: 'Je bouwt snel op. Hou het deze week in toom.' },
-  risico:   { kleur: 'var(--danger)',    titel: 'Blessurerisico',   tekst: 'Te snelle stijging in belasting. Las herstel in vóór je doorgaat.' },
-  onbekend: { kleur: 'var(--text-dim)',  titel: 'Nog geen oordeel', tekst: 'Te weinig trainingsdata voor een betrouwbare belastingsratio.' },
-};
-
-const dagStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
-
-// ACWR = acute (7d) belasting / gemiddelde wekelijkse chronische (28d) belasting.
-// Geeft ratio + zone + zekerheid + uitleg (premium-principe: uitlegbaar + veilige
-// terugval bij te weinig data).
-export function acwrBerekenen(sessies = [], refDatum = new Date()) {
-  const ref = dagStart(refDatum).getTime();
-  const dag = 86400000;
-  const dagenGeleden = (s) => Math.floor((ref - dagStart(new Date(`${s.datum}T12:00:00`)).getTime()) / dag);
-  const recent = (sessies || []).filter((s) => { const g = dagenGeleden(s); return g >= 0 && g < 28; });
-  const som = (arr) => arr.reduce((a, s) => a + (s.load || 0), 0);
-
-  const acuut = som(recent.filter((s) => dagenGeleden(s) < 7));
-  const chronischWeek = som(recent) / 4;
-
-  // Zekerheid: hoeveel weken historiek + aantal sessies dragen dit?
-  const weken = recent.length ? Math.min(4, Math.ceil((Math.max(...recent.map(dagenGeleden)) + 1) / 7)) : 0;
-  let zekerheid = 'laag';
-  if (recent.length >= 4 && weken >= 3) zekerheid = 'hoog';
-  else if (recent.length >= 2 && weken >= 2) zekerheid = 'gemiddeld';
-
-  if (chronischWeek <= 0 || recent.length < 2) {
-    return {
-      ratio: null, zone: 'onbekend', zekerheid: 'laag',
-      acuut, chronischWeek: Math.round(chronischWeek),
-      waarom: 'Nog te weinig getrainde sessies (min. ~2 weken historiek) voor een betrouwbare ratio.',
-      meetlat: 'ACWR = belasting deze week ÷ gemiddelde van de laatste 4 weken. Veilig: 0,8–1,3.',
-      ...ACWR_ZONES.onbekend,
-    };
-  }
-
-  const ratio = Math.round((acuut / chronischWeek) * 100) / 100;
-  const zone = ratio < 0.8 ? 'laag' : ratio <= 1.3 ? 'optimaal' : ratio <= 1.5 ? 'verhoogd' : 'risico';
-  return {
-    ratio, zone, zekerheid,
-    acuut: Math.round(acuut), chronischWeek: Math.round(chronischWeek),
-    waarom: `Deze week ${Math.round(acuut)} belastingspunten t.o.v. een weekgemiddelde van ${Math.round(chronischWeek)} (ratio ${ratio.toFixed(2)}).`,
-    meetlat: 'ACWR = belasting deze week ÷ gemiddelde van de laatste 4 weken. Veilig: 0,8–1,3.',
-    ...ACWR_ZONES[zone],
-  };
-}
-
-export function belastingStatus({ trainingStatus = null, readinessReeks = [] } = {}) {
-  const ts = String(trainingStatus || '').toUpperCase();
-  let key = null;
-
-  if (/STRAINED|OVERREACH|OVERLOAD/.test(ts)) key = 'overbelast';
-  else if (/RECOVERY/.test(ts)) key = 'herstel';
-  else if (/UNPRODUCTIVE/.test(ts)) key = 'inefficient';
-  else if (/PRODUCTIVE|PEAK/.test(ts)) key = 'opbouwen';
-  else if (/MAINTAIN/.test(ts)) key = 'balans';
-  else if (/DETRAIN/.test(ts)) key = 'teweinig';
-
-  // Trend van de readiness (laatste helft vs eerste helft) als signaal/back-up.
-  const vals = readinessReeks.filter((v) => typeof v === 'number');
-  let trend = null;
-  if (vals.length >= 4) {
-    const h = Math.floor(vals.length / 2);
-    trend = Math.round(avg(vals.slice(h)) - avg(vals.slice(0, h)));
-  }
-
-  if (!key) {
-    if (trend == null) key = 'onbekend';
-    else if (trend <= -8) key = 'herstel';
-    else if (trend >= 6) key = 'opbouwen';
-    else key = 'balans';
-  }
-
-  return { key, trend, ...STATUS[key] };
-}
-
-```
-
-## `src/services/blessures.js`
-
-```js
-// Blessures: per-blessure revalidatie-oefeningen + automatische sportbeperking.
-// Premium-coach principe: elke beperking moet uitlegbaar zijn (welke regio,
-// welke sporten en waarom) en het systeem valt veilig terug — geen regio
-// gekozen betekent geen automatische sportveto, nooit een stellig "mag niet"
-// op wankele basis.
-import { BLESSURE_REGIOS } from '../config/appConfig';
-import { dagOrdinal } from './tijd';
-
-export function isBlessureActief(b, datum) {
-  if (!b || b.actief === false) return false;
-  if (b.eindDatum && b.eindDatum < datum) return false;
-  return true;
-}
-
-// Einddatum verstreken, maar de gebruiker heeft dit nog niet gezien/bevestigd —
-// zo'n blessure telt al niet meer mee (isBlessureActief), maar moet nog gemeld
-// worden zodat het sluiten niet stilzwijgend gebeurt.
-export function isVerlopenNietGemeld(b, datum) {
-  return !!(b && b.actief !== false && b.eindDatum && b.eindDatum < datum && !b.eindeGemeld);
-}
-
-export function vermijdSportenVanBlessures(blessures = [], datum) {
-  const set = new Set();
-  blessures.filter((b) => isBlessureActief(b, datum)).forEach((b) => {
-    (BLESSURE_REGIOS[b.regio]?.vermijdSport || []).forEach((s) => set.add(s));
-  });
-  return [...set];
-}
-
-// Eerlijke round-robin: elke dag een andere, opeenvolgende schijf van de actieve
-// oefeningen, zodat iedereen over de cyclus evenveel aan de beurt komt — geen
-// willekeur, dus voorspelbaar (premium-coach principe "vertrouwen > intelligentie").
-export function kiesOefeningenVanDag({ oefeningen = [], aantalPerDag, datum }) {
-  const actief = oefeningen.filter((o) => o.actief !== false);
-  if (!actief.length) return [];
-  const n = Math.max(1, Math.min(aantalPerDag || actief.length, actief.length));
-  if (n >= actief.length) return actief;
-  const offset = (dagOrdinal(datum) * n) % actief.length;
-  const gekozen = [];
-  for (let i = 0; i < n; i++) gekozen.push(actief[(offset + i) % actief.length]);
-  return gekozen;
-}
-
-export function blessureBlokDuur(aantalOefeningen) {
-  return Math.max(10, aantalOefeningen * 4);
-}
-
-```
-
-## `src/services/coach.js`
-
-```js
-// Coach-laag: vertaalt Garmin-signalen (readiness, body battery, slaap) + je doel
-// naar een concreet sportadvies voor vandaag. Pure functie, makkelijk testbaar.
-
-export const DOELEN = {
-  afvallen: 'Afvallen',
-  kracht: 'Kracht opbouwen',
-  uithouding: 'Uithouding',
-  herstel: 'Herstel & blessurevrij',
-  algemeen: 'Algemeen fit',
-};
-
-// Niveaus oplopend in belasting.
-const NIVEAU_KLEUR = {
-  herstel: 'var(--text-dim)',
-  rustig: 'var(--primary-2)',
-  matig: 'var(--warning)',
-  hard: 'var(--success)',
-};
-
-// Advies per doel × niveau: { sport, duurMin }.
-const MATRIX = {
-  afvallen: {
-    hard: { sport: 'Langere cardio (fietsen/lopen) in zone 2', duurMin: 60 },
-    matig: { sport: 'Stevige wandeling of rustige fietsrit', duurMin: 45 },
-    rustig: { sport: 'Lichte wandeling', duurMin: 30 },
-    herstel: { sport: 'Wandelen + mobiliteit', duurMin: 25 },
-  },
-  kracht: {
-    hard: { sport: 'Krachttraining of judo (zwaar)', duurMin: 60 },
-    matig: { sport: 'Krachttraining (matig) of techniektraining', duurMin: 45 },
-    rustig: { sport: 'Core + mobiliteit', duurMin: 25 },
-    herstel: { sport: 'Reva-oefeningen + stretchen', duurMin: 20 },
-  },
-  uithouding: {
-    hard: { sport: 'Intervaltraining of langere duurloop', duurMin: 55 },
-    matig: { sport: 'Duurloop/fietsrit in zone 2', duurMin: 45 },
-    rustig: { sport: 'Rustige cardio', duurMin: 30 },
-    herstel: { sport: 'Herstelwandeling', duurMin: 25 },
-  },
-  herstel: {
-    hard: { sport: 'Lichte techniektraining of mobiliteit', duurMin: 30 },
-    matig: { sport: 'Mobiliteit + lichte cardio', duurMin: 25 },
-    rustig: { sport: 'Reva-oefeningen + wandelen', duurMin: 20 },
-    herstel: { sport: 'Volledige rust of zachte stretching', duurMin: 15 },
-  },
-  algemeen: {
-    hard: { sport: 'Sport naar keuze (judo, fietsen, kracht)', duurMin: 50 },
-    matig: { sport: 'Matige training of fietsrit', duurMin: 40 },
-    rustig: { sport: 'Lichte beweging of wandeling', duurMin: 30 },
-    herstel: { sport: 'Rust + mobiliteit', duurMin: 20 },
-  },
-};
-
-// HRV-status -> bijstelling van de score. Onbekende/afwezige status telt niet mee.
-function hrvBijstelling(hrvStatus) {
-  const s = String(hrvStatus || '').toUpperCase();
-  if (/UNBALANCED|LOW|POOR/.test(s)) return -10;
-  if (/BALANCED/.test(s)) return 4;
-  return 0;
-}
-
-// Zelf-gerapporteerde pijn (0-5) bij de ochtend-check-in. Vanaf 3 wegen we dit
-// even zwaar als een actieve blessure — pijn is een hard veiligheidssignaal,
-// ook als er nog geen blessure is aangemaakt.
-const PIJN_HERSTEL_DREMPEL = 3;
-
-function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn }) {
-  if (blessureActief || overbelast || (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL)) return 'herstel';
-  const r = readiness ?? 55;
-  const bb = bodyBattery ?? 60;
-  let score = r * 0.6 + bb * 0.4;
-  if (typeof slaapUren === 'number') {
-    if (slaapUren < 6) score -= 12;
-    else if (slaapUren >= 8) score += 6;
-  }
-  if (typeof energie === 'number') {
-    score += { 1: -16, 2: -8, 3: 0, 4: 6, 5: 10 }[energie] ?? 0;
-  }
-  if (typeof pijn === 'number' && pijn > 0) score -= pijn * 6;
-  score += hrvBijstelling(hrvStatus);
-  if (score >= 65) return 'hard';
-  if (score >= 45) return 'matig';
-  if (score >= 30) return 'rustig';
-  return 'herstel';
-}
-
-// Hoeveel echte meetsignalen zitten er achter het advies? Bepaalt de zekerheid.
-// Weinig data -> lage zekerheid -> we adviseren bewust voorzichtiger (zie cap).
-function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn }) {
-  // Blessure/overbelasting/pijn is een duidelijk, hard veiligheidssignaal.
-  if (blessureActief || overbelast || (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL)) return 'hoog';
-  let n = 0;
-  if (readiness != null) n += 1;
-  if (bodyBattery != null) n += 1;
-  if (typeof slaapUren === 'number') n += 1;
-  if (typeof energie === 'number') n += 1;
-  if (hrvStatus) n += 1;
-  if (typeof pijn === 'number' && pijn > 0) n += 1;
-  // ≥2 elkaar bevestigende signalen = hoog; één los getal kan ruis zijn.
-  if (n >= 2) return 'hoog';
-  if (n === 1) return 'gemiddeld';
-  return 'laag';
-}
-
-const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
-
-export function coachAdvies({
-  readiness = null, bodyBattery = null, slaapUren = null, energie = null, hrvStatus = null,
-  goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null, pijn = null,
-  periodiseringFase = null, vakantieType = null,
-} = {}) {
-  const doel = MATRIX[goal] ? goal : 'algemeen';
-  let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
-  const zekerheid = bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
-
-  // Beoordeeld op je slechtste advies: 'hard' enkel bij hoge zekerheid (≥2 signalen).
-  let voorzichtig = false;
-  if (zekerheid !== 'hoog' && niveau === 'hard') { niveau = 'matig'; voorzichtig = true; }
-
-  // Periodisering (ACWR): te snelle opbouw remt het advies af (blessurepreventie).
-  let acwrRem = null;
-  if (acwrZone === 'risico' && NIVEAU_RANG.indexOf(niveau) > NIVEAU_RANG.indexOf('rustig')) {
-    niveau = 'rustig'; acwrRem = 'risico';
-  } else if (acwrZone === 'verhoogd' && niveau === 'hard') {
-    niveau = 'matig'; acwrRem = 'verhoogd';
-  }
-
-  // Periodisering: vaste deload-week in de trainingscyclus temperen we altijd
-  // af van 'hard', los van hoe de losse meetdata vandaag uitvallen — dit is een
-  // structureel vangnet, niet een schatting (zie services/periodisering.js).
-  let deload = false;
-  if (periodiseringFase === 'deload' && niveau === 'hard') { niveau = 'matig'; deload = true; }
-
-  const advies = MATRIX[doel][niveau];
-
-  // Groot verlof: thuis heb je vaak meer tijd om te sporten dan een gewone dag;
-  // we verlengen de sessie licht (niet bij 'herstel' — dat blijft kort, dat is
-  // net het punt). In het buitenland verandert er bewust niets: geen aanname
-  // over beschikbare tijd/faciliteiten daar, dus standaardduur.
-  let duurMin = advies.duurMin;
-  let verlofBonus = false;
-  if (vakantieType === 'thuis' && niveau !== 'herstel') {
-    duurMin = advies.duurMin + 15;
-    verlofBonus = true;
-  }
-
-  // "Waarom": de signalen die het advies dragen (mensbaar geformuleerd).
-  const waarom = [];
-  if (overbelast) waarom.push('Garmin meldt overbelasting — herstel gaat voor.');
-  if (blessureActief) waarom.push('Blessure actief — we beschermen je herstel.');
-  if (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL) waarom.push(`Je gaf pijn ${pijn}/5 op — we kiezen voor herstel.`);
-  else if (typeof pijn === 'number' && pijn > 0) waarom.push(`Je gaf pijn ${pijn}/5 op — we temperen het advies.`);
-  if (readiness != null) waarom.push(`Readiness ${Math.round(readiness)}/100.`);
-  if (bodyBattery != null) waarom.push(`Body battery ${Math.round(bodyBattery)}.`);
-  if (typeof slaapUren === 'number') waarom.push(`${slaapUren.toFixed(1)}u slaap.`);
-  if (typeof energie === 'number') waarom.push(`Je gaf energie ${energie}/5 op.`);
-  if (hrvStatus) waarom.push(`HRV-status: ${hrvStatus}.`);
-  if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
-  if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
-  if (deload) waarom.push('Deze week is een ingeplande hersteller in je trainingscyclus — geen volle gas, ook niet als je je goed voelt.');
-  if (verlofBonus) waarom.push('Je bent met verlof thuis — meer tijd dan gewoonlijk, dus iets langere sessie.');
-  else if (vakantieType === 'buitenland') waarom.push('Je bent met verlof in het buitenland — we houden de duur standaard, geen aanname over faciliteiten daar.');
-  if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
-  if (!waarom.length) waarom.push('Nog geen meetdata vandaag — dit is een veilig algemeen advies.');
-
-  // Welke databronnen zijn effectief gebruikt.
-  const databronnen = [];
-  if (readiness != null) databronnen.push('Garmin readiness');
-  if (bodyBattery != null) databronnen.push('Body battery');
-  if (typeof slaapUren === 'number') databronnen.push('Slaap');
-  if (typeof energie === 'number') databronnen.push('Zelf-gerapporteerde energie');
-  if (hrvStatus) databronnen.push('HRV-status');
-  if (typeof pijn === 'number' && pijn > 0) databronnen.push('Zelf-gerapporteerde pijn');
-  if (!databronnen.length) databronnen.push('Geen meetdata');
-
-  const titel = {
-    hard: 'Goeie dag om er vol voor te gaan',
-    matig: 'Train met mate vandaag',
-    rustig: 'Hou het rustig vandaag',
-    herstel: 'Kies vandaag voor herstel',
-  }[niveau];
-
-  return {
-    niveau, titel,
-    sport: advies.sport,
-    duurMin,
-    doelLabel: DOELEN[doel],
-    waarom,
-    databronnen,
-    zekerheid,
-    meetlat: 'Geslaagd = je voltooit deze sessie en voelt je morgen niet slechter.',
-    reden: waarom.join(' '), // korte samenvatting (backwards-compat)
-    kleur: NIVEAU_KLEUR[niveau],
-  };
-}
-
-```
-
-## `src/services/data.js`
-
-```js
-// Firestore-datalaag. Alles leeft onder users/{uid}/...
-import {
-  doc, getDoc, getDocFromCache, setDoc, updateDoc, deleteDoc, deleteField, collection, getDocs,
-  getDocsFromServer, query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
-} from 'firebase/firestore';
-import { db } from '../firebase';
-import { DEFAULT_INSTELLINGEN } from '../config/appConfig';
-
-const u = (uid, ...rest) => ['users', uid, ...rest];
-
-// ---- Instellingen (één doc per rubriek) ----
-export async function getInstellingen(uid) {
-  const rubrieken = Object.keys(DEFAULT_INSTELLINGEN);
-  const result = {};
-  await Promise.all(rubrieken.map(async (r) => {
-    const snap = await getDoc(doc(db, ...u(uid, 'instellingen', r)));
-    result[r] = { ...DEFAULT_INSTELLINGEN[r], ...(snap.exists() ? snap.data() : {}) };
-  }));
-  return result;
-}
-
-export async function saveInstellingen(uid, rubriek, data) {
-  await setDoc(doc(db, ...u(uid, 'instellingen', rubriek)),
-    { ...data, bijgewerktOp: serverTimestamp() }, { merge: true });
-}
-
-// Seedt defaults + voorbeelddata bij allereerste login.
-export async function seedDefaultsIfNeeded(uid, profiel) {
-  const userRef = doc(db, 'users', uid);
-  const userSnap = await getDoc(userRef);
-  if (userSnap.exists() && userSnap.data()?.geseed) return;
-
-  const batch = writeBatch(db);
-  batch.set(userRef, {
-    email: profiel?.email || null,
-    naam: profiel?.naam || null,
-    geseed: true,
-    aangemaaktOp: serverTimestamp(),
-  }, { merge: true });
-
-  for (const [rubriek, data] of Object.entries(DEFAULT_INSTELLINGEN)) {
-    batch.set(doc(db, ...u(uid, 'instellingen', rubriek)), data, { merge: true });
-  }
-
-  // Voorbeeld-gewoontes om mee te starten (in-app aanpasbaar). Géén losse
-  // reva-taak meer: blessures (`pages/Gezondheid.jsx`) plannen hun reva-blok
-  // nu zelf in (`services/planner.js`), een losse seed-taak zou dat dubbel
-  // boeken.
-  const seedTaken = [
-    { titel: 'Water drinken (2,5 L)', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: null, blokType: 'routine', volgorde: 1, actief: true },
-    { titel: 'Geen scrollen na 22:00', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: '22:00', blokType: 'scherm', volgorde: 2, actief: true },
-    { titel: 'Maaltijd voorbereiden', type: 'gewoonte', dagen: ['zo'], tijd: '17:00', blokType: 'maaltijd', volgorde: 3, actief: true },
-  ];
-  seedTaken.forEach((t, i) => {
-    batch.set(doc(db, ...u(uid, 'taken', `seed${i}`)),
-      { ...t, streak: 0, beste: 0, aangemaaktOp: serverTimestamp() });
-  });
-
-  await batch.commit();
-}
-
-// ---- Generieke collectie-CRUD ----
-export function subscribeCollection(uid, naam, cb) {
-  return onSnapshot(collection(db, ...u(uid, naam)), (snap) => {
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  });
-}
-
-export async function getCollection(uid, naam) {
-  const snap = await getDocs(collection(db, ...u(uid, naam)));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
-export async function addItem(uid, naam, data) {
-  const ref = doc(collection(db, ...u(uid, naam)));
-  await setDoc(ref, { ...data, aangemaaktOp: serverTimestamp() });
-  return ref.id;
-}
-
-export async function setItem(uid, naam, id, data) {
-  await setDoc(doc(db, ...u(uid, naam, id)), data, { merge: true });
-}
-
-export async function updateItem(uid, naam, id, data) {
-  await updateDoc(doc(db, ...u(uid, naam, id)), data);
-}
-
-export async function deleteItem(uid, naam, id) {
-  await deleteDoc(doc(db, ...u(uid, naam, id)));
-}
-
-export async function getDocById(uid, naam, id) {
-  const snap = await getDoc(doc(db, ...u(uid, naam, id)));
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
-}
-
-// ---- Dag-plan (één doc per datum) ----
-export async function getDag(uid, datum) {
-  return getDocById(uid, 'dagen', datum);
-}
-export async function saveDag(uid, datum, data) {
-  await setDoc(doc(db, ...u(uid, 'dagen', datum)),
-    { ...data, datum, bijgewerktOp: serverTimestamp() }, { merge: true });
-}
-
-// Verwijdert één blok-correctie (terug naar het oorspronkelijk gepland tijdstip).
-// Gebruikt deleteField() zodat enkel die sleutel uit de verzet-map verdwijnt,
-// in plaats van de hele map te overschrijven (merge:true zou anders niets wissen).
-export async function verwijderVerzet(uid, datum, blokId) {
-  await setDoc(doc(db, ...u(uid, 'dagen', datum)),
-    { [`verzet.${blokId}`]: deleteField(), bijgewerktOp: serverTimestamp() }, { merge: true });
-}
-
-// Verwijdert een handmatige slaap-correctie (terug naar wat Garmin meet).
-export async function verwijderSlaapOverride(uid, datum) {
-  await setDoc(doc(db, ...u(uid, 'dagen', datum)),
-    { slaapOverride: deleteField(), bijgewerktOp: serverTimestamp() }, { merge: true });
-}
-
-// Dag-doc cache-eerst (historische dagen wijzigen niet meer → bespaart reads).
-export async function getDagCached(uid, datum) {
-  const ref = doc(db, ...u(uid, 'dagen', datum));
-  try {
-    const c = await getDocFromCache(ref);
-    if (c.exists()) return { id: c.id, ...c.data() };
-  } catch { /* nog niet in cache */ }
-  const s = await getDoc(ref);
-  return s.exists() ? { id: s.id, ...s.data() } : null;
-}
-
-// ---- Garmin (alleen-lezen) ----
-export async function getGarminDag(uid, datum) {
-  return getDocById(uid, 'garminDaily', datum);
-}
-
-// ---- Weer (alleen-lezen, server geschreven door weerSync) ----
-export async function getWeer(uid, datum) {
-  return getDocById(uid, 'weer', datum);
-}
-
-// Garmin-dag uit cache eerst (historische dagen wijzigen nooit → bespaart reads).
-export async function getGarminDagCached(uid, datum) {
-  const ref = doc(db, ...u(uid, 'garminDaily', datum));
-  try {
-    const c = await getDocFromCache(ref);
-    if (c.exists()) return { id: c.id, ...c.data() };
-  } catch { /* nog niet in cache */ }
-  const s = await getDoc(ref);
-  return s.exists() ? { id: s.id, ...s.data() } : null;
-}
-
-// Meest recente Garmin-dag + tijdstip van laatste sync (voor "laatst gesynct").
-export async function getLaatsteGarminSync(uid) {
-  try {
-    const snap = await getDocs(query(
-      collection(db, ...u(uid, 'garminDaily')), orderBy('date', 'desc'), limit(1),
-    ));
-    if (snap.empty) return null;
-    const d = snap.docs[0].data();
-    return {
-      datum: d.date || snap.docs[0].id,
-      syncedAt: d.syncedAt?.toDate ? d.syncedAt.toDate() : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-// Server-eerst lezen met cache-fallback. Nodig voor agendaEvents: de server-sync
-// herschrijft die documenten, maar een eenmalige getDocs (zonder live listener)
-// kan oude/verwijderde docs uit de offline-cache blijven teruggeven. Server-eerst
-// haalt de gecorrigeerde tijden op; offline valt het terug op de cache.
-async function getDocsVers(q) {
-  try {
-    return await getDocsFromServer(q);
-  } catch {
-    return await getDocs(q);
-  }
-}
-
-// ---- Agenda-events uit ICS (alleen-lezen) ----
-export async function getAgendaEventsVoorDag(uid, datum) {
-  const snap = await getDocsVers(query(
-    collection(db, ...u(uid, 'agendaEvents')),
-    where('datum', '==', datum),
-  ));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
-// Alle agenda-events (voor het weekoverzicht), server-eerst tegen stale cache.
-export async function getAgendaEvents(uid) {
-  const snap = await getDocsVers(collection(db, ...u(uid, 'agendaEvents')));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
-// Vakantieperiodes server-eerst: bewerkingen (datums, judovrij) moeten meteen
-// doorwerken in de planning, niet pas na een cache-verval.
-export async function getVakanties(uid) {
-  const snap = await getDocsVers(collection(db, ...u(uid, 'vakanties')));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
-export { serverTimestamp };
-
-```
-
-## `src/services/doelen.js`
-
-```js
-// Lange-termijndoelen met automatische koppeling aan Garmin waar mogelijk.
-
-export const METRIEKEN = {
-  vo2max:  { label: 'VO₂max',   eenheid: '',    omhoog: true },
-  gewicht: { label: 'Gewicht',  eenheid: 'kg',  omhoog: false },
-  rusthr:  { label: 'Rust-HR',  eenheid: 'bpm', omhoog: false },
-  afstand: { label: 'Afstand',  eenheid: 'km',  omhoog: true },
-  kracht:  { label: 'Gewicht (kg)', eenheid: 'kg', omhoog: true },
-  eigen:   { label: 'Eigen meting', eenheid: '', omhoog: true },
-};
-
-// Huidige waarde: uit Garmin als de metriek dat toelaat, anders handmatig.
-export function huidigeWaarde(doel, garmin) {
-  if (doel.metric === 'vo2max' && garmin?.vo2max != null) return garmin.vo2max;
-  if (doel.metric === 'gewicht' && garmin?.gewichtKg != null) return garmin.gewichtKg;
-  if (doel.metric === 'rusthr' && garmin?.rustHr != null) return garmin.rustHr;
-  return doel.huidige ?? null;
-}
-
-export function doelProgress(doel, garmin) {
-  const start = Number(doel.start);
-  const naar = Number(doel.naar);
-  const huidige = huidigeWaarde(doel, garmin);
-  if (huidige == null || !Number.isFinite(start) || !Number.isFinite(naar) || start === naar) {
-    return { huidige, pct: 0, klaar: false, rest: null };
-  }
-  let pct = ((Number(huidige) - start) / (naar - start)) * 100;
-  pct = Math.max(0, Math.min(100, Math.round(pct)));
-  const rest = Math.round((naar - Number(huidige)) * 10) / 10;
-  return { huidige: Number(huidige), pct, klaar: pct >= 100, rest };
-}
-
-export function doelKleur(pct) {
-  if (pct >= 100) return 'var(--success)';
-  if (pct >= 50) return 'var(--primary)';
-  return 'var(--primary-2)';
-}
-
-```
-
-## `src/services/garmin.js`
-
-```js
-// Leest defensief een paar bruikbare waarden uit het ruwe Garmin-dagdocument.
-// De pipeline bewaart de onbewerkte Garmin-objecten; sleutels kunnen per
-// account licht verschillen, dus alles is best-effort met nette fallback.
-
-function eersteGetal(...kandidaten) {
-  for (const k of kandidaten) {
-    const n = Number(k);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return null;
-}
-
-// Garmin's "Local"-timestamps zijn epoch-ms die het lokale kloktijdstip
-// coderen alsof het UTC is — dus UTC-getters gebruiken, geen lokale tijdzone.
-function tijdVanEpochLocal(ms) {
-  if (!Number.isFinite(ms)) return null;
-  const d = new Date(ms);
-  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-}
-
-// Vertaalt de laatste-sync-info naar leesbare status + staleness-vlag.
-export function syncStatus(laatsteSync) {
-  if (!laatsteSync || !laatsteSync.datum) return { tekst: 'Nog niet gesynct', stale: true, leeg: true };
-  const d = new Date(laatsteSync.datum + 'T12:00:00');
-  const dagen = Math.floor((Date.now() - d.getTime()) / 864e5);
-  const rel = dagen <= 0 ? 'vandaag' : dagen === 1 ? 'gisteren' : `${dagen} dagen geleden`;
-  return { tekst: `Laatst gesynct: ${rel}`, stale: dagen >= 2, leeg: false, dagen };
-}
-
-export function garminSamenvatting(g) {
-  if (!g) return null;
-
-  const stappen = eersteGetal(
-    g.summary?.totalSteps,
-    g.stepsIntraday?.totalSteps,
-  );
-
-  const slaapSec = eersteGetal(
-    g.sleep?.dailySleepDTO?.sleepTimeSeconds,
-    g.sleep?.sleepTimeSeconds,
-  );
-  const slaapUren = slaapSec ? slaapSec / 3600 : null;
-
-  const dailySleep = g.sleep?.dailySleepDTO || g.sleep;
-  const slaapBegin = tijdVanEpochLocal(eersteGetal(
-    dailySleep?.sleepStartTimestampLocal,
-    g.sleep?.sleepStartTimestampLocal,
-  ));
-  const slaapEind = tijdVanEpochLocal(eersteGetal(
-    dailySleep?.sleepEndTimestampLocal,
-    g.sleep?.sleepEndTimestampLocal,
-  ));
-
-  // trainingReadiness is meestal een lijst met één object.
-  const tr = Array.isArray(g.trainingReadiness) ? g.trainingReadiness[0] : g.trainingReadiness;
-  const readiness = eersteGetal(tr?.score, tr?.readinessScore);
-  const readinessLabel = tr?.level || tr?.feedbackShort || null;
-
-  const rustHr = eersteGetal(
-    g.restingHeartRate?.restingHeartRate,
-    g.restingHeartRate?.allMetrics?.metricsMap?.WELLNESS_RESTING_HEART_RATE?.[0]?.value,
-    g.summary?.restingHeartRate,
-  );
-
-  const kcal = eersteGetal(g.summary?.totalKilocalories, g.summary?.activeKilocalories);
-
-  const status = g.trainingStatus?.latestTrainingStatusData
-    ? Object.values(g.trainingStatus.latestTrainingStatusData)[0]?.trainingStatusFeedbackPhrase
-    : null;
-
-  // ---- Fase 3: body battery, VO2max, profiel ----
-  const bb = Array.isArray(g.bodyBattery) ? g.bodyBattery[0] : g.bodyBattery;
-  const bbArray = bb?.bodyBatteryValuesArray || bb?.bodyBatteryValuesArrayLevel;
-  let bodyBattery = null, bodyBatteryMax = null;
-  if (Array.isArray(bbArray) && bbArray.length) {
-    const levels = bbArray.map((p) => (Array.isArray(p) ? p[1] : p?.level)).filter((n) => typeof n === 'number');
-    if (levels.length) { bodyBattery = levels[levels.length - 1]; bodyBatteryMax = Math.max(...levels); }
-  }
-
-  // HRV-status (Garmin: BALANCED/UNBALANCED/LOW/...) + gemiddelde van afgelopen nacht.
-  const hrvSummary = g.hrv?.hrvSummary || g.hrv;
-  const hrvStatus = hrvSummary?.status || hrvSummary?.lastNightAvgStatus || null;
-  const hrvAvg = eersteGetal(hrvSummary?.lastNightAvg, hrvSummary?.weeklyAvg);
-
-  const mm = Array.isArray(g.maxMetrics) ? g.maxMetrics[0] : g.maxMetrics;
-  const vo2max = eersteGetal(mm?.generic?.vo2MaxValue, mm?.vo2MaxValue, g.userProfile?.userData?.vo2Max);
-
-  const bc = g.bodyComposition?.totalAverage || (Array.isArray(g.bodyComposition) ? g.bodyComposition[0] : g.bodyComposition);
-  const gewichtG = eersteGetal(bc?.weight, g.userProfile?.userData?.weight);
-  const gewichtKg = gewichtG ? Math.round(gewichtG / 1000 * 10) / 10 : null;
-  const vetPct = eersteGetal(bc?.bodyFat);
-
-  const ud = g.userProfile?.userData || g.userProfile || {};
-  const lengteCm = eersteGetal(ud.height);
-  let leeftijd = null;
-  if (ud.birthDate) {
-    const d = new Date(ud.birthDate);
-    if (!isNaN(d)) leeftijd = Math.floor((Date.now() - d.getTime()) / (365.25 * 864e5));
-  }
-
-  return {
-    stappen,
-    slaapUren,
-    slaapBegin,
-    slaapEind,
-    readiness,
-    readinessLabel,
-    rustHr,
-    kcal,
-    trainingStatus: status,
-    bodyBattery,
-    bodyBatteryMax,
-    hrvStatus,
-    hrvAvg,
-    vo2max,
-    gewichtKg,
-    vetPct,
-    leeftijd,
-    lengteCm,
-    // genormaliseerd voor de planner-advieslogica
-    trainingReadiness: readiness != null ? { score: readiness } : null,
-    sleep: slaapUren != null ? { urenTotaal: slaapUren } : null,
-  };
-}
-
-```
-
-## `src/services/maaltijden.js`
-
-```js
-// Maaltijdplanning: kiest concrete, exacte suggesties uit de eigen receptenbank
-// (geen scraping van winkelsites — bewuste keuze, zie HANDOVER.md), schaalt
-// hoeveelheden op het aantal eters, en stelt een boodschappenlijst samen.
-// Premium-coach principe: dag-deterministische round-robin (net als
-// `blessures.js` → `kiesOefeningenVanDag`), geen willekeur, geen scraping —
-// voorspelbaar en uitlegbaar boven "slim".
-import { dagOrdinal } from './tijd';
-
-// Drie vaste, herkenbare snackmomenten + de drie hoofdmaaltijden. De recepten
-// zelf kennen enkel het brede type 'snack' (zie Maaltijden.jsx) — elk
-// snackmoment kiest via een eigen rotatie-offset (slotIndex) zodat ze niet
-// stelselmatig hetzelfde voorstellen, met veilige terugval als er maar één
-// snackrecept bestaat.
-export const MOMENTEN = ['ontbijt', 'lunch', 'diner', 'snack1', 'snack2', 'snack3'];
-
-export function receptType(moment) {
-  return moment.startsWith('snack') ? 'snack' : moment;
-}
-
-function slotIndex(moment) {
-  return moment === 'snack2' ? 1 : moment === 'snack3' ? 2 : 0;
-}
-
-// Eerlijke round-robin over de recepten die bij moment + doel passen — geen
-// recept gekozen voor `doelen` betekent dat het bij elk doel past (veilige,
-// inclusieve terugval, geen recepten verstoppen door een ontbrekend tag).
-export function kiesSuggesties({ recepten = [], moment, doelen = [], datum, aantal = 2 }) {
-  const type = receptType(moment);
-  const passend = recepten.filter((r) =>
-    (r.type || r.moment) === type
-    && (!r.doelen?.length || !doelen.length || r.doelen.some((d) => doelen.includes(d))));
-  if (!passend.length) return [];
-  const offset = (dagOrdinal(datum) + slotIndex(moment)) % passend.length;
-  const n = Math.min(aantal, passend.length);
-  const gekozen = [];
-  for (let i = 0; i < n; i++) gekozen.push(passend[(offset + i) % passend.length]);
-  return gekozen;
-}
-
-// Override (expliciete gebruikerskeuze) wint altijd; anders de eerste van de
-// deterministische suggesties. Pure functie van datum + recepten — werkt ook
-// voor toekomstige dagen zonder dat daarvoor al een dagdoc bestaat.
-export function gekozenMaaltijd({ recepten = [], moment, doelen = [], datum, override = null }) {
-  if (override?.recipeId) {
-    const recept = recepten.find((r) => r.id === override.recipeId);
-    if (recept) return { recept, aantalEters: override.aantalEters || recept.aantalEters || 1 };
-  }
-  const [recept] = kiesSuggesties({ recepten, moment, doelen, datum, aantal: 1 });
-  if (!recept) return null;
-  return { recept, aantalEters: recept.aantalEters || 1 };
-}
-
-function rondAf(waarde, eenheid) {
-  return ['g', 'ml'].includes(eenheid) ? Math.round(waarde / 5) * 5 : Math.round(waarde * 10) / 10;
-}
-
-export function schaalIngredienten(ingredienten = [], vanEters, naarEters) {
-  const ratio = (naarEters || 1) / (vanEters || 1);
-  return ingredienten.map((i) => ({ ...i, hoeveelheid: rondAf((i.hoeveelheid || 0) * ratio, i.eenheid) }));
-}
-
-export function ingredientenTekst(ingredienten = []) {
-  return ingredienten.map((i) => `${i.hoeveelheid}${i.eenheid || ''} ${i.naam}`).join(', ');
-}
-
-// Boodschappenlijst over een periode (datums als "YYYY-MM-DD"), opgeteld per
-// (naam, eenheid) en gegroepeerd in vers/houdbaar voor de UI (wekelijks vs.
-// maandelijks in bulk). `dagDocs` is optioneel — enkel voor al gerealiseerde
-// keuzes (bv. deze week); voor toekomstige dagen zonder dagdoc valt dit terug
-// op de deterministische suggestie, dus géén extra Firestore-reads nodig voor
-// een vooruitblik van een maand.
-export function genereerBoodschappenlijst({ periode = [], recepten = [], doelen = [], aantalEtersStandaard = 1, dagDocs = {} }) {
-  const totalen = new Map();
-  periode.forEach((datum) => {
-    MOMENTEN.forEach((moment) => {
-      const override = dagDocs[datum]?.maaltijdPlan?.[moment] || null;
-      const gekozen = gekozenMaaltijd({ recepten, moment, doelen, datum, override });
-      if (!gekozen) return;
-      const eters = override?.aantalEters || aantalEtersStandaard;
-      const geschaald = schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters);
-      geschaald.forEach((i) => {
-        const key = `${i.naam}|${i.eenheid || ''}`;
-        const bestaand = totalen.get(key) || { naam: i.naam, eenheid: i.eenheid || '', hoeveelheid: 0, houdbaar: !!gekozen.recept.houdbaar };
-        bestaand.hoeveelheid += i.hoeveelheid || 0;
-        totalen.set(key, bestaand);
-      });
-    });
-  });
-  const lijst = [...totalen.values()].sort((a, b) => a.naam.localeCompare(b.naam));
-  return {
-    vers: lijst.filter((i) => !i.houdbaar),
-    houdbaar: lijst.filter((i) => i.houdbaar),
-  };
-}
-
-```
-
-## `src/services/noordster.js`
-
-```js
-// North Star-metric: één score die "word ik consistenter?" samenvat.
-// We meten THERAPIETROUW = welk deel van je geplande, afvinkbare sleutelblokken
-// (sport, judo, reva, voetbal, taken...) je effectief afvinkt. Berekend uit de al
-// opgeslagen dagdata (dagen/{datum}.plan + .gedaan) — geen extra schrijfwerk.
-//
-// Premium-principe: deze score is uitlegbaar (zie `waarom`) en valt veilig terug
-// bij weinig data (score = null i.p.v. een misleidend getal).
-
-// Welke blokken tellen mee. Nieuwe plannen dragen `checkbaar`; voor oudere docs
-// (zonder dat veld) vallen we terug op de kerntypes.
-const KERN_TYPES = new Set(['judo', 'lesgeven', 'sport', 'reva', 'voetbal']);
-const teltMee = (b) => (typeof b?.checkbaar === 'boolean' ? b.checkbaar : KERN_TYPES.has(b?.type));
-
-// Een reva-blok met een oefeningen-checklist is pas "gedaan" als alle losse
-// oefeningen zijn afgevinkt (die staan onder samengestelde id's `${blokId}::${oefId}`).
-// Andere blokken blijven gewoon op hun eigen blok-id.
-function isBlokGedaan(b, gedaan) {
-  if (b.oefeningen?.length) return b.oefeningen.every((oId) => gedaan?.[`${b.id}::${oId}`]);
-  return !!gedaan?.[b.id];
-}
-
-// Therapietrouw van één dag, of null als er die dag niets te doen viel.
-export function dagTherapietrouw(dag) {
-  const kern = (dag?.plan || []).filter(teltMee);
-  if (!kern.length) return null;
-  const gedaan = kern.filter((b) => isBlokGedaan(b, dag?.gedaan)).length;
-  return { ratio: gedaan / kern.length, gedaan, totaal: kern.length };
-}
-
-// Reva-specifieke therapietrouw (enkel blessure-oefeningen), losstaand van de
-// algemene North Star-score. Geeft null als er die dag(en) geen reva gepland stond.
-export function dagRevaTherapietrouw(dag) {
-  const reva = (dag?.plan || []).filter((b) => b.type === 'reva');
-  if (!reva.length) return null;
-  const gedaan = reva.filter((b) => isBlokGedaan(b, dag?.gedaan)).length;
-  return { ratio: gedaan / reva.length, gedaan, totaal: reva.length };
-}
-
-// dagen = reeks dagdocs (oud→nieuw). Geeft een reva-therapietrouw-score + uitleg,
-// met dezelfde veilige terugval als de algemene North Star-score bij weinig data.
-export function revaTherapietrouw(dagen) {
-  const perDag = (dagen || []).map(dagRevaTherapietrouw);
-  const metData = perDag.filter((d) => d != null);
-  if (!metData.length) {
-    return { score: null, dagenMetReva: 0, waarom: 'Nog geen reva-blokken gepland in deze periode.' };
-  }
-  const score = Math.round((metData.reduce((a, d) => a + d.ratio, 0) / metData.length) * 100);
-  const totGedaan = metData.reduce((a, d) => a + d.gedaan, 0);
-  const totKern = metData.reduce((a, d) => a + d.totaal, 0);
-  return {
-    score, dagenMetReva: metData.length,
-    waarom: `${totGedaan}/${totKern} reva-blokken volledig afgevinkt over ${metData.length} ${metData.length === 1 ? 'dag' : 'dagen'} met reva gepland.`,
-  };
-}
-
-function label(score) {
-  if (score >= 80) return 'Sterk consistent';
-  if (score >= 60) return 'Op koers';
-  if (score >= 40) return 'Wisselvallig';
-  return 'Pak de draad weer op';
-}
-function kleur(score) {
-  if (score >= 80) return 'var(--success)';
-  if (score >= 60) return 'var(--primary)';
-  if (score >= 40) return 'var(--warning)';
-  return 'var(--danger)';
-}
-
-// dagen = reeks dagdocs (oud→nieuw). Geeft de North Star-score + uitleg.
-export function noordster(dagen) {
-  const perDag = (dagen || []).map(dagTherapietrouw);
-  const metData = perDag.filter((d) => d != null);
-  const checkinDagen = (dagen || []).filter((d) => d?.checkin?.ochtend || d?.checkin?.avond).length;
-
-  if (!metData.length) {
-    return {
-      score: null, dagenMetPlan: 0, checkinDagen,
-      label: 'Nog te weinig data', kleur: 'var(--text-dim)',
-      reeks: perDag.map(() => null),
-      waarom: 'Zodra je geplande sleutelblokken afvinkt, verschijnt hier je consistentie.',
-      meetlat: 'Consistentie = welk deel van je geplande sleutelblokken je afvinkt.',
-    };
-  }
-
-  const score = Math.round((metData.reduce((a, d) => a + d.ratio, 0) / metData.length) * 100);
-  const totGedaan = metData.reduce((a, d) => a + d.gedaan, 0);
-  const totKern = metData.reduce((a, d) => a + d.totaal, 0);
-  return {
-    score, dagenMetPlan: metData.length, checkinDagen,
-    label: label(score), kleur: kleur(score),
-    reeks: perDag.map((d) => (d ? Math.round(d.ratio * 100) : null)),
-    waarom: `Gemeten aan ${totGedaan}/${totKern} afgevinkte sleutelblokken over ${metData.length} ${metData.length === 1 ? 'dag' : 'dagen'}`
-      + (checkinDagen ? `, en ${checkinDagen} dag(en) met een check-in.` : '.'),
-    meetlat: 'Consistentie = welk deel van je geplande sleutelblokken je afvinkt.',
-  };
-}
-
-```
-
-## `src/services/periodisering.js`
-
-```js
-// Periodisering: expliciete trainingsblokken (opbouw- vs deload-weken).
-// Bewust een vaste, voorspelbare kalendercyclus (geen losse instelling, geen
-// data-afhankelijke gok) — premium-principe 2: "vertrouwen > intelligentie",
-// liever voorspelbaar dan verrassend. ACWR (services/belasting.js) blijft de
-// dynamische, data-gedreven laag; periodisering is de structurele laag erboven:
-// elke Nde week (standaard 4) is een ingeplande hersteller, los van hoe de
-// belasting die week toevallig uitviel.
-
-const CYCLUS_LENGTE_DEFAULT = 4; // 3 weken opbouw + 1 week deload
-
-// Maandag-gebaseerde, doorlopende weekindex (i.t.t. ISO-weeknummers loopt deze
-// door over jaargrenzen, anders zou de cyclus elk jaar rond nieuwjaar haperen).
-function weekIndex(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  const dagSindsMaandag = (x.getDay() + 6) % 7;
-  x.setDate(x.getDate() - dagSindsMaandag);
-  return Math.floor(x.getTime() / (7 * 86400000));
-}
-
-// Welke fase van de opbouw-/deloadcyclus valt op refDatum? Pure functie van de
-// datum — geen meetdata nodig, dus altijd hoge zekerheid.
-export function periodiseringBepalen(refDatum = new Date(), cyclusLengte = CYCLUS_LENGTE_DEFAULT) {
-  const idx = weekIndex(refDatum);
-  const weekInCyclus = (((idx % cyclusLengte) + cyclusLengte) % cyclusLengte) + 1; // 1..cyclusLengte
-  const fase = weekInCyclus >= cyclusLengte ? 'deload' : 'opbouw';
-  const waarom = fase === 'deload'
-    ? `Week ${weekInCyclus}/${cyclusLengte} van je trainingscyclus is een ingeplande hersteller — na ${cyclusLengte - 1} weken opbouwen bouwen we bewust af, los van hoe zwaar deze week toevallig aanvoelt.`
-    : `Week ${weekInCyclus}/${cyclusLengte} van je trainingscyclus — een opbouwweek, daarna volgt een hersteller.`;
-  return {
-    fase, weekInCyclus, cyclusLengte, zekerheid: 'hoog', waarom,
-    meetlat: `Vaste cyclus van ${cyclusLengte} weken: ${cyclusLengte - 1} weken opbouw, dan 1 week deload — onafhankelijk van ACWR, als structureel vangnet tegen sluipende overbelasting.`,
-  };
-}
-
-```
-
-## `src/services/planner.js`
-
-```js
-// =========================================================================
-//  Planning-engine: bouwt een gedetailleerde dagindeling op uit
-//  instellingen + werkmodus + vaste ankers (judo trainen/lesgeven, RSCA,
-//  agenda) + gewoontes/reva/maaltijden. Geeft tijdsloten met push-ankers.
-//
-//  Resultaat:
-//   { blokken: [{id,start,eind,titel,type,kleur,bron,vast,taakId,push}],
-//     todos:   [{taakId,titel,...}],   // taken zonder vast tijdslot
-//     advies:  { fiets, sport, slaap, tekst[] } }
-// =========================================================================
-import { BLOK_TYPES, SPORTEN } from '../config/appConfig';
-import { toMin, toHHMM, addMin } from './tijd';
-import { kiesSportVanDag, genereerSportInhoud } from './sportcoach';
-import { isBlessureActief, isVerlopenNietGemeld, vermijdSportenVanBlessures, kiesOefeningenVanDag, blessureBlokDuur } from './blessures';
-import { gekozenMaaltijd, schaalIngredienten, ingredientenTekst } from './maaltijden';
-
-const kleurVoor = (type) => (BLOK_TYPES[type]?.kleur || BLOK_TYPES.routine.kleur);
-
-const SNACK_DUUR_MIN = 15;
-
-// Maaltijdblok met een concreet, uitlegbaar voorstel (naam + exacte hoeveelheden)
-// uit de eigen receptenbank, geschaald op het aantal eters. Geen passend recept
-// gevonden (lege bank, of geen match voor het doel) → val veilig terug op het
-// generieke blok van vroeger, geen regressie.
-function maaltijdBlok(arr, start, eind, label, moment, { recepten, doelen, datum, maaltijdPlan, aantalEtersStandaard }) {
-  const override = maaltijdPlan?.[moment] || null;
-  const gekozen = gekozenMaaltijd({ recepten, moment, doelen, datum, override });
-  if (!gekozen) {
-    maakBlok(arr, start, eind, label, 'maaltijd', { bron: 'maaltijd' });
-    return;
-  }
-  const eters = override?.aantalEters || aantalEtersStandaard || 1;
-  const detail = ingredientenTekst(schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters));
-  maakBlok(arr, start, eind, `${label} — ${gekozen.recept.naam}`, 'maaltijd', { bron: 'maaltijdplan', detail, id: `maaltijd-${moment}` });
-}
-
-function maakBlok(arr, start, eind, titel, type, opts = {}) {
-  if (!start || !eind) return;
-  arr.push({
-    id: opts.id || `${type}-${start}`,
-    start, eind, titel, type,
-    kleur: kleurVoor(type),
-    bron: opts.bron || 'plan',
-    vast: opts.vast ?? false,
-    taakId: opts.taakId || null,
-    push: opts.push ?? true,
-    detail: opts.detail || null,
-    oefeningen: opts.oefeningen || null,
-    blessureId: opts.blessureId || null,
-  });
-}
-
-// Zoekt, vanaf een voorkeurstijd, het eerstvolgende moment van duurMin
-// minuten dat geen vaste/belangrijke blokken overlapt — zo plant de planner
-// zelf rond werk/judo/agenda i.p.v. enkel een conflict te melden.
-function vindVrijSlot(blok, vanaf, duurMin) {
-  const belangrijk = blok
-    .filter((b) => b.vast || ['werk', 'judo', 'lesgeven', 'woonwerk', 'agenda'].includes(b.bron))
-    .slice().sort((a, b) => toMin(a.start) - toMin(b.start));
-  let kandidaat = vanaf;
-  for (const b of belangrijk) {
-    if (toMin(addMin(kandidaat, duurMin)) <= toMin(b.start)) return kandidaat;
-    if (toMin(kandidaat) < toMin(b.eind)) kandidaat = b.eind;
-  }
-  return kandidaat;
-}
-
-// Fietsadvies op basis van blessure, Garmin-readiness en weer.
-export function berekenFietsAdvies({ sport, blessureActief, vermijdSporten = [], garmin, weer }) {
-  if (!sport?.fietsAlsSport) return { fiets: false, reden: 'Fietsen-als-sport staat uit.' };
-  if ((blessureActief || vermijdSporten.includes('fietsen')) && !sport.fietsBijBlessure) {
-    return { fiets: false, reden: 'Blessure actief — neem vandaag de auto.' };
-  }
-  const readiness = garmin?.trainingReadiness?.score ?? garmin?.trainingReadiness ?? null;
-  if (typeof readiness === 'number' && readiness < 35) {
-    return { fiets: false, reden: `Lage training readiness (${readiness}/100) — spaar je vandaag.` };
-  }
-  if (weer) {
-    const regen = weer.neerslagKans ?? weer.precipProb ?? 0;
-    const wind = weer.windKmh ?? 0;
-    if (regen >= 60) return { fiets: false, reden: `Veel kans op regen (${regen}%) — auto is comfortabeler.` };
-    if (wind >= 45) return { fiets: false, reden: `Harde wind (${wind} km/u) — minder leuk fietsweer.` };
-  }
-  return { fiets: true, reden: 'Goede dag om te fietsen (telt als training).' };
-}
-
-export function genereerDagPlan({
-  datum, dagKort, instellingen, werkModus,
-  taken = [], reva = [], blessures = [], maaltijden = [], agendaEvents = [],
-  garmin = null, weer = null, blessureActief = false, isVakantie = false, geenJudo = false,
-  coachNiveau = null, revaTrouw = null, maaltijdPlan = {},
-}) {
-  const I = instellingen || {};
-  const alg = I.algemeen || {};
-  const werk = I.werk || {};
-  const sport = I.sport || {};
-  const gezondheid = I.gezondheid || {};
-  const voeding = I.voeding || {};
-  const recepten = maaltijden;
-  const maaltijdCtx = {
-    recepten, doelen: voeding.doelen || [], datum, maaltijdPlan,
-    aantalEtersStandaard: voeding.aantalEtersStandaard || 1,
-  };
-  const blok = [];
-  const advies = { tekst: [] };
-  let werkEindTijd = null;
-  let werkStartTijd = null;
-
-  const isWo = dagKort === 'wo';
-
-  // Bepaal werkmodus eerst, want het ritme (opstaan/slapen) hangt ervan af.
-  const modus = werkModus || 'thuis';
-  const werktVandaag = ['thuis', 'kantoor_auto', 'kantoor_fiets'].includes(modus);
-  const vrijeDag = !werktVandaag || isVakantie;
-
-  // Ritme verschilt: vrije/vakantiedagen mogen later starten en eindigen.
-  const opstaan = vrijeDag ? (alg.opstaanVrij || alg.opstaan || '08:00') : (alg.opstaan || '06:45');
-  const slapen = vrijeDag ? (alg.slapenVrij || alg.slapen || '23:30') : (alg.slapen || '22:45');
-
-  // 1) Ochtendroutine + ontbijt
-  maakBlok(blok, opstaan, addMin(opstaan, 25), 'Opstaan & klaarmaken', 'routine', { bron: 'routine' });
-  maaltijdBlok(blok, addMin(opstaan, 25), addMin(opstaan, 45), 'Ontbijt', 'ontbijt', maaltijdCtx);
-
-  // 2) Werk + woon-werk
-  if (werktVandaag) {
-    const fiets = modus === 'kantoor_fiets';
-    const kantoor = modus !== 'thuis';
-    let start = kantoor ? (werk.kantoorStart || '07:45') : (werk.thuisStart || '08:25');
-    let eind = kantoor ? (werk.kantoorEind || '17:00') : (werk.thuisEind || '16:00');
-    if (isWo) eind = werk.woensdagEind || '16:00'; // vroeg weg om les te geven
-
-    if (kantoor) {
-      const reis = fiets ? (werk.fietsReisMin || 45) : (werk.autoReisMin || 45);
-      maakBlok(blok, addMin(start, -reis), start,
-        fiets ? 'Fietsen naar werk' : 'Rijden naar werk', fiets ? 'sport' : 'woonwerk',
-        { bron: 'woonwerk', detail: fiets ? 'Telt als training' : null });
-      werkStartTijd = addMin(start, -reis);
-    } else {
-      werkStartTijd = start;
-    }
-
-    // Werk opsplitsen rond de middagpauze
-    const pauze = werk.middagpauzeMin || 30;
-    const lunch = '13:00';
-    if (toMin(lunch) > toMin(start) && toMin(lunch) < toMin(eind)) {
-      maakBlok(blok, start, lunch, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk' });
-      maaltijdBlok(blok, lunch, addMin(lunch, pauze), 'Middagpauze + lunch', 'lunch', maaltijdCtx);
-      maakBlok(blok, addMin(lunch, pauze), eind, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk', push: false });
-    } else {
-      maakBlok(blok, start, eind, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk' });
-    }
-
-    if (kantoor) {
-      const reis = fiets ? (werk.fietsReisMin || 45) : (werk.autoReisMin || 45);
-      maakBlok(blok, eind, addMin(eind, reis),
-        fiets ? 'Fietsen naar huis' : 'Rijden naar huis', fiets ? 'sport' : 'woonwerk', { bron: 'woonwerk' });
-      werkEindTijd = addMin(eind, reis);
-    } else {
-      werkEindTijd = eind;
-    }
-    // doel-uren feedback
-    if (werk.doelUrenPerDag) advies.tekst.push(`Streef naar ±${werk.doelUrenPerDag}u werk (recuperatie-uren).`);
-  }
-
-  // 3) Judo les geven (woensdag, tenzij vakantie)
-  (sport.judoLesgeven || []).forEach((les, i) => {
-    if (les.dag !== dagKort) return;
-    if (geenJudo) return;
-    if (isVakantie && !les.tijdensVakantie) return;
-    const vertrek = addMin(les.start, -(les.vertrekVoorMin || 30));
-    maakBlok(blok, addMin(vertrek, -25), addMin(vertrek, -5), 'Snel eten voor judo', 'maaltijd', { bron: 'maaltijd' });
-    maakBlok(blok, vertrek, les.start, 'Vertrek naar judoclub', 'woonwerk', { bron: 'judo' });
-    maakBlok(blok, les.start, les.eind, 'Judoles geven', 'lesgeven', { bron: 'judo', vast: true, id: `lesgeven-${i}` });
-  });
-
-  // 4) Eigen judotraining
-  (sport.judoEigenClub || []).forEach((t, i) => {
-    if (t.dag !== dagKort) return;
-    if (geenJudo) return;
-    maakBlok(blok, t.start, t.eind, 'Judotraining', 'judo', { bron: 'judo', vast: true, id: `judo-${i}` });
-  });
-
-  // 5) Agenda-events (ICS): o.a. RSCA-matchen. Eigen agenda-afspraken laten we
-  //    altijd staan — ook judo-gerelateerde zoals een BBQ of tornooi; dat is
-  //    bewust jouw kalender. 'geenJudo' raakt enkel de door de app geplande judo.
-  agendaEvents.forEach((ev, i) => {
-    const titel = ev.titel || ev.summary || 'Afspraak';
-    const isVoetbal = /anderlecht|rsca|voetbal/i.test(titel);
-    maakBlok(blok, ev.start, ev.eind || addMin(ev.start, 90), titel,
-      isVoetbal ? 'voetbal' : 'vrije_tijd', { bron: 'agenda', vast: true, id: `agenda-${i}` });
-  });
-
-  // Judovrij melden als er normaal judo (training of les) gepland zou zijn
-  const judoVandaag = (sport.judoEigenClub || []).some((t) => t.dag === dagKort)
-    || (sport.judoLesgeven || []).some((l) => l.dag === dagKort);
-  if (geenJudo && judoVandaag) {
-    advies.tekst.push('🥋 Judovrij (vakantie) — geen training of les vandaag.');
-  }
-
-  // Welke sporten een actieve blessure afraadt (zie BLESSURE_REGIOS) — voedt
-  // zowel de sportcoach-keuze als het fietsadvies hieronder.
-  const vermijdSporten = vermijdSportenVanBlessures(blessures, datum);
-  if (judoVandaag && !geenJudo && vermijdSporten.includes('judo')) {
-    advies.tekst.push('⚠️ Judo staat gepland, maar een actieve blessure raadt dit af — overweeg te schrappen of aan te passen.');
-  }
-  blessures.forEach((b) => {
-    if (isVerlopenNietGemeld(b, datum)) {
-      advies.tekst.push(`ℹ️ Blessure “${b.titel || b.naam || 'onbenoemd'}” liep af op ${b.eindDatum} — controleer of die echt voorbij is.`);
-    }
-  });
-  // Adaptieve feedback-loop: structureel gemiste reva (<50% de voorbije dagen)
-  // melden we, zonder te straffen — een blessure die je niet naleeft is precies
-  // het risico dat de reva moet voorkomen.
-  if (typeof revaTrouw === 'number' && revaTrouw < 50) {
-    advies.tekst.push(`⚠️ Je reva-oefeningen lukten de voorbije dagen maar ${revaTrouw}% — overweeg het aantal of de duur te verlagen in Gezondheid, zodat je het wél haalt.`);
-  }
-
-  // 5b) Sportcoach: concreet trainingsblok voor vandaag, zodat het advies van
-  //     de coach ook echt in het dagschema staat (niet enkel op de coach-pagina).
-  //     Judo heeft hierboven al een eigen vast blok; rustdagen krijgen geen blok.
-  if (coachNiveau) {
-    const keuze = kiesSportVanDag({ dagKort, weekSchema: sport.weekSchema, niveau: coachNiveau, judoVandaag: judoVandaag && !geenJudo, weer, vermijdSporten });
-    if (keuze.sport !== 'rust' && keuze.sport !== 'judo') {
-      const inhoud = genereerSportInhoud({
-        sport: keuze.sport, niveau: coachNiveau, oefeningen: sport.oefeningen,
-        garmin, stappenDoel: gezondheid.stappenDoel, datum, weer,
-      });
-      const duurMin = inhoud.minuten || { hard: 50, matig: 40, rustig: 30, herstel: 20 }[coachNiveau] || 40;
-      const sportStart = werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 90);
-      const detail = inhoud.type === 'homefitness'
-        ? (inhoud.oefeningen.length ? inhoud.oefeningen.map((o) => `${o.naam} ${o.sets}×${o.reps}`).join(', ') : inhoud.waarom[0])
-        : inhoud.type === 'fietsen'
-          ? `±${inhoud.km} km (~${inhoud.minuten} min) · ${inhoud.zoneTekst}`
-          : inhoud.stappenAdvies != null
-            ? `Nog ±${Math.round(inhoud.stappenAdvies).toLocaleString('nl-BE')} stappen (±${inhoud.km} km)`
-            : `±${inhoud.km} km`;
-      maakBlok(blok, sportStart, addMin(sportStart, duurMin), SPORTEN[keuze.sport]?.naam || 'Training', 'sport',
-        { bron: 'sportcoach', detail, id: 'sportcoach-blok' });
-      if (keuze.overschreven) advies.tekst.push(`🏋️ ${keuze.waarom.join(' ')}`);
-    }
-  }
-
-  // 5c) Reva: één blok per actieve blessure, met die dag eerlijk-geroteerde
-  //     selectie oefeningen als checklist — zichtbaar bij "vandaag".
-  const actieveBlessures = blessures.filter((b) => isBlessureActief(b, datum));
-  actieveBlessures.forEach((b, i) => {
-    const oefeningen = kiesOefeningenVanDag({ oefeningen: b.oefeningen || [], aantalPerDag: b.aantalPerDag, datum });
-    if (!oefeningen.length) return;
-    const duurMin = blessureBlokDuur(oefeningen.length);
-    // Geen vaste tijd gekozen: de planner plant zelf rond werk/judo/agenda in
-    // plaats van enkel een conflict te melden — bij voorkeur vóór het werk
-    // begint (na het ontbijt), anders na het werk, telkens om vaste blokken
-    // heen geschoven. Een expliciet gekozen tijd (b.tijd) blijft gerespecteerd
-    // — die kiest de gebruiker bewust, daar schuift de planner niet aan.
-    let start;
-    if (b.tijd) {
-      start = b.tijd;
-    } else {
-      const naOntbijt = addMin(opstaan, 45);
-      const pastVoorWerk = !werkStartTijd || toMin(addMin(naOntbijt, duurMin)) <= toMin(werkStartTijd);
-      const voorkeur = pastVoorWerk ? naOntbijt : (werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 60));
-      start = vindVrijSlot(blok, voorkeur, duurMin);
-    }
-    maakBlok(blok, start, addMin(start, duurMin), `Reva — ${b.titel || b.naam || 'oefeningen'}`, 'reva', {
-      bron: 'reva', id: `reva-${b.id || i}`, blessureId: b.id || null,
-      oefeningen: oefeningen.map((o) => ({ id: o.id, naam: o.naam, sets: o.sets || null })),
-      detail: oefeningen.map((o) => o.naam).join(', '),
-    });
-  });
-
-  // 6) Reva + gewoontes met vast tijdslot worden blokken; rest -> todos
-  const todos = [];
-  const dagTaken = taken.filter((t) => t.actief !== false && (!t.dagen || t.dagen.includes(dagKort)));
-  dagTaken.forEach((t) => {
-    if (t.tijd) {
-      maakBlok(blok, t.tijd, addMin(t.tijd, t.duurMin || 15), t.titel, t.blokType || 'routine',
-        { bron: 'taak', taakId: t.id, id: `taak-${t.id}` });
-    } else {
-      todos.push({ taakId: t.id, titel: t.titel, type: t.type, blokType: t.blokType || 'routine' });
-    }
-  });
-
-  // 7) Avondeten als er nog niet gegeten is rond de avond
-  const heeftAvondeten = blok.some((b) => b.type === 'maaltijd' && toMin(b.start) >= toMin('18:00'));
-  if (!heeftAvondeten && werktVandaag) {
-    const et = isWo ? null : '18:45';
-    if (et) {
-      maaltijdBlok(blok, et, addMin(et, 40), 'Avondeten', 'diner', maaltijdCtx);
-    }
-  }
-
-  // 7b) Snacks: 3 vaste momenten (voormiddag/namiddag/avond-ontspanning), elk
-  //     via `vindVrijSlot` om werk/judo/agenda heen geschoven zodat ze nooit
-  //     een conflict opleveren. Stil overgeslagen zonder passend snackrecept
-  //     of zonder ruimte vóór het afbouwen — geen geforceerd blok.
-  if (voeding.snacksAan !== false) {
-    const voorkeuren = {
-      snack1: addMin(opstaan, 210),
-      snack2: '15:30',
-      snack3: addMin(slapen, -150),
-    };
-    ['snack1', 'snack2', 'snack3'].forEach((moment) => {
-      const override = maaltijdPlan?.[moment] || null;
-      const gekozen = gekozenMaaltijd({ recepten, doelen: voeding.doelen || [], datum, moment, override });
-      if (!gekozen) return;
-      const start = vindVrijSlot(blok, voorkeuren[moment], SNACK_DUUR_MIN);
-      const eind = addMin(start, SNACK_DUUR_MIN);
-      if (toMin(eind) > toMin(addMin(slapen, -30))) return; // geen ruimte meer vóór het afbouwen
-      const eters = override?.aantalEters || voeding.aantalEtersStandaard || 1;
-      const detail = ingredientenTekst(schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters));
-      maakBlok(blok, start, eind, `Snack — ${gekozen.recept.naam}`, 'maaltijd', { bron: 'maaltijdplan', detail, id: `maaltijd-${moment}` });
-    });
-  }
-
-  // 8) Afbouwen + slaap. Het slaapblok loopt van bedtijd tot het opstaan-uur
-  //    (over middernacht heen), niet een betekenisloos 1-minuut-blok.
-  const slaapDuurMin = ((toMin(opstaan) - toMin(slapen)) + 1440) % 1440 || 480;
-  maakBlok(blok, addMin(slapen, -30), slapen, 'Afbouwen — scherm weg, klaarmaken', 'scherm', { bron: 'routine' });
-  maakBlok(blok, slapen, opstaan, 'Slapen', 'slaap',
-    { bron: 'routine', push: true, detail: `±${(slaapDuurMin / 60).toFixed(1).replace('.0', '')}u tot ${opstaan}` });
-
-  // Sorteer op starttijd
-  blok.sort((a, b) => toMin(a.start) - toMin(b.start));
-
-  // Vul gaten tussen einde werk/sport en afbouwen met "vrije tijd"
-  vulVrijeTijd(blok, slapen);
-
-  // Advies
-  const fietsAdvies = berekenFietsAdvies({ sport, blessureActief, vermijdSporten, garmin, weer });
-  advies.fiets = fietsAdvies;
-  if (modus === 'kantoor_fiets' || modus === 'kantoor_auto') {
-    advies.tekst.push(fietsAdvies.fiets
-      ? `🚲 ${fietsAdvies.reden}`
-      : `🚗 ${fietsAdvies.reden}`);
-  }
-  if (garmin) {
-    const slaapU = garmin.sleep?.urenTotaal ?? garmin.sleep?.totalHours ?? null;
-    if (slaapU != null) advies.tekst.push(`Slaap vannacht: ${Number(slaapU).toFixed(1)}u.`);
-    const rd = garmin.trainingReadiness?.score ?? garmin.trainingReadiness ?? null;
-    if (rd != null) {
-      advies.tekst.push(rd >= 65 ? `Topreadiness (${rd}/100) — ga ervoor.`
-        : rd >= 40 ? `Matige readiness (${rd}/100) — train rustig.`
-        : `Lage readiness (${rd}/100) — kies herstel.`);
-    }
-  }
-
-  // Conflictdetectie tussen vaste/belangrijke blokken (overlap in tijd).
-  const conflicten = detecteerConflicten(blok);
-  conflicten.forEach((c) => advies.tekst.push(`⚠️ Conflict: “${c.a}” overlapt met “${c.b}”.`));
-
-  return { blokken: blok, todos, advies, conflicten };
-}
-
-function detecteerConflicten(blok) {
-  const belangrijk = blok.filter((b) =>
-    b.vast || ['judo', 'agenda', 'werk', 'reva'].includes(b.bron) || ['judo', 'lesgeven', 'voetbal', 'sport', 'reva'].includes(b.type)
-  );
-  const conflicten = [];
-  for (let i = 0; i < belangrijk.length; i++) {
-    for (let j = i + 1; j < belangrijk.length; j++) {
-      const a = belangrijk[i], b = belangrijk[j];
-      if (toMin(a.start) < toMin(b.eind) && toMin(a.eind) > toMin(b.start)) {
-        a.conflict = true; b.conflict = true;
-        conflicten.push({ a: a.titel, b: b.titel });
-      }
-    }
-  }
-  return conflicten;
-}
-
-// Voegt "vrije tijd"-blokken toe in lege avond-/dagdelen tussen ankers.
-function vulVrijeTijd(blok, slapen) {
-  const vasteEinde = [...blok].sort((a, b) => toMin(a.start) - toMin(b.start));
-  const result = [];
-  for (let i = 0; i < vasteEinde.length - 1; i++) {
-    const huidig = vasteEinde[i];
-    const volgend = vasteEinde[i + 1];
-    const gap = toMin(volgend.start) - toMin(huidig.eind);
-    // alleen 's avonds (na 17u) en gaten >= 45 min opvullen met vrije tijd
-    if (gap >= 45 && toMin(huidig.eind) >= toMin('17:00') && toMin(huidig.eind) < toMin(slapen)) {
-      result.push({
-        id: `vrij-${huidig.eind}`, start: huidig.eind, eind: volgend.start,
-        titel: 'Vrije tijd / ontspanning', type: 'vrije_tijd', kleur: kleurVoor('vrije_tijd'),
-        bron: 'auto', vast: false, push: false, taakId: null, detail: 'Tv, lezen, sociaal — bewust ontspannen',
-      });
-    }
-  }
-  blok.push(...result);
-  blok.sort((a, b) => toMin(a.start) - toMin(b.start));
-}
-
-```
-
-## `src/services/push.js`
-
-```js
-// Client-side push: toestemming vragen, FCM-token ophalen en opslaan onder
-// users/{uid}/pushTokens/{token}. De Cloud Functions sturen hiernaar.
-import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import app, { db } from '../firebase';
-
-const VAPID_KEY = import.meta.env.VITE_VAPID_KEY;
-let _messaging = null;
-const messagingInstance = () => (_messaging ||= getMessaging(app));
-
-export async function pushOndersteund() {
-  if (!('Notification' in window) || !('serviceWorker' in navigator)) return false;
-  try { return await isSupported(); } catch { return false; }
-}
-
-export async function activeerPush(uid) {
-  if (!(await pushOndersteund())) throw new Error('Deze browser/toestel ondersteunt geen push. Voeg de app eerst toe aan je beginscherm.');
-  if (!VAPID_KEY) throw new Error('VAPID-sleutel ontbreekt (VITE_VAPID_KEY).');
-
-  const permissie = await Notification.requestPermission();
-  if (permissie !== 'granted') throw new Error('Meldingen niet toegestaan.');
-
-  // Firebase registreert zelf /firebase-messaging-sw.js
-  const token = await getToken(messagingInstance(), { vapidKey: VAPID_KEY });
-  if (!token) throw new Error('Geen push-token ontvangen.');
-
-  await setDoc(doc(db, 'users', uid, 'pushTokens', token), {
-    token, actief: true, platform: 'web',
-    device: navigator.userAgent.slice(0, 120),
-    bijgewerktOp: serverTimestamp(),
-  }, { merge: true });
-
-  return token;
-}
-
-export async function luisterVoorgrond(cb) {
-  if (!(await pushOndersteund())) return () => {};
-  return onMessage(messagingInstance(), (payload) => cb?.(payload));
-}
-
-```
-
-## `src/services/reflectie.js`
-
-```js
-// Mindset & reflectie: schalen voor stemming/energie/tevredenheid + trend-helpers.
-// Pure functies, makkelijk testbaar. Check-ins leven in dagen/{datum}.checkin:
-//   { ochtend: { stemming, energie, op }, avond: { tevreden, dankbaar, reflectie, op } }
-
-export const STEMMINGEN = [
-  { v: 1, emoji: '😣', label: 'Slecht' },
-  { v: 2, emoji: '😕', label: 'Matig' },
-  { v: 3, emoji: '😐', label: 'Oké' },
-  { v: 4, emoji: '🙂', label: 'Goed' },
-  { v: 5, emoji: '😄', label: 'Top' },
-];
-
-export const ENERGIE = [
-  { v: 1, label: 'Uitgeput' },
-  { v: 2, label: 'Laag' },
-  { v: 3, label: 'Normaal' },
-  { v: 4, label: 'Energiek' },
-  { v: 5, label: 'Topfit' },
-];
-
-export const stemmingInfo = (v) => STEMMINGEN.find((s) => s.v === v) || null;
-export const energieInfo = (v) => ENERGIE.find((e) => e.v === v) || null;
-
-// Gemiddelde over numerieke waarden (null/undefined genegeerd), op 1 decimaal.
-export function gemiddelde(waarden) {
-  const xs = (waarden || []).filter((v) => typeof v === 'number');
-  if (!xs.length) return null;
-  return Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10;
-}
-
-// Reeks dagdocs -> reeks check-in-waarden per dag (voor sparklines/trends).
-export function reflectieReeks(dagen) {
-  return (dagen || []).map((d) => ({
-    datum: d.datum,
-    label: d.label || '',
-    stemming: d.checkin?.ochtend?.stemming ?? null,
-    energie: d.checkin?.ochtend?.energie ?? null,
-    tevreden: d.checkin?.avond?.tevreden ?? null,
-  }));
-}
-
-// Korte samenvatting van een reeks: gemiddelden + of er genoeg data is.
-export function reflectieSamenvatting(dagen) {
-  const r = reflectieReeks(dagen);
-  return {
-    stemming: gemiddelde(r.map((x) => x.stemming)),
-    energie: gemiddelde(r.map((x) => x.energie)),
-    tevreden: gemiddelde(r.map((x) => x.tevreden)),
-    aantal: r.filter((x) => x.stemming != null || x.energie != null || x.tevreden != null).length,
-    stemmingReeks: r.map((x) => x.stemming),
-    energieReeks: r.map((x) => x.energie),
-  };
-}
-
-// Zelf-gerapporteerde energie (1-5) -> bijsturing van de coach-score.
-// Lage energie remt af, hoge energie geeft wat ruimte. 3 = neutraal.
-export function energieNudge(energie) {
-  if (typeof energie !== 'number') return 0;
-  return { 1: -16, 2: -8, 3: 0, 4: 6, 5: 10 }[energie] ?? 0;
-}
-
-```
-
-## `src/services/sportcoach.js`
-
-```js
-// Sport-coach: bepaalt WELKE sport een dag krijgt (vast weekschema + adaptieve
-// override bij laag herstel-niveau) en WAT die sport die dag concreet inhoudt
-// (oefeningen + waarom, km/interval/hartslagzone voor fietsen, km/stappen voor
-// wandelen). Judo blijft bewust ongedetailleerd — dat is al een vast blok.
-
-import { SPORTEN } from '../config/appConfig';
-
-const NIVEAU_LABEL = { hard: 'hoge belastbaarheid', matig: 'gemiddelde belastbaarheid', rustig: 'lichte belastbaarheid', herstel: 'herstel' };
-
-// Intensiteit-rangorde van de sporten zelf — bepaalt of een override "lichter" is.
-const SPORT_INTENSITEIT = { rust: 0, wandelen: 1, homefitness: 2, fietsen: 3 };
-
-// Hybride: vast weekschema, met override naar een lichtere sport bij laag
-// herstel — nooit zomaar schrappen, altijd met uitleg.
-export function kiesSportVanDag({ dagKort, weekSchema, niveau, judoVandaag, weer = null, vermijdSporten = [] }) {
-  if (judoVandaag) return { sport: 'judo', gepland: 'judo', overschreven: false, waarom: [] };
-
-  const gepland = weekSchema?.[dagKort] || 'rust';
-  if (gepland === 'rust') return { sport: 'rust', gepland, overschreven: false, waarom: [] };
-
-  const geplandeIntensiteit = SPORT_INTENSITEIT[gepland] ?? 1;
-  let sport = gepland;
-  const waarom = [];
-  if (niveau === 'herstel' && geplandeIntensiteit >= 2) {
-    sport = 'wandelen';
-    waarom.push(`${gepland === 'fietsen' ? 'Fietsen' : 'Home fitness'} stond gepland, maar je herstel-niveau is laag vandaag — een lichtere wandeling in de plaats.`);
-  } else if (niveau === 'rustig' && geplandeIntensiteit >= 3) {
-    sport = 'homefitness';
-    waarom.push('Fietsen stond gepland, maar gezien je matige belastbaarheid kiezen we een rustigere home fitness-sessie.');
-  } else if (gepland === 'fietsen' && sport === 'fietsen') {
-    const weerReden = slechtFietsWeer(weer);
-    if (weerReden) {
-      sport = 'homefitness';
-      waarom.push(`Fietsen stond gepland, maar ${weerReden} — een home fitness-sessie in plaats daarvan.`);
-    }
-  }
-
-  // Blessure-veto: een actieve blessure kan deze sport specifiek afraden (zie
-  // BLESSURE_REGIOS). Kies dan het lichtste alternatief dat zelf niet ook
-  // afgeraden wordt; pas als alles afgeraden is, valt het terug op rust.
-  if (vermijdSporten.includes(sport)) {
-    const voorVeto = sport;
-    const alternatieven = ['wandelen', 'homefitness', 'rust'];
-    sport = alternatieven.find((s) => s === 'rust' || !vermijdSporten.includes(s));
-    waarom.push(`${SPORTEN[voorVeto]?.naam || voorVeto} stond gepland, maar dat wordt afgeraden door een actieve blessure — ${
-      sport === 'rust' ? 'vandaag rust in plaats daarvan.' : `${SPORTEN[sport]?.naam || sport} in de plaats daarvan.`}`);
-  }
-
-  return { sport, gepland, overschreven: sport !== gepland, waarom };
-}
-
-// Stabiele "willekeurige" rotatie op basis van de datum, zodat dezelfde dag
-// altijd dezelfde oefeningen toont — geen herberekening die elke render wisselt.
-function seedGetal(tekst) {
-  let h = 0;
-  for (const c of String(tekst)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return h;
-}
-
-export function genereerHomeFitness({ oefeningen = [], niveau, datum }) {
-  if (!oefeningen.length) {
-    return { oefeningen: [], waarom: ['Nog geen oefeningen ingesteld — vul ze aan via Beheer › Sport & fiets.'] };
-  }
-  const aantal = { hard: 6, matig: 5, rustig: 4, herstel: 3 }[niveau] ?? 5;
-  const seed = seedGetal(datum);
-  const geroteerd = oefeningen.map((_, i) => oefeningen[(i + seed) % oefeningen.length]);
-  const basis = niveau === 'herstel'
-    ? geroteerd.filter((o) => o.categorie === 'mobiliteit' || o.categorie === 'core')
-    : geroteerd;
-  const gekozen = (basis.length ? basis : geroteerd).slice(0, aantal);
-  const factor = niveau === 'hard' ? 1.15 : niveau === 'herstel' ? 0.7 : 1;
-  return {
-    oefeningen: gekozen.map((o) => ({ ...o, sets: Math.max(1, Math.round((o.sets || 3) * factor)) })),
-    waarom: [`Sessie afgestemd op ${NIVEAU_LABEL[niveau] || 'vandaag'} — elke oefening heeft een eigen waarom hieronder.`],
-  };
-}
-
-// Slecht fietsweer (veel regen/harde wind) -> binnen blijven kan geen kwaad,
-// maar we vervangen het advies bewust door een evenwaardige home fitness-sessie
-// in plaats van de gebruiker zonder alternatief te laten staan.
-function slechtFietsWeer(weer) {
-  if (!weer) return null;
-  const regen = weer.neerslagKans ?? weer.precipProb ?? 0;
-  const wind = weer.windKmh ?? weer.wind ?? 0;
-  if (regen >= 60) return `veel kans op regen (${regen}%)`;
-  if (wind >= 45) return `harde wind (${wind} km/u)`;
-  return null;
-}
-
-export function genereerFietsAdvies({ niveau, weer = null }) {
-  const minuten = { hard: 75, matig: 50, rustig: 35, herstel: 25 }[niveau] ?? 45;
-  const km = Math.round((minuten / 60) * 22); // ±22 km/u gemiddeld
-  const zoneTekst = {
-    hard: 'Hartslagzone 3-4, met 4-6 intervallen van 3 min stevig / 2 min rustig',
-    matig: 'Hartslagzone 2-3, rustig duurtempo zonder intervallen',
-    rustig: 'Hartslagzone 1-2, comfortabel tempo',
-    herstel: 'Hartslagzone 1, heel licht — vooral de benen losrijden',
-  }[niveau] || 'Hartslagzone 2, rustig tempo';
-  const weerReden = slechtFietsWeer(weer);
-  return {
-    km, minuten, zoneTekst, weerWaarschuwing: weerReden,
-    waarom: weerReden
-      ? [`±${km} km (~${minuten} min) past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}, maar ${weerReden} — overweeg binnen te trainen.`]
-      : [`±${km} km (~${minuten} min) past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}.`],
-  };
-}
-
-export function genereerWandelAdvies({ niveau, garmin, stappenDoel }) {
-  const km = { hard: 7, matig: 5, rustig: 3.5, herstel: 2.5 }[niveau] ?? 4;
-  const stappenVandaag = garmin?.stappen ?? null;
-  const restStappen = stappenDoel != null && stappenVandaag != null ? Math.max(0, stappenDoel - stappenVandaag) : null;
-  if (restStappen != null && restStappen > 0) {
-    return {
-      km, stappenAdvies: restStappen,
-      waarom: [`Je hebt vandaag nog ${restStappen.toLocaleString('nl-BE')} stappen tot je doel — een wandeling van ±${km} km helpt dat te halen.`],
-    };
-  }
-  return { km, stappenAdvies: null, waarom: [`±${km} km past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}.`] };
-}
-
-export function genereerSportInhoud({ sport, niveau, oefeningen = [], garmin = null, stappenDoel = null, datum, weer = null }) {
-  if (sport === 'homefitness') return { type: 'homefitness', ...genereerHomeFitness({ oefeningen, niveau, datum }) };
-  if (sport === 'fietsen') return { type: 'fietsen', ...genereerFietsAdvies({ niveau, weer }) };
-  if (sport === 'wandelen') return { type: 'wandelen', ...genereerWandelAdvies({ niveau, garmin, stappenDoel }) };
-  if (sport === 'judo') return { type: 'judo', waarom: ['Vaste judotraining/-les — geen extra invulling nodig.'] };
-  return { type: 'rust', waarom: ['Geplande rustdag — geen training nodig.'] };
-}
-
-```
-
-## `src/services/taken.js`
-
-```js
-// Afvinken van taken/gewoontes + streak-bijhouden.
-import { doc, setDoc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
-import { datumKey } from './tijd';
-
-const logId = (datum, taakId) => `${datum}_${taakId}`;
-
-// Markeer een taak als (on)gedaan voor een dag en werk de streak bij.
-export async function zetTaakGedaan(uid, taak, datumObj, gedaan) {
-  const datum = typeof datumObj === 'string' ? datumObj : datumKey(datumObj);
-  const logRef = doc(db, 'users', uid, 'takenLog', logId(datum, taak.id));
-  await setDoc(logRef, { taakId: taak.id, datum, gedaan, op: serverTimestamp() }, { merge: true });
-
-  // Streak alleen relevant voor gewoontes.
-  if (taak.type !== 'gewoonte') return;
-
-  const taakRef = doc(db, 'users', uid, 'taken', taak.id);
-  const snap = await getDoc(taakRef);
-  const t = snap.exists() ? snap.data() : {};
-  const gisteren = vorigeDatum(datum);
-
-  let streak = t.streak || 0;
-  let beste = t.beste || 0;
-  let laatste = t.laatsteGedaan || null;
-
-  if (gedaan) {
-    if (laatste === datum) return; // al geteld
-    streak = laatste === gisteren ? streak + 1 : 1;
-    laatste = datum;
-    beste = Math.max(beste, streak);
-  } else {
-    // ongedaan maken van vandaag: stap één terug
-    if (laatste === datum) {
-      streak = Math.max(0, streak - 1);
-      laatste = streak > 0 ? gisteren : null;
-    }
-  }
-  await updateDoc(taakRef, { streak, beste, laatsteGedaan: laatste });
-}
-
-function vorigeDatum(datum) {
-  const d = new Date(datum + 'T12:00:00');
-  d.setDate(d.getDate() - 1);
-  return datumKey(d);
-}
-
-```
-
-## `src/services/tijd.js`
-
-```js
-// Kleine tijd-helpers. Tijden zijn strings "HH:MM"; intern rekenen we in minuten.
-export const toMin = (hhmm) => {
-  if (!hhmm || typeof hhmm !== 'string') return null;
-  const [h, m] = hhmm.split(':').map(Number);
-  return h * 60 + (m || 0);
-};
-export const toHHMM = (min) => {
-  const m = ((Math.round(min) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-};
-export const addMin = (hhmm, delta) => toHHMM(toMin(hhmm) + delta);
-export const duurMin = (a, b) => toMin(b) - toMin(a);
-
-export const DAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
-export const dagKortVanDatum = (d) => DAG_KORT[d.getDay()];
-
-export const datumKey = (d) => {
-  const x = d instanceof Date ? d : new Date(d);
-  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-};
-
-// ISO-weeknummer + jaar -> "YYYY-Www"
-export function weekKey(d) {
-  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNr = (x.getUTCDay() + 6) % 7;
-  x.setUTCDate(x.getUTCDate() - dayNr + 3);
-  const firstThursday = new Date(Date.UTC(x.getUTCFullYear(), 0, 4));
-  const week = 1 + Math.round(((x - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
-  return `${x.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
-}
-
-export const nuMin = () => {
-  const d = new Date();
-  return d.getHours() * 60 + d.getMinutes();
-};
-
-// Dagnummer sinds epoch — basis voor deterministische, eerlijke round-robin-
-// rotaties (reva-oefeningen, maaltijdsuggesties) zonder willekeur.
-export const dagOrdinal = (datum) => Math.floor(new Date(`${datum}T00:00:00Z`).getTime() / 86400000);
-
-```
-
-## `src/services/vakanties.js`
-
-```js
-// Vakantieperiodes als datum-reeksen (YYYY-MM-DD; string-vergelijking volstaat).
-// Een periode kan 'verlof' zijn (jij bent vrij) en/of 'geenJudo' (clubs dicht:
-// geen eigen training én geen lesgeven).
-
-export function vakantieVoorDatum(lijst, datum) {
-  for (const v of lijst || []) {
-    if (v.van && v.tot && datum >= v.van && datum <= v.tot) return v;
-  }
-  return null;
-}
-
-// Gecombineerde vlaggen over ÁLLE periodes die deze datum overlappen. Belangrijk
-// bij overlap: als één periode 'geenJudo' is en een andere 'verlof', gelden beide.
-// (Anders zou alleen de eerst-gevonden periode tellen en kon judovrij wegvallen.)
-export function vakantieFlags(lijst, datum) {
-  let verlof = false, geenJudo = false, buitenland = false, periode = null;
-  for (const v of lijst || []) {
-    if (v.van && v.tot && datum >= v.van && datum <= v.tot) {
-      if (!periode) periode = v;
-      if (v.verlof) verlof = true;
-      if (v.geenJudo) geenJudo = true;
-      if (v.buitenland) buitenland = true;
-    }
-  }
-  return { verlof, geenJudo, buitenland, periode };
-}
-
-// Eerste periode die een van de gegeven dagdatums overlapt (voor weekbanner).
-export function vakantieInWeek(lijst, datums) {
-  for (const v of lijst || []) {
-    if (v.van && v.tot && datums.some((d) => d >= v.van && d <= v.tot)) return v;
-  }
-  return null;
-}
-
-export function vakantieLabel(v) {
-  if (!v) return '';
-  const suffix = v.buitenland ? ' (buitenland)' : '';
-  if (v.geenJudo && v.verlof) return `Verlof + judovrij${suffix}`;
-  if (v.geenJudo) return `Judovrij (clubs dicht)${suffix}`;
-  if (v.verlof) return `Persoonlijk verlof${suffix}`;
-  return 'Vakantie';
-}
-
-```
-
-## `src/styles/global.css`
+Semantische CSS-tokens + thema's
 
 ```css
 /* =========================================================================
@@ -9272,7 +7683,1838 @@ body {
 
 ```
 
-## `test/belasting.test.js`
+## Services
+
+### `src/services/agenda.js`
+
+Client: roept icsSync Cloud Function aan
+
+```js
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app from '../firebase';
+
+// Roept de Cloud Function aan die de ICS-links nu meteen inleest.
+export async function syncAgendaNu() {
+  const fns = getFunctions(app, 'europe-west1');
+  const call = httpsCallable(fns, 'syncAgendaNu');
+  const res = await call();
+  return res.data; // { aantal, perLink: [{link, aantal|fout}], links }
+}
+
+```
+
+### `src/services/belasting.js` ★
+
+★ ACWR (acute:chronic load ratio) uit RPE-gewogen sRPE-belasting
+
+```js
+// Belasting/herstel-bewaker: vertaalt Garmin-trainingsstatus (en als back-up de
+// readiness-trend) naar mensentaal. Voorkomt overbelasting op weg naar elite.
+
+const STATUS = {
+  overbelast: { titel: 'Overbelast', kleur: 'var(--danger)', tekst: 'Je belasting is te hoog. Las 1-2 herstel- of rustdagen in.' },
+  herstel:    { titel: 'Herstellend', kleur: 'var(--warning)', tekst: 'Je lichaam herstelt. Hou het licht (wandelen, mobiliteit, reva).' },
+  inefficient:{ titel: 'Inefficiënt', kleur: 'var(--warning)', tekst: 'Veel inspanning, weinig winst. Check slaap, voeding en herstel.' },
+  opbouwen:   { titel: 'Opbouwend', kleur: 'var(--success)', tekst: 'Mooie progressie — je mag rustig blijven opbouwen.' },
+  balans:     { titel: 'In balans', kleur: 'var(--primary)', tekst: 'Je onderhoudt je niveau. Durf iets meer te pushen voor groei.' },
+  teweinig:   { titel: 'Te weinig prikkel', kleur: 'var(--primary-2)', tekst: 'Je traint te weinig om te groeien. Voeg een sessie toe.' },
+  onbekend:   { titel: 'Nog geen oordeel', kleur: 'var(--text-dim)', tekst: 'Te weinig data. Draag je horloge en sync dagelijks.' },
+};
+
+function avg(arr) { return arr.reduce((s, v) => s + v, 0) / arr.length; }
+
+// ── Periodisering: acute:chronic workload-ratio (ACWR) ────────────────────────
+// sRPE-belasting per sessie = duur (min) × RPE (zwaarte 1-10). Zonder RPE nemen we
+// een neutrale 5 (matig). Pure functies, makkelijk testbaar.
+
+// Garmin-activiteiten + RPE-map -> [{ datum:'YYYY-MM-DD', load }].
+export function sessieBelasting(activiteiten = [], rpeMap = {}) {
+  return (activiteiten || []).map((a) => {
+    const datum = (a.startTimeLocal || a.startTimeGMT || a.datum || '').slice(0, 10);
+    const duurMin = a.duration ? a.duration / 60 : (a.duurMin || 0);
+    const rpe = rpeMap[a.id] ?? rpeMap[a.activityId] ?? 5;
+    return { datum, load: Math.round(duurMin * rpe) };
+  }).filter((s) => s.datum && s.load > 0);
+}
+
+const ACWR_ZONES = {
+  laag:     { kleur: 'var(--primary-2)', titel: 'Lage belasting', tekst: 'Je trainingsprikkel daalt — ruimte om (voorzichtig) op te bouwen.' },
+  optimaal: { kleur: 'var(--success)',   titel: 'Optimale opbouw', tekst: 'Je belasting stijgt in een veilig tempo (sweet spot).' },
+  verhoogd: { kleur: 'var(--warning)',   titel: 'Verhoogd risico',  tekst: 'Je bouwt snel op. Hou het deze week in toom.' },
+  risico:   { kleur: 'var(--danger)',    titel: 'Blessurerisico',   tekst: 'Te snelle stijging in belasting. Las herstel in vóór je doorgaat.' },
+  onbekend: { kleur: 'var(--text-dim)',  titel: 'Nog geen oordeel', tekst: 'Te weinig trainingsdata voor een betrouwbare belastingsratio.' },
+};
+
+const dagStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+
+// ACWR = acute (7d) belasting / gemiddelde wekelijkse chronische (28d) belasting.
+// Geeft ratio + zone + zekerheid + uitleg (premium-principe: uitlegbaar + veilige
+// terugval bij te weinig data).
+export function acwrBerekenen(sessies = [], refDatum = new Date()) {
+  const ref = dagStart(refDatum).getTime();
+  const dag = 86400000;
+  const dagenGeleden = (s) => Math.floor((ref - dagStart(new Date(`${s.datum}T12:00:00`)).getTime()) / dag);
+  const recent = (sessies || []).filter((s) => { const g = dagenGeleden(s); return g >= 0 && g < 28; });
+  const som = (arr) => arr.reduce((a, s) => a + (s.load || 0), 0);
+
+  const acuut = som(recent.filter((s) => dagenGeleden(s) < 7));
+  const chronischWeek = som(recent) / 4;
+
+  // Zekerheid: hoeveel weken historiek + aantal sessies dragen dit?
+  const weken = recent.length ? Math.min(4, Math.ceil((Math.max(...recent.map(dagenGeleden)) + 1) / 7)) : 0;
+  let zekerheid = 'laag';
+  if (recent.length >= 4 && weken >= 3) zekerheid = 'hoog';
+  else if (recent.length >= 2 && weken >= 2) zekerheid = 'gemiddeld';
+
+  if (chronischWeek <= 0 || recent.length < 2) {
+    return {
+      ratio: null, zone: 'onbekend', zekerheid: 'laag',
+      acuut, chronischWeek: Math.round(chronischWeek),
+      waarom: 'Nog te weinig getrainde sessies (min. ~2 weken historiek) voor een betrouwbare ratio.',
+      meetlat: 'ACWR = belasting deze week ÷ gemiddelde van de laatste 4 weken. Veilig: 0,8–1,3.',
+      ...ACWR_ZONES.onbekend,
+    };
+  }
+
+  const ratio = Math.round((acuut / chronischWeek) * 100) / 100;
+  const zone = ratio < 0.8 ? 'laag' : ratio <= 1.3 ? 'optimaal' : ratio <= 1.5 ? 'verhoogd' : 'risico';
+  return {
+    ratio, zone, zekerheid,
+    acuut: Math.round(acuut), chronischWeek: Math.round(chronischWeek),
+    waarom: `Deze week ${Math.round(acuut)} belastingspunten t.o.v. een weekgemiddelde van ${Math.round(chronischWeek)} (ratio ${ratio.toFixed(2)}).`,
+    meetlat: 'ACWR = belasting deze week ÷ gemiddelde van de laatste 4 weken. Veilig: 0,8–1,3.',
+    ...ACWR_ZONES[zone],
+  };
+}
+
+export function belastingStatus({ trainingStatus = null, readinessReeks = [] } = {}) {
+  const ts = String(trainingStatus || '').toUpperCase();
+  let key = null;
+
+  if (/STRAINED|OVERREACH|OVERLOAD/.test(ts)) key = 'overbelast';
+  else if (/RECOVERY/.test(ts)) key = 'herstel';
+  else if (/UNPRODUCTIVE/.test(ts)) key = 'inefficient';
+  else if (/PRODUCTIVE|PEAK/.test(ts)) key = 'opbouwen';
+  else if (/MAINTAIN/.test(ts)) key = 'balans';
+  else if (/DETRAIN/.test(ts)) key = 'teweinig';
+
+  // Trend van de readiness (laatste helft vs eerste helft) als signaal/back-up.
+  const vals = readinessReeks.filter((v) => typeof v === 'number');
+  let trend = null;
+  if (vals.length >= 4) {
+    const h = Math.floor(vals.length / 2);
+    trend = Math.round(avg(vals.slice(h)) - avg(vals.slice(0, h)));
+  }
+
+  if (!key) {
+    if (trend == null) key = 'onbekend';
+    else if (trend <= -8) key = 'herstel';
+    else if (trend >= 6) key = 'opbouwen';
+    else key = 'balans';
+  }
+
+  return { key, trend, ...STATUS[key] };
+}
+
+```
+
+### `src/services/blessures.js` ★
+
+★ Reva-oefeningenrotatie (dag-deterministisch) bij actieve blessure
+
+```js
+// Blessures: per-blessure revalidatie-oefeningen + automatische sportbeperking.
+// Premium-coach principe: elke beperking moet uitlegbaar zijn (welke regio,
+// welke sporten en waarom) en het systeem valt veilig terug — geen regio
+// gekozen betekent geen automatische sportveto, nooit een stellig "mag niet"
+// op wankele basis.
+import { BLESSURE_REGIOS } from '../config/appConfig';
+import { dagOrdinal } from './tijd';
+
+export function isBlessureActief(b, datum) {
+  if (!b || b.actief === false) return false;
+  if (b.eindDatum && b.eindDatum < datum) return false;
+  return true;
+}
+
+// Einddatum verstreken, maar de gebruiker heeft dit nog niet gezien/bevestigd —
+// zo'n blessure telt al niet meer mee (isBlessureActief), maar moet nog gemeld
+// worden zodat het sluiten niet stilzwijgend gebeurt.
+export function isVerlopenNietGemeld(b, datum) {
+  return !!(b && b.actief !== false && b.eindDatum && b.eindDatum < datum && !b.eindeGemeld);
+}
+
+export function vermijdSportenVanBlessures(blessures = [], datum) {
+  const set = new Set();
+  blessures.filter((b) => isBlessureActief(b, datum)).forEach((b) => {
+    (BLESSURE_REGIOS[b.regio]?.vermijdSport || []).forEach((s) => set.add(s));
+  });
+  return [...set];
+}
+
+// Eerlijke round-robin: elke dag een andere, opeenvolgende schijf van de actieve
+// oefeningen, zodat iedereen over de cyclus evenveel aan de beurt komt — geen
+// willekeur, dus voorspelbaar (premium-coach principe "vertrouwen > intelligentie").
+export function kiesOefeningenVanDag({ oefeningen = [], aantalPerDag, datum }) {
+  const actief = oefeningen.filter((o) => o.actief !== false);
+  if (!actief.length) return [];
+  const n = Math.max(1, Math.min(aantalPerDag || actief.length, actief.length));
+  if (n >= actief.length) return actief;
+  const offset = (dagOrdinal(datum) * n) % actief.length;
+  const gekozen = [];
+  for (let i = 0; i < n; i++) gekozen.push(actief[(offset + i) % actief.length]);
+  return gekozen;
+}
+
+export function blessureBlokDuur(aantalOefeningen) {
+  return Math.max(10, aantalOefeningen * 4);
+}
+
+```
+
+### `src/services/coach.js` ★
+
+★ Kernlogica: Garmin + zelfrapportage → sportadvies (waarom/databronnen/zekerheid)
+
+```js
+// Coach-laag: vertaalt Garmin-signalen (readiness, body battery, slaap) + je doel
+// naar een concreet sportadvies voor vandaag. Pure functie, makkelijk testbaar.
+
+export const DOELEN = {
+  afvallen: 'Afvallen',
+  kracht: 'Kracht opbouwen',
+  uithouding: 'Uithouding',
+  herstel: 'Herstel & blessurevrij',
+  algemeen: 'Algemeen fit',
+};
+
+// Niveaus oplopend in belasting.
+const NIVEAU_KLEUR = {
+  herstel: 'var(--text-dim)',
+  rustig: 'var(--primary-2)',
+  matig: 'var(--warning)',
+  hard: 'var(--success)',
+};
+
+// Advies per doel × niveau: { sport, duurMin }.
+const MATRIX = {
+  afvallen: {
+    hard: { sport: 'Langere cardio (fietsen/lopen) in zone 2', duurMin: 60 },
+    matig: { sport: 'Stevige wandeling of rustige fietsrit', duurMin: 45 },
+    rustig: { sport: 'Lichte wandeling', duurMin: 30 },
+    herstel: { sport: 'Wandelen + mobiliteit', duurMin: 25 },
+  },
+  kracht: {
+    hard: { sport: 'Krachttraining of judo (zwaar)', duurMin: 60 },
+    matig: { sport: 'Krachttraining (matig) of techniektraining', duurMin: 45 },
+    rustig: { sport: 'Core + mobiliteit', duurMin: 25 },
+    herstel: { sport: 'Reva-oefeningen + stretchen', duurMin: 20 },
+  },
+  uithouding: {
+    hard: { sport: 'Intervaltraining of langere duurloop', duurMin: 55 },
+    matig: { sport: 'Duurloop/fietsrit in zone 2', duurMin: 45 },
+    rustig: { sport: 'Rustige cardio', duurMin: 30 },
+    herstel: { sport: 'Herstelwandeling', duurMin: 25 },
+  },
+  herstel: {
+    hard: { sport: 'Lichte techniektraining of mobiliteit', duurMin: 30 },
+    matig: { sport: 'Mobiliteit + lichte cardio', duurMin: 25 },
+    rustig: { sport: 'Reva-oefeningen + wandelen', duurMin: 20 },
+    herstel: { sport: 'Volledige rust of zachte stretching', duurMin: 15 },
+  },
+  algemeen: {
+    hard: { sport: 'Sport naar keuze (judo, fietsen, kracht)', duurMin: 50 },
+    matig: { sport: 'Matige training of fietsrit', duurMin: 40 },
+    rustig: { sport: 'Lichte beweging of wandeling', duurMin: 30 },
+    herstel: { sport: 'Rust + mobiliteit', duurMin: 20 },
+  },
+};
+
+// HRV-status -> bijstelling van de score. Onbekende/afwezige status telt niet mee.
+function hrvBijstelling(hrvStatus) {
+  const s = String(hrvStatus || '').toUpperCase();
+  if (/UNBALANCED|LOW|POOR/.test(s)) return -10;
+  if (/BALANCED/.test(s)) return 4;
+  return 0;
+}
+
+// Zelf-gerapporteerde pijn (0-5) bij de ochtend-check-in. Vanaf 3 wegen we dit
+// even zwaar als een actieve blessure — pijn is een hard veiligheidssignaal,
+// ook als er nog geen blessure is aangemaakt.
+const PIJN_HERSTEL_DREMPEL = 3;
+
+function bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn }) {
+  if (blessureActief || overbelast || (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL)) return 'herstel';
+  const r = readiness ?? 55;
+  const bb = bodyBattery ?? 60;
+  let score = r * 0.6 + bb * 0.4;
+  if (typeof slaapUren === 'number') {
+    if (slaapUren < 6) score -= 12;
+    else if (slaapUren >= 8) score += 6;
+  }
+  if (typeof energie === 'number') {
+    score += { 1: -16, 2: -8, 3: 0, 4: 6, 5: 10 }[energie] ?? 0;
+  }
+  if (typeof pijn === 'number' && pijn > 0) score -= pijn * 6;
+  score += hrvBijstelling(hrvStatus);
+  if (score >= 65) return 'hard';
+  if (score >= 45) return 'matig';
+  if (score >= 30) return 'rustig';
+  return 'herstel';
+}
+
+// Hoeveel echte meetsignalen zitten er achter het advies? Bepaalt de zekerheid.
+// Weinig data -> lage zekerheid -> we adviseren bewust voorzichtiger (zie cap).
+function bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn }) {
+  // Blessure/overbelasting/pijn is een duidelijk, hard veiligheidssignaal.
+  if (blessureActief || overbelast || (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL)) return 'hoog';
+  let n = 0;
+  if (readiness != null) n += 1;
+  if (bodyBattery != null) n += 1;
+  if (typeof slaapUren === 'number') n += 1;
+  if (typeof energie === 'number') n += 1;
+  if (hrvStatus) n += 1;
+  if (typeof pijn === 'number' && pijn > 0) n += 1;
+  // ≥2 elkaar bevestigende signalen = hoog; één los getal kan ruis zijn.
+  if (n >= 2) return 'hoog';
+  if (n === 1) return 'gemiddeld';
+  return 'laag';
+}
+
+const NIVEAU_RANG = ['herstel', 'rustig', 'matig', 'hard'];
+
+export function coachAdvies({
+  readiness = null, bodyBattery = null, slaapUren = null, energie = null, hrvStatus = null,
+  goal = 'algemeen', blessureActief = false, overbelast = false, acwrZone = null, pijn = null,
+  periodiseringFase = null, vakantieType = null,
+} = {}) {
+  const doel = MATRIX[goal] ? goal : 'algemeen';
+  let niveau = bepaalNiveau({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
+  const zekerheid = bepaalZekerheid({ readiness, bodyBattery, slaapUren, energie, hrvStatus, blessureActief, overbelast, pijn });
+
+  // Beoordeeld op je slechtste advies: 'hard' enkel bij hoge zekerheid (≥2 signalen).
+  let voorzichtig = false;
+  if (zekerheid !== 'hoog' && niveau === 'hard') { niveau = 'matig'; voorzichtig = true; }
+
+  // Periodisering (ACWR): te snelle opbouw remt het advies af (blessurepreventie).
+  let acwrRem = null;
+  if (acwrZone === 'risico' && NIVEAU_RANG.indexOf(niveau) > NIVEAU_RANG.indexOf('rustig')) {
+    niveau = 'rustig'; acwrRem = 'risico';
+  } else if (acwrZone === 'verhoogd' && niveau === 'hard') {
+    niveau = 'matig'; acwrRem = 'verhoogd';
+  }
+
+  // Periodisering: vaste deload-week in de trainingscyclus temperen we altijd
+  // af van 'hard', los van hoe de losse meetdata vandaag uitvallen — dit is een
+  // structureel vangnet, niet een schatting (zie services/periodisering.js).
+  let deload = false;
+  if (periodiseringFase === 'deload' && niveau === 'hard') { niveau = 'matig'; deload = true; }
+
+  const advies = MATRIX[doel][niveau];
+
+  // Groot verlof: thuis heb je vaak meer tijd om te sporten dan een gewone dag;
+  // we verlengen de sessie licht (niet bij 'herstel' — dat blijft kort, dat is
+  // net het punt). In het buitenland verandert er bewust niets: geen aanname
+  // over beschikbare tijd/faciliteiten daar, dus standaardduur.
+  let duurMin = advies.duurMin;
+  let verlofBonus = false;
+  if (vakantieType === 'thuis' && niveau !== 'herstel') {
+    duurMin = advies.duurMin + 15;
+    verlofBonus = true;
+  }
+
+  // "Waarom": de signalen die het advies dragen (mensbaar geformuleerd).
+  const waarom = [];
+  if (overbelast) waarom.push('Garmin meldt overbelasting — herstel gaat voor.');
+  if (blessureActief) waarom.push('Blessure actief — we beschermen je herstel.');
+  if (typeof pijn === 'number' && pijn >= PIJN_HERSTEL_DREMPEL) waarom.push(`Je gaf pijn ${pijn}/5 op — we kiezen voor herstel.`);
+  else if (typeof pijn === 'number' && pijn > 0) waarom.push(`Je gaf pijn ${pijn}/5 op — we temperen het advies.`);
+  if (readiness != null) waarom.push(`Readiness ${Math.round(readiness)}/100.`);
+  if (bodyBattery != null) waarom.push(`Body battery ${Math.round(bodyBattery)}.`);
+  if (typeof slaapUren === 'number') waarom.push(`${slaapUren.toFixed(1)}u slaap.`);
+  if (typeof energie === 'number') waarom.push(`Je gaf energie ${energie}/5 op.`);
+  if (hrvStatus) waarom.push(`HRV-status: ${hrvStatus}.`);
+  if (acwrRem === 'risico') waarom.push('Je trainingsbelasting steeg te snel (blessurerisico) — we temperen.');
+  if (acwrRem === 'verhoogd') waarom.push('Je belasting loopt op — vandaag geen volle gas.');
+  if (deload) waarom.push('Deze week is een ingeplande hersteller in je trainingscyclus — geen volle gas, ook niet als je je goed voelt.');
+  if (verlofBonus) waarom.push('Je bent met verlof thuis — meer tijd dan gewoonlijk, dus iets langere sessie.');
+  else if (vakantieType === 'buitenland') waarom.push('Je bent met verlof in het buitenland — we houden de duur standaard, geen aanname over faciliteiten daar.');
+  if (voorzichtig) waarom.push('Weinig meetdata vandaag → we houden het bewust voorzichtig.');
+  if (!waarom.length) waarom.push('Nog geen meetdata vandaag — dit is een veilig algemeen advies.');
+
+  // Welke databronnen zijn effectief gebruikt.
+  const databronnen = [];
+  if (readiness != null) databronnen.push('Garmin readiness');
+  if (bodyBattery != null) databronnen.push('Body battery');
+  if (typeof slaapUren === 'number') databronnen.push('Slaap');
+  if (typeof energie === 'number') databronnen.push('Zelf-gerapporteerde energie');
+  if (hrvStatus) databronnen.push('HRV-status');
+  if (typeof pijn === 'number' && pijn > 0) databronnen.push('Zelf-gerapporteerde pijn');
+  if (!databronnen.length) databronnen.push('Geen meetdata');
+
+  const titel = {
+    hard: 'Goeie dag om er vol voor te gaan',
+    matig: 'Train met mate vandaag',
+    rustig: 'Hou het rustig vandaag',
+    herstel: 'Kies vandaag voor herstel',
+  }[niveau];
+
+  return {
+    niveau, titel,
+    sport: advies.sport,
+    duurMin,
+    doelLabel: DOELEN[doel],
+    waarom,
+    databronnen,
+    zekerheid,
+    meetlat: 'Geslaagd = je voltooit deze sessie en voelt je morgen niet slechter.',
+    reden: waarom.join(' '), // korte samenvatting (backwards-compat)
+    kleur: NIVEAU_KLEUR[niveau],
+  };
+}
+
+```
+
+### `src/services/data.js`
+
+Generieke Firestore-CRUD-laag (alles onder users/{uid}/...)
+
+```js
+// Firestore-datalaag. Alles leeft onder users/{uid}/...
+import {
+  doc, getDoc, getDocFromCache, setDoc, updateDoc, deleteDoc, deleteField, collection, getDocs,
+  getDocsFromServer, query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch,
+} from 'firebase/firestore';
+import { db } from '../firebase';
+import { DEFAULT_INSTELLINGEN } from '../config/appConfig';
+
+const u = (uid, ...rest) => ['users', uid, ...rest];
+
+// ---- Instellingen (één doc per rubriek) ----
+export async function getInstellingen(uid) {
+  const rubrieken = Object.keys(DEFAULT_INSTELLINGEN);
+  const result = {};
+  await Promise.all(rubrieken.map(async (r) => {
+    const snap = await getDoc(doc(db, ...u(uid, 'instellingen', r)));
+    result[r] = { ...DEFAULT_INSTELLINGEN[r], ...(snap.exists() ? snap.data() : {}) };
+  }));
+  return result;
+}
+
+export async function saveInstellingen(uid, rubriek, data) {
+  await setDoc(doc(db, ...u(uid, 'instellingen', rubriek)),
+    { ...data, bijgewerktOp: serverTimestamp() }, { merge: true });
+}
+
+// Seedt defaults + voorbeelddata bij allereerste login.
+export async function seedDefaultsIfNeeded(uid, profiel) {
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists() && userSnap.data()?.geseed) return;
+
+  const batch = writeBatch(db);
+  batch.set(userRef, {
+    email: profiel?.email || null,
+    naam: profiel?.naam || null,
+    geseed: true,
+    aangemaaktOp: serverTimestamp(),
+  }, { merge: true });
+
+  for (const [rubriek, data] of Object.entries(DEFAULT_INSTELLINGEN)) {
+    batch.set(doc(db, ...u(uid, 'instellingen', rubriek)), data, { merge: true });
+  }
+
+  // Voorbeeld-gewoontes om mee te starten (in-app aanpasbaar). Géén losse
+  // reva-taak meer: blessures (`pages/Gezondheid.jsx`) plannen hun reva-blok
+  // nu zelf in (`services/planner.js`), een losse seed-taak zou dat dubbel
+  // boeken.
+  const seedTaken = [
+    { titel: 'Water drinken (2,5 L)', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: null, blokType: 'routine', volgorde: 1, actief: true },
+    { titel: 'Geen scrollen na 22:00', type: 'gewoonte', dagen: ['ma','di','wo','do','vr','za','zo'], tijd: '22:00', blokType: 'scherm', volgorde: 2, actief: true },
+    { titel: 'Maaltijd voorbereiden', type: 'gewoonte', dagen: ['zo'], tijd: '17:00', blokType: 'maaltijd', volgorde: 3, actief: true },
+  ];
+  seedTaken.forEach((t, i) => {
+    batch.set(doc(db, ...u(uid, 'taken', `seed${i}`)),
+      { ...t, streak: 0, beste: 0, aangemaaktOp: serverTimestamp() });
+  });
+
+  await batch.commit();
+}
+
+// ---- Generieke collectie-CRUD ----
+export function subscribeCollection(uid, naam, cb) {
+  return onSnapshot(collection(db, ...u(uid, naam)), (snap) => {
+    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  });
+}
+
+export async function getCollection(uid, naam) {
+  const snap = await getDocs(collection(db, ...u(uid, naam)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function addItem(uid, naam, data) {
+  const ref = doc(collection(db, ...u(uid, naam)));
+  await setDoc(ref, { ...data, aangemaaktOp: serverTimestamp() });
+  return ref.id;
+}
+
+export async function setItem(uid, naam, id, data) {
+  await setDoc(doc(db, ...u(uid, naam, id)), data, { merge: true });
+}
+
+export async function updateItem(uid, naam, id, data) {
+  await updateDoc(doc(db, ...u(uid, naam, id)), data);
+}
+
+export async function deleteItem(uid, naam, id) {
+  await deleteDoc(doc(db, ...u(uid, naam, id)));
+}
+
+export async function getDocById(uid, naam, id) {
+  const snap = await getDoc(doc(db, ...u(uid, naam, id)));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+// ---- Dag-plan (één doc per datum) ----
+export async function getDag(uid, datum) {
+  return getDocById(uid, 'dagen', datum);
+}
+export async function saveDag(uid, datum, data) {
+  await setDoc(doc(db, ...u(uid, 'dagen', datum)),
+    { ...data, datum, bijgewerktOp: serverTimestamp() }, { merge: true });
+}
+
+// Verwijdert één blok-correctie (terug naar het oorspronkelijk gepland tijdstip).
+// Gebruikt deleteField() zodat enkel die sleutel uit de verzet-map verdwijnt,
+// in plaats van de hele map te overschrijven (merge:true zou anders niets wissen).
+export async function verwijderVerzet(uid, datum, blokId) {
+  await setDoc(doc(db, ...u(uid, 'dagen', datum)),
+    { [`verzet.${blokId}`]: deleteField(), bijgewerktOp: serverTimestamp() }, { merge: true });
+}
+
+// Verwijdert een handmatige slaap-correctie (terug naar wat Garmin meet).
+export async function verwijderSlaapOverride(uid, datum) {
+  await setDoc(doc(db, ...u(uid, 'dagen', datum)),
+    { slaapOverride: deleteField(), bijgewerktOp: serverTimestamp() }, { merge: true });
+}
+
+// Dag-doc cache-eerst (historische dagen wijzigen niet meer → bespaart reads).
+export async function getDagCached(uid, datum) {
+  const ref = doc(db, ...u(uid, 'dagen', datum));
+  try {
+    const c = await getDocFromCache(ref);
+    if (c.exists()) return { id: c.id, ...c.data() };
+  } catch { /* nog niet in cache */ }
+  const s = await getDoc(ref);
+  return s.exists() ? { id: s.id, ...s.data() } : null;
+}
+
+// ---- Garmin (alleen-lezen) ----
+export async function getGarminDag(uid, datum) {
+  return getDocById(uid, 'garminDaily', datum);
+}
+
+// ---- Weer (alleen-lezen, server geschreven door weerSync) ----
+export async function getWeer(uid, datum) {
+  return getDocById(uid, 'weer', datum);
+}
+
+// Garmin-dag uit cache eerst (historische dagen wijzigen nooit → bespaart reads).
+export async function getGarminDagCached(uid, datum) {
+  const ref = doc(db, ...u(uid, 'garminDaily', datum));
+  try {
+    const c = await getDocFromCache(ref);
+    if (c.exists()) return { id: c.id, ...c.data() };
+  } catch { /* nog niet in cache */ }
+  const s = await getDoc(ref);
+  return s.exists() ? { id: s.id, ...s.data() } : null;
+}
+
+// Meest recente Garmin-dag + tijdstip van laatste sync (voor "laatst gesynct").
+export async function getLaatsteGarminSync(uid) {
+  try {
+    const snap = await getDocs(query(
+      collection(db, ...u(uid, 'garminDaily')), orderBy('date', 'desc'), limit(1),
+    ));
+    if (snap.empty) return null;
+    const d = snap.docs[0].data();
+    return {
+      datum: d.date || snap.docs[0].id,
+      syncedAt: d.syncedAt?.toDate ? d.syncedAt.toDate() : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Server-eerst lezen met cache-fallback. Nodig voor agendaEvents: de server-sync
+// herschrijft die documenten, maar een eenmalige getDocs (zonder live listener)
+// kan oude/verwijderde docs uit de offline-cache blijven teruggeven. Server-eerst
+// haalt de gecorrigeerde tijden op; offline valt het terug op de cache.
+async function getDocsVers(q) {
+  try {
+    return await getDocsFromServer(q);
+  } catch {
+    return await getDocs(q);
+  }
+}
+
+// ---- Agenda-events uit ICS (alleen-lezen) ----
+export async function getAgendaEventsVoorDag(uid, datum) {
+  const snap = await getDocsVers(query(
+    collection(db, ...u(uid, 'agendaEvents')),
+    where('datum', '==', datum),
+  ));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+// Alle agenda-events (voor het weekoverzicht), server-eerst tegen stale cache.
+export async function getAgendaEvents(uid) {
+  const snap = await getDocsVers(collection(db, ...u(uid, 'agendaEvents')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+// Vakantieperiodes server-eerst: bewerkingen (datums, judovrij) moeten meteen
+// doorwerken in de planning, niet pas na een cache-verval.
+export async function getVakanties(uid) {
+  const snap = await getDocsVers(collection(db, ...u(uid, 'vakanties')));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export { serverTimestamp };
+
+```
+
+### `src/services/doelen.js`
+
+Lange-termijndoelen + Garmin-koppeling
+
+```js
+// Lange-termijndoelen met automatische koppeling aan Garmin waar mogelijk.
+
+export const METRIEKEN = {
+  vo2max:  { label: 'VO₂max',   eenheid: '',    omhoog: true },
+  gewicht: { label: 'Gewicht',  eenheid: 'kg',  omhoog: false },
+  rusthr:  { label: 'Rust-HR',  eenheid: 'bpm', omhoog: false },
+  afstand: { label: 'Afstand',  eenheid: 'km',  omhoog: true },
+  kracht:  { label: 'Gewicht (kg)', eenheid: 'kg', omhoog: true },
+  eigen:   { label: 'Eigen meting', eenheid: '', omhoog: true },
+};
+
+// Huidige waarde: uit Garmin als de metriek dat toelaat, anders handmatig.
+export function huidigeWaarde(doel, garmin) {
+  if (doel.metric === 'vo2max' && garmin?.vo2max != null) return garmin.vo2max;
+  if (doel.metric === 'gewicht' && garmin?.gewichtKg != null) return garmin.gewichtKg;
+  if (doel.metric === 'rusthr' && garmin?.rustHr != null) return garmin.rustHr;
+  return doel.huidige ?? null;
+}
+
+export function doelProgress(doel, garmin) {
+  const start = Number(doel.start);
+  const naar = Number(doel.naar);
+  const huidige = huidigeWaarde(doel, garmin);
+  if (huidige == null || !Number.isFinite(start) || !Number.isFinite(naar) || start === naar) {
+    return { huidige, pct: 0, klaar: false, rest: null };
+  }
+  let pct = ((Number(huidige) - start) / (naar - start)) * 100;
+  pct = Math.max(0, Math.min(100, Math.round(pct)));
+  const rest = Math.round((naar - Number(huidige)) * 10) / 10;
+  return { huidige: Number(huidige), pct, klaar: pct >= 100, rest };
+}
+
+export function doelKleur(pct) {
+  if (pct >= 100) return 'var(--success)';
+  if (pct >= 50) return 'var(--primary)';
+  return 'var(--primary-2)';
+}
+
+```
+
+### `src/services/garmin.js`
+
+Leest ruwe Garmin-dagdata uit tot samenvatting
+
+```js
+// Leest defensief een paar bruikbare waarden uit het ruwe Garmin-dagdocument.
+// De pipeline bewaart de onbewerkte Garmin-objecten; sleutels kunnen per
+// account licht verschillen, dus alles is best-effort met nette fallback.
+
+function eersteGetal(...kandidaten) {
+  for (const k of kandidaten) {
+    const n = Number(k);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+// Garmin's "Local"-timestamps zijn epoch-ms die het lokale kloktijdstip
+// coderen alsof het UTC is — dus UTC-getters gebruiken, geen lokale tijdzone.
+function tijdVanEpochLocal(ms) {
+  if (!Number.isFinite(ms)) return null;
+  const d = new Date(ms);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+// Vertaalt de laatste-sync-info naar leesbare status + staleness-vlag.
+export function syncStatus(laatsteSync) {
+  if (!laatsteSync || !laatsteSync.datum) return { tekst: 'Nog niet gesynct', stale: true, leeg: true };
+  const d = new Date(laatsteSync.datum + 'T12:00:00');
+  const dagen = Math.floor((Date.now() - d.getTime()) / 864e5);
+  const rel = dagen <= 0 ? 'vandaag' : dagen === 1 ? 'gisteren' : `${dagen} dagen geleden`;
+  return { tekst: `Laatst gesynct: ${rel}`, stale: dagen >= 2, leeg: false, dagen };
+}
+
+export function garminSamenvatting(g) {
+  if (!g) return null;
+
+  const stappen = eersteGetal(
+    g.summary?.totalSteps,
+    g.stepsIntraday?.totalSteps,
+  );
+
+  const slaapSec = eersteGetal(
+    g.sleep?.dailySleepDTO?.sleepTimeSeconds,
+    g.sleep?.sleepTimeSeconds,
+  );
+  const slaapUren = slaapSec ? slaapSec / 3600 : null;
+
+  const dailySleep = g.sleep?.dailySleepDTO || g.sleep;
+  const slaapBegin = tijdVanEpochLocal(eersteGetal(
+    dailySleep?.sleepStartTimestampLocal,
+    g.sleep?.sleepStartTimestampLocal,
+  ));
+  const slaapEind = tijdVanEpochLocal(eersteGetal(
+    dailySleep?.sleepEndTimestampLocal,
+    g.sleep?.sleepEndTimestampLocal,
+  ));
+
+  // trainingReadiness is meestal een lijst met één object.
+  const tr = Array.isArray(g.trainingReadiness) ? g.trainingReadiness[0] : g.trainingReadiness;
+  const readiness = eersteGetal(tr?.score, tr?.readinessScore);
+  const readinessLabel = tr?.level || tr?.feedbackShort || null;
+
+  const rustHr = eersteGetal(
+    g.restingHeartRate?.restingHeartRate,
+    g.restingHeartRate?.allMetrics?.metricsMap?.WELLNESS_RESTING_HEART_RATE?.[0]?.value,
+    g.summary?.restingHeartRate,
+  );
+
+  const kcal = eersteGetal(g.summary?.totalKilocalories, g.summary?.activeKilocalories);
+
+  const status = g.trainingStatus?.latestTrainingStatusData
+    ? Object.values(g.trainingStatus.latestTrainingStatusData)[0]?.trainingStatusFeedbackPhrase
+    : null;
+
+  // ---- Fase 3: body battery, VO2max, profiel ----
+  const bb = Array.isArray(g.bodyBattery) ? g.bodyBattery[0] : g.bodyBattery;
+  const bbArray = bb?.bodyBatteryValuesArray || bb?.bodyBatteryValuesArrayLevel;
+  let bodyBattery = null, bodyBatteryMax = null;
+  if (Array.isArray(bbArray) && bbArray.length) {
+    const levels = bbArray.map((p) => (Array.isArray(p) ? p[1] : p?.level)).filter((n) => typeof n === 'number');
+    if (levels.length) { bodyBattery = levels[levels.length - 1]; bodyBatteryMax = Math.max(...levels); }
+  }
+
+  // HRV-status (Garmin: BALANCED/UNBALANCED/LOW/...) + gemiddelde van afgelopen nacht.
+  const hrvSummary = g.hrv?.hrvSummary || g.hrv;
+  const hrvStatus = hrvSummary?.status || hrvSummary?.lastNightAvgStatus || null;
+  const hrvAvg = eersteGetal(hrvSummary?.lastNightAvg, hrvSummary?.weeklyAvg);
+
+  const mm = Array.isArray(g.maxMetrics) ? g.maxMetrics[0] : g.maxMetrics;
+  const vo2max = eersteGetal(mm?.generic?.vo2MaxValue, mm?.vo2MaxValue, g.userProfile?.userData?.vo2Max);
+
+  const bc = g.bodyComposition?.totalAverage || (Array.isArray(g.bodyComposition) ? g.bodyComposition[0] : g.bodyComposition);
+  const gewichtG = eersteGetal(bc?.weight, g.userProfile?.userData?.weight);
+  const gewichtKg = gewichtG ? Math.round(gewichtG / 1000 * 10) / 10 : null;
+  const vetPct = eersteGetal(bc?.bodyFat);
+
+  const ud = g.userProfile?.userData || g.userProfile || {};
+  const lengteCm = eersteGetal(ud.height);
+  let leeftijd = null;
+  if (ud.birthDate) {
+    const d = new Date(ud.birthDate);
+    if (!isNaN(d)) leeftijd = Math.floor((Date.now() - d.getTime()) / (365.25 * 864e5));
+  }
+
+  return {
+    stappen,
+    slaapUren,
+    slaapBegin,
+    slaapEind,
+    readiness,
+    readinessLabel,
+    rustHr,
+    kcal,
+    trainingStatus: status,
+    bodyBattery,
+    bodyBatteryMax,
+    hrvStatus,
+    hrvAvg,
+    vo2max,
+    gewichtKg,
+    vetPct,
+    leeftijd,
+    lengteCm,
+    // genormaliseerd voor de planner-advieslogica
+    trainingReadiness: readiness != null ? { score: readiness } : null,
+    sleep: slaapUren != null ? { urenTotaal: slaapUren } : null,
+  };
+}
+
+```
+
+### `src/services/maaltijden.js` ★
+
+★ Kernlogica: dag-deterministische receptsuggesties, schaling, boodschappenlijst
+
+```js
+// Maaltijdplanning: kiest concrete, exacte suggesties uit de eigen receptenbank
+// (geen scraping van winkelsites — bewuste keuze, zie HANDOVER.md), schaalt
+// hoeveelheden op het aantal eters, en stelt een boodschappenlijst samen.
+// Premium-coach principe: dag-deterministische round-robin (net als
+// `blessures.js` → `kiesOefeningenVanDag`), geen willekeur, geen scraping —
+// voorspelbaar en uitlegbaar boven "slim".
+import { dagOrdinal } from './tijd';
+
+// Drie vaste, herkenbare snackmomenten + de drie hoofdmaaltijden. De recepten
+// zelf kennen enkel het brede type 'snack' (zie Maaltijden.jsx) — elk
+// snackmoment kiest via een eigen rotatie-offset (slotIndex) zodat ze niet
+// stelselmatig hetzelfde voorstellen, met veilige terugval als er maar één
+// snackrecept bestaat.
+export const MOMENTEN = ['ontbijt', 'lunch', 'diner', 'snack1', 'snack2', 'snack3'];
+
+export function receptType(moment) {
+  return moment.startsWith('snack') ? 'snack' : moment;
+}
+
+function slotIndex(moment) {
+  return moment === 'snack2' ? 1 : moment === 'snack3' ? 2 : 0;
+}
+
+// Eerlijke round-robin over de recepten die bij moment + doel passen — geen
+// recept gekozen voor `doelen` betekent dat het bij elk doel past (veilige,
+// inclusieve terugval, geen recepten verstoppen door een ontbrekend tag).
+export function kiesSuggesties({ recepten = [], moment, doelen = [], datum, aantal = 2 }) {
+  const type = receptType(moment);
+  const passend = recepten.filter((r) =>
+    (r.type || r.moment) === type
+    && (!r.doelen?.length || !doelen.length || r.doelen.some((d) => doelen.includes(d))));
+  if (!passend.length) return [];
+  const offset = (dagOrdinal(datum) + slotIndex(moment)) % passend.length;
+  const n = Math.min(aantal, passend.length);
+  const gekozen = [];
+  for (let i = 0; i < n; i++) gekozen.push(passend[(offset + i) % passend.length]);
+  return gekozen;
+}
+
+// Override (expliciete gebruikerskeuze) wint altijd; anders de eerste van de
+// deterministische suggesties. Pure functie van datum + recepten — werkt ook
+// voor toekomstige dagen zonder dat daarvoor al een dagdoc bestaat.
+export function gekozenMaaltijd({ recepten = [], moment, doelen = [], datum, override = null }) {
+  if (override?.recipeId) {
+    const recept = recepten.find((r) => r.id === override.recipeId);
+    if (recept) return { recept, aantalEters: override.aantalEters || recept.aantalEters || 1 };
+  }
+  const [recept] = kiesSuggesties({ recepten, moment, doelen, datum, aantal: 1 });
+  if (!recept) return null;
+  return { recept, aantalEters: recept.aantalEters || 1 };
+}
+
+function rondAf(waarde, eenheid) {
+  return ['g', 'ml'].includes(eenheid) ? Math.round(waarde / 5) * 5 : Math.round(waarde * 10) / 10;
+}
+
+export function schaalIngredienten(ingredienten = [], vanEters, naarEters) {
+  const ratio = (naarEters || 1) / (vanEters || 1);
+  return ingredienten.map((i) => ({ ...i, hoeveelheid: rondAf((i.hoeveelheid || 0) * ratio, i.eenheid) }));
+}
+
+export function ingredientenTekst(ingredienten = []) {
+  return ingredienten.map((i) => `${i.hoeveelheid}${i.eenheid || ''} ${i.naam}`).join(', ');
+}
+
+// Boodschappenlijst over een periode (datums als "YYYY-MM-DD"), opgeteld per
+// (naam, eenheid) en gegroepeerd in vers/houdbaar voor de UI (wekelijks vs.
+// maandelijks in bulk). `dagDocs` is optioneel — enkel voor al gerealiseerde
+// keuzes (bv. deze week); voor toekomstige dagen zonder dagdoc valt dit terug
+// op de deterministische suggestie, dus géén extra Firestore-reads nodig voor
+// een vooruitblik van een maand.
+export function genereerBoodschappenlijst({ periode = [], recepten = [], doelen = [], aantalEtersStandaard = 1, dagDocs = {} }) {
+  const totalen = new Map();
+  periode.forEach((datum) => {
+    MOMENTEN.forEach((moment) => {
+      const override = dagDocs[datum]?.maaltijdPlan?.[moment] || null;
+      const gekozen = gekozenMaaltijd({ recepten, moment, doelen, datum, override });
+      if (!gekozen) return;
+      const eters = override?.aantalEters || aantalEtersStandaard;
+      const geschaald = schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters);
+      geschaald.forEach((i) => {
+        const key = `${i.naam}|${i.eenheid || ''}`;
+        const bestaand = totalen.get(key) || { naam: i.naam, eenheid: i.eenheid || '', hoeveelheid: 0, houdbaar: !!gekozen.recept.houdbaar };
+        bestaand.hoeveelheid += i.hoeveelheid || 0;
+        totalen.set(key, bestaand);
+      });
+    });
+  });
+  const lijst = [...totalen.values()].sort((a, b) => a.naam.localeCompare(b.naam));
+  return {
+    vers: lijst.filter((i) => !i.houdbaar),
+    houdbaar: lijst.filter((i) => i.houdbaar),
+  };
+}
+
+```
+
+### `src/services/noordster.js` ★
+
+★ North Star-score (therapietrouw/consistentie) uit dagdata
+
+```js
+// North Star-metric: één score die "word ik consistenter?" samenvat.
+// We meten THERAPIETROUW = welk deel van je geplande, afvinkbare sleutelblokken
+// (sport, judo, reva, voetbal, taken...) je effectief afvinkt. Berekend uit de al
+// opgeslagen dagdata (dagen/{datum}.plan + .gedaan) — geen extra schrijfwerk.
+//
+// Premium-principe: deze score is uitlegbaar (zie `waarom`) en valt veilig terug
+// bij weinig data (score = null i.p.v. een misleidend getal).
+
+// Welke blokken tellen mee. Nieuwe plannen dragen `checkbaar`; voor oudere docs
+// (zonder dat veld) vallen we terug op de kerntypes.
+const KERN_TYPES = new Set(['judo', 'lesgeven', 'sport', 'reva', 'voetbal']);
+const teltMee = (b) => (typeof b?.checkbaar === 'boolean' ? b.checkbaar : KERN_TYPES.has(b?.type));
+
+// Een reva-blok met een oefeningen-checklist is pas "gedaan" als alle losse
+// oefeningen zijn afgevinkt (die staan onder samengestelde id's `${blokId}::${oefId}`).
+// Andere blokken blijven gewoon op hun eigen blok-id.
+function isBlokGedaan(b, gedaan) {
+  if (b.oefeningen?.length) return b.oefeningen.every((oId) => gedaan?.[`${b.id}::${oId}`]);
+  return !!gedaan?.[b.id];
+}
+
+// Therapietrouw van één dag, of null als er die dag niets te doen viel.
+export function dagTherapietrouw(dag) {
+  const kern = (dag?.plan || []).filter(teltMee);
+  if (!kern.length) return null;
+  const gedaan = kern.filter((b) => isBlokGedaan(b, dag?.gedaan)).length;
+  return { ratio: gedaan / kern.length, gedaan, totaal: kern.length };
+}
+
+// Reva-specifieke therapietrouw (enkel blessure-oefeningen), losstaand van de
+// algemene North Star-score. Geeft null als er die dag(en) geen reva gepland stond.
+export function dagRevaTherapietrouw(dag) {
+  const reva = (dag?.plan || []).filter((b) => b.type === 'reva');
+  if (!reva.length) return null;
+  const gedaan = reva.filter((b) => isBlokGedaan(b, dag?.gedaan)).length;
+  return { ratio: gedaan / reva.length, gedaan, totaal: reva.length };
+}
+
+// dagen = reeks dagdocs (oud→nieuw). Geeft een reva-therapietrouw-score + uitleg,
+// met dezelfde veilige terugval als de algemene North Star-score bij weinig data.
+export function revaTherapietrouw(dagen) {
+  const perDag = (dagen || []).map(dagRevaTherapietrouw);
+  const metData = perDag.filter((d) => d != null);
+  if (!metData.length) {
+    return { score: null, dagenMetReva: 0, waarom: 'Nog geen reva-blokken gepland in deze periode.' };
+  }
+  const score = Math.round((metData.reduce((a, d) => a + d.ratio, 0) / metData.length) * 100);
+  const totGedaan = metData.reduce((a, d) => a + d.gedaan, 0);
+  const totKern = metData.reduce((a, d) => a + d.totaal, 0);
+  return {
+    score, dagenMetReva: metData.length,
+    waarom: `${totGedaan}/${totKern} reva-blokken volledig afgevinkt over ${metData.length} ${metData.length === 1 ? 'dag' : 'dagen'} met reva gepland.`,
+  };
+}
+
+function label(score) {
+  if (score >= 80) return 'Sterk consistent';
+  if (score >= 60) return 'Op koers';
+  if (score >= 40) return 'Wisselvallig';
+  return 'Pak de draad weer op';
+}
+function kleur(score) {
+  if (score >= 80) return 'var(--success)';
+  if (score >= 60) return 'var(--primary)';
+  if (score >= 40) return 'var(--warning)';
+  return 'var(--danger)';
+}
+
+// dagen = reeks dagdocs (oud→nieuw). Geeft de North Star-score + uitleg.
+export function noordster(dagen) {
+  const perDag = (dagen || []).map(dagTherapietrouw);
+  const metData = perDag.filter((d) => d != null);
+  const checkinDagen = (dagen || []).filter((d) => d?.checkin?.ochtend || d?.checkin?.avond).length;
+
+  if (!metData.length) {
+    return {
+      score: null, dagenMetPlan: 0, checkinDagen,
+      label: 'Nog te weinig data', kleur: 'var(--text-dim)',
+      reeks: perDag.map(() => null),
+      waarom: 'Zodra je geplande sleutelblokken afvinkt, verschijnt hier je consistentie.',
+      meetlat: 'Consistentie = welk deel van je geplande sleutelblokken je afvinkt.',
+    };
+  }
+
+  const score = Math.round((metData.reduce((a, d) => a + d.ratio, 0) / metData.length) * 100);
+  const totGedaan = metData.reduce((a, d) => a + d.gedaan, 0);
+  const totKern = metData.reduce((a, d) => a + d.totaal, 0);
+  return {
+    score, dagenMetPlan: metData.length, checkinDagen,
+    label: label(score), kleur: kleur(score),
+    reeks: perDag.map((d) => (d ? Math.round(d.ratio * 100) : null)),
+    waarom: `Gemeten aan ${totGedaan}/${totKern} afgevinkte sleutelblokken over ${metData.length} ${metData.length === 1 ? 'dag' : 'dagen'}`
+      + (checkinDagen ? `, en ${checkinDagen} dag(en) met een check-in.` : '.'),
+    meetlat: 'Consistentie = welk deel van je geplande sleutelblokken je afvinkt.',
+  };
+}
+
+```
+
+### `src/services/periodisering.js` ★
+
+★ Trainingscyclus (opbouw-/deload-weken), kalenderbepaald
+
+```js
+// Periodisering: expliciete trainingsblokken (opbouw- vs deload-weken).
+// Bewust een vaste, voorspelbare kalendercyclus (geen losse instelling, geen
+// data-afhankelijke gok) — premium-principe 2: "vertrouwen > intelligentie",
+// liever voorspelbaar dan verrassend. ACWR (services/belasting.js) blijft de
+// dynamische, data-gedreven laag; periodisering is de structurele laag erboven:
+// elke Nde week (standaard 4) is een ingeplande hersteller, los van hoe de
+// belasting die week toevallig uitviel.
+
+const CYCLUS_LENGTE_DEFAULT = 4; // 3 weken opbouw + 1 week deload
+
+// Maandag-gebaseerde, doorlopende weekindex (i.t.t. ISO-weeknummers loopt deze
+// door over jaargrenzen, anders zou de cyclus elk jaar rond nieuwjaar haperen).
+function weekIndex(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  const dagSindsMaandag = (x.getDay() + 6) % 7;
+  x.setDate(x.getDate() - dagSindsMaandag);
+  return Math.floor(x.getTime() / (7 * 86400000));
+}
+
+// Welke fase van de opbouw-/deloadcyclus valt op refDatum? Pure functie van de
+// datum — geen meetdata nodig, dus altijd hoge zekerheid.
+export function periodiseringBepalen(refDatum = new Date(), cyclusLengte = CYCLUS_LENGTE_DEFAULT) {
+  const idx = weekIndex(refDatum);
+  const weekInCyclus = (((idx % cyclusLengte) + cyclusLengte) % cyclusLengte) + 1; // 1..cyclusLengte
+  const fase = weekInCyclus >= cyclusLengte ? 'deload' : 'opbouw';
+  const waarom = fase === 'deload'
+    ? `Week ${weekInCyclus}/${cyclusLengte} van je trainingscyclus is een ingeplande hersteller — na ${cyclusLengte - 1} weken opbouwen bouwen we bewust af, los van hoe zwaar deze week toevallig aanvoelt.`
+    : `Week ${weekInCyclus}/${cyclusLengte} van je trainingscyclus — een opbouwweek, daarna volgt een hersteller.`;
+  return {
+    fase, weekInCyclus, cyclusLengte, zekerheid: 'hoog', waarom,
+    meetlat: `Vaste cyclus van ${cyclusLengte} weken: ${cyclusLengte - 1} weken opbouw, dan 1 week deload — onafhankelijk van ACWR, als structureel vangnet tegen sluipende overbelasting.`,
+  };
+}
+
+```
+
+### `src/services/planner.js` ★
+
+★ Kernlogica: genereert dagindeling uit werkmodus + ankers + advies + maaltijden
+
+```js
+// =========================================================================
+//  Planning-engine: bouwt een gedetailleerde dagindeling op uit
+//  instellingen + werkmodus + vaste ankers (judo trainen/lesgeven, RSCA,
+//  agenda) + gewoontes/reva/maaltijden. Geeft tijdsloten met push-ankers.
+//
+//  Resultaat:
+//   { blokken: [{id,start,eind,titel,type,kleur,bron,vast,taakId,push}],
+//     todos:   [{taakId,titel,...}],   // taken zonder vast tijdslot
+//     advies:  { fiets, sport, slaap, tekst[] } }
+// =========================================================================
+import { BLOK_TYPES, SPORTEN } from '../config/appConfig';
+import { toMin, toHHMM, addMin } from './tijd';
+import { kiesSportVanDag, genereerSportInhoud } from './sportcoach';
+import { isBlessureActief, isVerlopenNietGemeld, vermijdSportenVanBlessures, kiesOefeningenVanDag, blessureBlokDuur } from './blessures';
+import { gekozenMaaltijd, schaalIngredienten, ingredientenTekst } from './maaltijden';
+
+const kleurVoor = (type) => (BLOK_TYPES[type]?.kleur || BLOK_TYPES.routine.kleur);
+
+const SNACK_DUUR_MIN = 15;
+
+// Maaltijdblok met een concreet, uitlegbaar voorstel (naam + exacte hoeveelheden)
+// uit de eigen receptenbank, geschaald op het aantal eters. Geen passend recept
+// gevonden (lege bank, of geen match voor het doel) → val veilig terug op het
+// generieke blok van vroeger, geen regressie.
+function maaltijdBlok(arr, start, eind, label, moment, { recepten, doelen, datum, maaltijdPlan, aantalEtersStandaard }) {
+  const override = maaltijdPlan?.[moment] || null;
+  const gekozen = gekozenMaaltijd({ recepten, moment, doelen, datum, override });
+  if (!gekozen) {
+    maakBlok(arr, start, eind, label, 'maaltijd', { bron: 'maaltijd' });
+    return;
+  }
+  const eters = override?.aantalEters || aantalEtersStandaard || 1;
+  const detail = ingredientenTekst(schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters));
+  maakBlok(arr, start, eind, `${label} — ${gekozen.recept.naam}`, 'maaltijd', { bron: 'maaltijdplan', detail, id: `maaltijd-${moment}` });
+}
+
+function maakBlok(arr, start, eind, titel, type, opts = {}) {
+  if (!start || !eind) return;
+  arr.push({
+    id: opts.id || `${type}-${start}`,
+    start, eind, titel, type,
+    kleur: kleurVoor(type),
+    bron: opts.bron || 'plan',
+    vast: opts.vast ?? false,
+    taakId: opts.taakId || null,
+    push: opts.push ?? true,
+    detail: opts.detail || null,
+    oefeningen: opts.oefeningen || null,
+    blessureId: opts.blessureId || null,
+  });
+}
+
+// Zoekt, vanaf een voorkeurstijd, het eerstvolgende moment van duurMin
+// minuten dat geen vaste/belangrijke blokken overlapt — zo plant de planner
+// zelf rond werk/judo/agenda i.p.v. enkel een conflict te melden.
+function vindVrijSlot(blok, vanaf, duurMin) {
+  const belangrijk = blok
+    .filter((b) => b.vast || ['werk', 'judo', 'lesgeven', 'woonwerk', 'agenda'].includes(b.bron))
+    .slice().sort((a, b) => toMin(a.start) - toMin(b.start));
+  let kandidaat = vanaf;
+  for (const b of belangrijk) {
+    if (toMin(addMin(kandidaat, duurMin)) <= toMin(b.start)) return kandidaat;
+    if (toMin(kandidaat) < toMin(b.eind)) kandidaat = b.eind;
+  }
+  return kandidaat;
+}
+
+// Fietsadvies op basis van blessure, Garmin-readiness en weer.
+export function berekenFietsAdvies({ sport, blessureActief, vermijdSporten = [], garmin, weer }) {
+  if (!sport?.fietsAlsSport) return { fiets: false, reden: 'Fietsen-als-sport staat uit.' };
+  if ((blessureActief || vermijdSporten.includes('fietsen')) && !sport.fietsBijBlessure) {
+    return { fiets: false, reden: 'Blessure actief — neem vandaag de auto.' };
+  }
+  const readiness = garmin?.trainingReadiness?.score ?? garmin?.trainingReadiness ?? null;
+  if (typeof readiness === 'number' && readiness < 35) {
+    return { fiets: false, reden: `Lage training readiness (${readiness}/100) — spaar je vandaag.` };
+  }
+  if (weer) {
+    const regen = weer.neerslagKans ?? weer.precipProb ?? 0;
+    const wind = weer.windKmh ?? 0;
+    if (regen >= 60) return { fiets: false, reden: `Veel kans op regen (${regen}%) — auto is comfortabeler.` };
+    if (wind >= 45) return { fiets: false, reden: `Harde wind (${wind} km/u) — minder leuk fietsweer.` };
+  }
+  return { fiets: true, reden: 'Goede dag om te fietsen (telt als training).' };
+}
+
+export function genereerDagPlan({
+  datum, dagKort, instellingen, werkModus,
+  taken = [], reva = [], blessures = [], maaltijden = [], agendaEvents = [],
+  garmin = null, weer = null, blessureActief = false, isVakantie = false, geenJudo = false,
+  coachNiveau = null, revaTrouw = null, maaltijdPlan = {},
+}) {
+  const I = instellingen || {};
+  const alg = I.algemeen || {};
+  const werk = I.werk || {};
+  const sport = I.sport || {};
+  const gezondheid = I.gezondheid || {};
+  const voeding = I.voeding || {};
+  const recepten = maaltijden;
+  const maaltijdCtx = {
+    recepten, doelen: voeding.doelen || [], datum, maaltijdPlan,
+    aantalEtersStandaard: voeding.aantalEtersStandaard || 1,
+  };
+  const blok = [];
+  const advies = { tekst: [] };
+  let werkEindTijd = null;
+  let werkStartTijd = null;
+
+  const isWo = dagKort === 'wo';
+
+  // Bepaal werkmodus eerst, want het ritme (opstaan/slapen) hangt ervan af.
+  const modus = werkModus || 'thuis';
+  const werktVandaag = ['thuis', 'kantoor_auto', 'kantoor_fiets'].includes(modus);
+  const vrijeDag = !werktVandaag || isVakantie;
+
+  // Ritme verschilt: vrije/vakantiedagen mogen later starten en eindigen.
+  const opstaan = vrijeDag ? (alg.opstaanVrij || alg.opstaan || '08:00') : (alg.opstaan || '06:45');
+  const slapen = vrijeDag ? (alg.slapenVrij || alg.slapen || '23:30') : (alg.slapen || '22:45');
+
+  // 1) Ochtendroutine + ontbijt
+  maakBlok(blok, opstaan, addMin(opstaan, 25), 'Opstaan & klaarmaken', 'routine', { bron: 'routine' });
+  maaltijdBlok(blok, addMin(opstaan, 25), addMin(opstaan, 45), 'Ontbijt', 'ontbijt', maaltijdCtx);
+
+  // 2) Werk + woon-werk
+  if (werktVandaag) {
+    const fiets = modus === 'kantoor_fiets';
+    const kantoor = modus !== 'thuis';
+    let start = kantoor ? (werk.kantoorStart || '07:45') : (werk.thuisStart || '08:25');
+    let eind = kantoor ? (werk.kantoorEind || '17:00') : (werk.thuisEind || '16:00');
+    if (isWo) eind = werk.woensdagEind || '16:00'; // vroeg weg om les te geven
+
+    if (kantoor) {
+      const reis = fiets ? (werk.fietsReisMin || 45) : (werk.autoReisMin || 45);
+      maakBlok(blok, addMin(start, -reis), start,
+        fiets ? 'Fietsen naar werk' : 'Rijden naar werk', fiets ? 'sport' : 'woonwerk',
+        { bron: 'woonwerk', detail: fiets ? 'Telt als training' : null });
+      werkStartTijd = addMin(start, -reis);
+    } else {
+      werkStartTijd = start;
+    }
+
+    // Werk opsplitsen rond de middagpauze
+    const pauze = werk.middagpauzeMin || 30;
+    const lunch = '13:00';
+    if (toMin(lunch) > toMin(start) && toMin(lunch) < toMin(eind)) {
+      maakBlok(blok, start, lunch, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk' });
+      maaltijdBlok(blok, lunch, addMin(lunch, pauze), 'Middagpauze + lunch', 'lunch', maaltijdCtx);
+      maakBlok(blok, addMin(lunch, pauze), eind, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk', push: false });
+    } else {
+      maakBlok(blok, start, eind, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk' });
+    }
+
+    if (kantoor) {
+      const reis = fiets ? (werk.fietsReisMin || 45) : (werk.autoReisMin || 45);
+      maakBlok(blok, eind, addMin(eind, reis),
+        fiets ? 'Fietsen naar huis' : 'Rijden naar huis', fiets ? 'sport' : 'woonwerk', { bron: 'woonwerk' });
+      werkEindTijd = addMin(eind, reis);
+    } else {
+      werkEindTijd = eind;
+    }
+    // doel-uren feedback
+    if (werk.doelUrenPerDag) advies.tekst.push(`Streef naar ±${werk.doelUrenPerDag}u werk (recuperatie-uren).`);
+  }
+
+  // 3) Judo les geven (woensdag, tenzij vakantie)
+  (sport.judoLesgeven || []).forEach((les, i) => {
+    if (les.dag !== dagKort) return;
+    if (geenJudo) return;
+    if (isVakantie && !les.tijdensVakantie) return;
+    const vertrek = addMin(les.start, -(les.vertrekVoorMin || 30));
+    maakBlok(blok, addMin(vertrek, -25), addMin(vertrek, -5), 'Snel eten voor judo', 'maaltijd', { bron: 'maaltijd' });
+    maakBlok(blok, vertrek, les.start, 'Vertrek naar judoclub', 'woonwerk', { bron: 'judo' });
+    maakBlok(blok, les.start, les.eind, 'Judoles geven', 'lesgeven', { bron: 'judo', vast: true, id: `lesgeven-${i}` });
+  });
+
+  // 4) Eigen judotraining
+  (sport.judoEigenClub || []).forEach((t, i) => {
+    if (t.dag !== dagKort) return;
+    if (geenJudo) return;
+    maakBlok(blok, t.start, t.eind, 'Judotraining', 'judo', { bron: 'judo', vast: true, id: `judo-${i}` });
+  });
+
+  // 5) Agenda-events (ICS): o.a. RSCA-matchen. Eigen agenda-afspraken laten we
+  //    altijd staan — ook judo-gerelateerde zoals een BBQ of tornooi; dat is
+  //    bewust jouw kalender. 'geenJudo' raakt enkel de door de app geplande judo.
+  agendaEvents.forEach((ev, i) => {
+    const titel = ev.titel || ev.summary || 'Afspraak';
+    const isVoetbal = /anderlecht|rsca|voetbal/i.test(titel);
+    maakBlok(blok, ev.start, ev.eind || addMin(ev.start, 90), titel,
+      isVoetbal ? 'voetbal' : 'vrije_tijd', { bron: 'agenda', vast: true, id: `agenda-${i}` });
+  });
+
+  // Judovrij melden als er normaal judo (training of les) gepland zou zijn
+  const judoVandaag = (sport.judoEigenClub || []).some((t) => t.dag === dagKort)
+    || (sport.judoLesgeven || []).some((l) => l.dag === dagKort);
+  if (geenJudo && judoVandaag) {
+    advies.tekst.push('🥋 Judovrij (vakantie) — geen training of les vandaag.');
+  }
+
+  // Welke sporten een actieve blessure afraadt (zie BLESSURE_REGIOS) — voedt
+  // zowel de sportcoach-keuze als het fietsadvies hieronder.
+  const vermijdSporten = vermijdSportenVanBlessures(blessures, datum);
+  if (judoVandaag && !geenJudo && vermijdSporten.includes('judo')) {
+    advies.tekst.push('⚠️ Judo staat gepland, maar een actieve blessure raadt dit af — overweeg te schrappen of aan te passen.');
+  }
+  blessures.forEach((b) => {
+    if (isVerlopenNietGemeld(b, datum)) {
+      advies.tekst.push(`ℹ️ Blessure “${b.titel || b.naam || 'onbenoemd'}” liep af op ${b.eindDatum} — controleer of die echt voorbij is.`);
+    }
+  });
+  // Adaptieve feedback-loop: structureel gemiste reva (<50% de voorbije dagen)
+  // melden we, zonder te straffen — een blessure die je niet naleeft is precies
+  // het risico dat de reva moet voorkomen.
+  if (typeof revaTrouw === 'number' && revaTrouw < 50) {
+    advies.tekst.push(`⚠️ Je reva-oefeningen lukten de voorbije dagen maar ${revaTrouw}% — overweeg het aantal of de duur te verlagen in Gezondheid, zodat je het wél haalt.`);
+  }
+
+  // 5b) Sportcoach: concreet trainingsblok voor vandaag, zodat het advies van
+  //     de coach ook echt in het dagschema staat (niet enkel op de coach-pagina).
+  //     Judo heeft hierboven al een eigen vast blok; rustdagen krijgen geen blok.
+  if (coachNiveau) {
+    const keuze = kiesSportVanDag({ dagKort, weekSchema: sport.weekSchema, niveau: coachNiveau, judoVandaag: judoVandaag && !geenJudo, weer, vermijdSporten });
+    if (keuze.sport !== 'rust' && keuze.sport !== 'judo') {
+      const inhoud = genereerSportInhoud({
+        sport: keuze.sport, niveau: coachNiveau, oefeningen: sport.oefeningen,
+        garmin, stappenDoel: gezondheid.stappenDoel, datum, weer,
+      });
+      const duurMin = inhoud.minuten || { hard: 50, matig: 40, rustig: 30, herstel: 20 }[coachNiveau] || 40;
+      const sportStart = werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 90);
+      const detail = inhoud.type === 'homefitness'
+        ? (inhoud.oefeningen.length ? inhoud.oefeningen.map((o) => `${o.naam} ${o.sets}×${o.reps}`).join(', ') : inhoud.waarom[0])
+        : inhoud.type === 'fietsen'
+          ? `±${inhoud.km} km (~${inhoud.minuten} min) · ${inhoud.zoneTekst}`
+          : inhoud.stappenAdvies != null
+            ? `Nog ±${Math.round(inhoud.stappenAdvies).toLocaleString('nl-BE')} stappen (±${inhoud.km} km)`
+            : `±${inhoud.km} km`;
+      maakBlok(blok, sportStart, addMin(sportStart, duurMin), SPORTEN[keuze.sport]?.naam || 'Training', 'sport',
+        { bron: 'sportcoach', detail, id: 'sportcoach-blok' });
+      if (keuze.overschreven) advies.tekst.push(`🏋️ ${keuze.waarom.join(' ')}`);
+    }
+  }
+
+  // 5c) Reva: één blok per actieve blessure, met die dag eerlijk-geroteerde
+  //     selectie oefeningen als checklist — zichtbaar bij "vandaag".
+  const actieveBlessures = blessures.filter((b) => isBlessureActief(b, datum));
+  actieveBlessures.forEach((b, i) => {
+    const oefeningen = kiesOefeningenVanDag({ oefeningen: b.oefeningen || [], aantalPerDag: b.aantalPerDag, datum });
+    if (!oefeningen.length) return;
+    const duurMin = blessureBlokDuur(oefeningen.length);
+    // Geen vaste tijd gekozen: de planner plant zelf rond werk/judo/agenda in
+    // plaats van enkel een conflict te melden — bij voorkeur vóór het werk
+    // begint (na het ontbijt), anders na het werk, telkens om vaste blokken
+    // heen geschoven. Een expliciet gekozen tijd (b.tijd) blijft gerespecteerd
+    // — die kiest de gebruiker bewust, daar schuift de planner niet aan.
+    let start;
+    if (b.tijd) {
+      start = b.tijd;
+    } else {
+      const naOntbijt = addMin(opstaan, 45);
+      const pastVoorWerk = !werkStartTijd || toMin(addMin(naOntbijt, duurMin)) <= toMin(werkStartTijd);
+      const voorkeur = pastVoorWerk ? naOntbijt : (werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 60));
+      start = vindVrijSlot(blok, voorkeur, duurMin);
+    }
+    maakBlok(blok, start, addMin(start, duurMin), `Reva — ${b.titel || b.naam || 'oefeningen'}`, 'reva', {
+      bron: 'reva', id: `reva-${b.id || i}`, blessureId: b.id || null,
+      oefeningen: oefeningen.map((o) => ({ id: o.id, naam: o.naam, sets: o.sets || null })),
+      detail: oefeningen.map((o) => o.naam).join(', '),
+    });
+  });
+
+  // 6) Reva + gewoontes met vast tijdslot worden blokken; rest -> todos
+  const todos = [];
+  const dagTaken = taken.filter((t) => t.actief !== false && (!t.dagen || t.dagen.includes(dagKort)));
+  dagTaken.forEach((t) => {
+    if (t.tijd) {
+      maakBlok(blok, t.tijd, addMin(t.tijd, t.duurMin || 15), t.titel, t.blokType || 'routine',
+        { bron: 'taak', taakId: t.id, id: `taak-${t.id}` });
+    } else {
+      todos.push({ taakId: t.id, titel: t.titel, type: t.type, blokType: t.blokType || 'routine' });
+    }
+  });
+
+  // 7) Avondeten als er nog niet gegeten is rond de avond
+  const heeftAvondeten = blok.some((b) => b.type === 'maaltijd' && toMin(b.start) >= toMin('18:00'));
+  if (!heeftAvondeten && werktVandaag) {
+    const et = isWo ? null : '18:45';
+    if (et) {
+      maaltijdBlok(blok, et, addMin(et, 40), 'Avondeten', 'diner', maaltijdCtx);
+    }
+  }
+
+  // 7b) Snacks: 3 vaste momenten (voormiddag/namiddag/avond-ontspanning), elk
+  //     via `vindVrijSlot` om werk/judo/agenda heen geschoven zodat ze nooit
+  //     een conflict opleveren. Stil overgeslagen zonder passend snackrecept
+  //     of zonder ruimte vóór het afbouwen — geen geforceerd blok.
+  if (voeding.snacksAan !== false) {
+    const voorkeuren = {
+      snack1: addMin(opstaan, 210),
+      snack2: '15:30',
+      snack3: addMin(slapen, -150),
+    };
+    ['snack1', 'snack2', 'snack3'].forEach((moment) => {
+      const override = maaltijdPlan?.[moment] || null;
+      const gekozen = gekozenMaaltijd({ recepten, doelen: voeding.doelen || [], datum, moment, override });
+      if (!gekozen) return;
+      const start = vindVrijSlot(blok, voorkeuren[moment], SNACK_DUUR_MIN);
+      const eind = addMin(start, SNACK_DUUR_MIN);
+      if (toMin(eind) > toMin(addMin(slapen, -30))) return; // geen ruimte meer vóór het afbouwen
+      const eters = override?.aantalEters || voeding.aantalEtersStandaard || 1;
+      const detail = ingredientenTekst(schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters));
+      maakBlok(blok, start, eind, `Snack — ${gekozen.recept.naam}`, 'maaltijd', { bron: 'maaltijdplan', detail, id: `maaltijd-${moment}` });
+    });
+  }
+
+  // 8) Afbouwen + slaap. Het slaapblok loopt van bedtijd tot het opstaan-uur
+  //    (over middernacht heen), niet een betekenisloos 1-minuut-blok.
+  const slaapDuurMin = ((toMin(opstaan) - toMin(slapen)) + 1440) % 1440 || 480;
+  maakBlok(blok, addMin(slapen, -30), slapen, 'Afbouwen — scherm weg, klaarmaken', 'scherm', { bron: 'routine' });
+  maakBlok(blok, slapen, opstaan, 'Slapen', 'slaap',
+    { bron: 'routine', push: true, detail: `±${(slaapDuurMin / 60).toFixed(1).replace('.0', '')}u tot ${opstaan}` });
+
+  // Sorteer op starttijd
+  blok.sort((a, b) => toMin(a.start) - toMin(b.start));
+
+  // Vul gaten tussen einde werk/sport en afbouwen met "vrije tijd"
+  vulVrijeTijd(blok, slapen);
+
+  // Advies
+  const fietsAdvies = berekenFietsAdvies({ sport, blessureActief, vermijdSporten, garmin, weer });
+  advies.fiets = fietsAdvies;
+  if (modus === 'kantoor_fiets' || modus === 'kantoor_auto') {
+    advies.tekst.push(fietsAdvies.fiets
+      ? `🚲 ${fietsAdvies.reden}`
+      : `🚗 ${fietsAdvies.reden}`);
+  }
+  if (garmin) {
+    const slaapU = garmin.sleep?.urenTotaal ?? garmin.sleep?.totalHours ?? null;
+    if (slaapU != null) advies.tekst.push(`Slaap vannacht: ${Number(slaapU).toFixed(1)}u.`);
+    const rd = garmin.trainingReadiness?.score ?? garmin.trainingReadiness ?? null;
+    if (rd != null) {
+      advies.tekst.push(rd >= 65 ? `Topreadiness (${rd}/100) — ga ervoor.`
+        : rd >= 40 ? `Matige readiness (${rd}/100) — train rustig.`
+        : `Lage readiness (${rd}/100) — kies herstel.`);
+    }
+  }
+
+  // Conflictdetectie tussen vaste/belangrijke blokken (overlap in tijd).
+  const conflicten = detecteerConflicten(blok);
+  conflicten.forEach((c) => advies.tekst.push(`⚠️ Conflict: “${c.a}” overlapt met “${c.b}”.`));
+
+  return { blokken: blok, todos, advies, conflicten };
+}
+
+function detecteerConflicten(blok) {
+  const belangrijk = blok.filter((b) =>
+    b.vast || ['judo', 'agenda', 'werk', 'reva'].includes(b.bron) || ['judo', 'lesgeven', 'voetbal', 'sport', 'reva'].includes(b.type)
+  );
+  const conflicten = [];
+  for (let i = 0; i < belangrijk.length; i++) {
+    for (let j = i + 1; j < belangrijk.length; j++) {
+      const a = belangrijk[i], b = belangrijk[j];
+      if (toMin(a.start) < toMin(b.eind) && toMin(a.eind) > toMin(b.start)) {
+        a.conflict = true; b.conflict = true;
+        conflicten.push({ a: a.titel, b: b.titel });
+      }
+    }
+  }
+  return conflicten;
+}
+
+// Voegt "vrije tijd"-blokken toe in lege avond-/dagdelen tussen ankers.
+function vulVrijeTijd(blok, slapen) {
+  const vasteEinde = [...blok].sort((a, b) => toMin(a.start) - toMin(b.start));
+  const result = [];
+  for (let i = 0; i < vasteEinde.length - 1; i++) {
+    const huidig = vasteEinde[i];
+    const volgend = vasteEinde[i + 1];
+    const gap = toMin(volgend.start) - toMin(huidig.eind);
+    // alleen 's avonds (na 17u) en gaten >= 45 min opvullen met vrije tijd
+    if (gap >= 45 && toMin(huidig.eind) >= toMin('17:00') && toMin(huidig.eind) < toMin(slapen)) {
+      result.push({
+        id: `vrij-${huidig.eind}`, start: huidig.eind, eind: volgend.start,
+        titel: 'Vrije tijd / ontspanning', type: 'vrije_tijd', kleur: kleurVoor('vrije_tijd'),
+        bron: 'auto', vast: false, push: false, taakId: null, detail: 'Tv, lezen, sociaal — bewust ontspannen',
+      });
+    }
+  }
+  blok.push(...result);
+  blok.sort((a, b) => toMin(a.start) - toMin(b.start));
+}
+
+```
+
+### `src/services/push.js`
+
+Client: FCM-token registreren
+
+```js
+// Client-side push: toestemming vragen, FCM-token ophalen en opslaan onder
+// users/{uid}/pushTokens/{token}. De Cloud Functions sturen hiernaar.
+import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import app, { db } from '../firebase';
+
+const VAPID_KEY = import.meta.env.VITE_VAPID_KEY;
+let _messaging = null;
+const messagingInstance = () => (_messaging ||= getMessaging(app));
+
+export async function pushOndersteund() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return false;
+  try { return await isSupported(); } catch { return false; }
+}
+
+export async function activeerPush(uid) {
+  if (!(await pushOndersteund())) throw new Error('Deze browser/toestel ondersteunt geen push. Voeg de app eerst toe aan je beginscherm.');
+  if (!VAPID_KEY) throw new Error('VAPID-sleutel ontbreekt (VITE_VAPID_KEY).');
+
+  const permissie = await Notification.requestPermission();
+  if (permissie !== 'granted') throw new Error('Meldingen niet toegestaan.');
+
+  // Firebase registreert zelf /firebase-messaging-sw.js
+  const token = await getToken(messagingInstance(), { vapidKey: VAPID_KEY });
+  if (!token) throw new Error('Geen push-token ontvangen.');
+
+  await setDoc(doc(db, 'users', uid, 'pushTokens', token), {
+    token, actief: true, platform: 'web',
+    device: navigator.userAgent.slice(0, 120),
+    bijgewerktOp: serverTimestamp(),
+  }, { merge: true });
+
+  return token;
+}
+
+export async function luisterVoorgrond(cb) {
+  if (!(await pushOndersteund())) return () => {};
+  return onMessage(messagingInstance(), (payload) => cb?.(payload));
+}
+
+```
+
+### `src/services/reflectie.js`
+
+Stemming/energie/tevredenheid-schalen + trend-helpers
+
+```js
+// Mindset & reflectie: schalen voor stemming/energie/tevredenheid + trend-helpers.
+// Pure functies, makkelijk testbaar. Check-ins leven in dagen/{datum}.checkin:
+//   { ochtend: { stemming, energie, op }, avond: { tevreden, dankbaar, reflectie, op } }
+
+export const STEMMINGEN = [
+  { v: 1, emoji: '😣', label: 'Slecht' },
+  { v: 2, emoji: '😕', label: 'Matig' },
+  { v: 3, emoji: '😐', label: 'Oké' },
+  { v: 4, emoji: '🙂', label: 'Goed' },
+  { v: 5, emoji: '😄', label: 'Top' },
+];
+
+export const ENERGIE = [
+  { v: 1, label: 'Uitgeput' },
+  { v: 2, label: 'Laag' },
+  { v: 3, label: 'Normaal' },
+  { v: 4, label: 'Energiek' },
+  { v: 5, label: 'Topfit' },
+];
+
+export const stemmingInfo = (v) => STEMMINGEN.find((s) => s.v === v) || null;
+export const energieInfo = (v) => ENERGIE.find((e) => e.v === v) || null;
+
+// Gemiddelde over numerieke waarden (null/undefined genegeerd), op 1 decimaal.
+export function gemiddelde(waarden) {
+  const xs = (waarden || []).filter((v) => typeof v === 'number');
+  if (!xs.length) return null;
+  return Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10;
+}
+
+// Reeks dagdocs -> reeks check-in-waarden per dag (voor sparklines/trends).
+export function reflectieReeks(dagen) {
+  return (dagen || []).map((d) => ({
+    datum: d.datum,
+    label: d.label || '',
+    stemming: d.checkin?.ochtend?.stemming ?? null,
+    energie: d.checkin?.ochtend?.energie ?? null,
+    tevreden: d.checkin?.avond?.tevreden ?? null,
+  }));
+}
+
+// Korte samenvatting van een reeks: gemiddelden + of er genoeg data is.
+export function reflectieSamenvatting(dagen) {
+  const r = reflectieReeks(dagen);
+  return {
+    stemming: gemiddelde(r.map((x) => x.stemming)),
+    energie: gemiddelde(r.map((x) => x.energie)),
+    tevreden: gemiddelde(r.map((x) => x.tevreden)),
+    aantal: r.filter((x) => x.stemming != null || x.energie != null || x.tevreden != null).length,
+    stemmingReeks: r.map((x) => x.stemming),
+    energieReeks: r.map((x) => x.energie),
+  };
+}
+
+// Zelf-gerapporteerde energie (1-5) -> bijsturing van de coach-score.
+// Lage energie remt af, hoge energie geeft wat ruimte. 3 = neutraal.
+export function energieNudge(energie) {
+  if (typeof energie !== 'number') return 0;
+  return { 1: -16, 2: -8, 3: 0, 4: 6, 5: 10 }[energie] ?? 0;
+}
+
+```
+
+### `src/services/sportcoach.js` ★
+
+★ Bepaalt WELKE sport + WAT die dag concreet inhoudt (vast schema + adaptieve override)
+
+```js
+// Sport-coach: bepaalt WELKE sport een dag krijgt (vast weekschema + adaptieve
+// override bij laag herstel-niveau) en WAT die sport die dag concreet inhoudt
+// (oefeningen + waarom, km/interval/hartslagzone voor fietsen, km/stappen voor
+// wandelen). Judo blijft bewust ongedetailleerd — dat is al een vast blok.
+
+import { SPORTEN } from '../config/appConfig';
+
+const NIVEAU_LABEL = { hard: 'hoge belastbaarheid', matig: 'gemiddelde belastbaarheid', rustig: 'lichte belastbaarheid', herstel: 'herstel' };
+
+// Intensiteit-rangorde van de sporten zelf — bepaalt of een override "lichter" is.
+const SPORT_INTENSITEIT = { rust: 0, wandelen: 1, homefitness: 2, fietsen: 3 };
+
+// Hybride: vast weekschema, met override naar een lichtere sport bij laag
+// herstel — nooit zomaar schrappen, altijd met uitleg.
+export function kiesSportVanDag({ dagKort, weekSchema, niveau, judoVandaag, weer = null, vermijdSporten = [] }) {
+  if (judoVandaag) return { sport: 'judo', gepland: 'judo', overschreven: false, waarom: [] };
+
+  const gepland = weekSchema?.[dagKort] || 'rust';
+  if (gepland === 'rust') return { sport: 'rust', gepland, overschreven: false, waarom: [] };
+
+  const geplandeIntensiteit = SPORT_INTENSITEIT[gepland] ?? 1;
+  let sport = gepland;
+  const waarom = [];
+  if (niveau === 'herstel' && geplandeIntensiteit >= 2) {
+    sport = 'wandelen';
+    waarom.push(`${gepland === 'fietsen' ? 'Fietsen' : 'Home fitness'} stond gepland, maar je herstel-niveau is laag vandaag — een lichtere wandeling in de plaats.`);
+  } else if (niveau === 'rustig' && geplandeIntensiteit >= 3) {
+    sport = 'homefitness';
+    waarom.push('Fietsen stond gepland, maar gezien je matige belastbaarheid kiezen we een rustigere home fitness-sessie.');
+  } else if (gepland === 'fietsen' && sport === 'fietsen') {
+    const weerReden = slechtFietsWeer(weer);
+    if (weerReden) {
+      sport = 'homefitness';
+      waarom.push(`Fietsen stond gepland, maar ${weerReden} — een home fitness-sessie in plaats daarvan.`);
+    }
+  }
+
+  // Blessure-veto: een actieve blessure kan deze sport specifiek afraden (zie
+  // BLESSURE_REGIOS). Kies dan het lichtste alternatief dat zelf niet ook
+  // afgeraden wordt; pas als alles afgeraden is, valt het terug op rust.
+  if (vermijdSporten.includes(sport)) {
+    const voorVeto = sport;
+    const alternatieven = ['wandelen', 'homefitness', 'rust'];
+    sport = alternatieven.find((s) => s === 'rust' || !vermijdSporten.includes(s));
+    waarom.push(`${SPORTEN[voorVeto]?.naam || voorVeto} stond gepland, maar dat wordt afgeraden door een actieve blessure — ${
+      sport === 'rust' ? 'vandaag rust in plaats daarvan.' : `${SPORTEN[sport]?.naam || sport} in de plaats daarvan.`}`);
+  }
+
+  return { sport, gepland, overschreven: sport !== gepland, waarom };
+}
+
+// Stabiele "willekeurige" rotatie op basis van de datum, zodat dezelfde dag
+// altijd dezelfde oefeningen toont — geen herberekening die elke render wisselt.
+function seedGetal(tekst) {
+  let h = 0;
+  for (const c of String(tekst)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h;
+}
+
+export function genereerHomeFitness({ oefeningen = [], niveau, datum }) {
+  if (!oefeningen.length) {
+    return { oefeningen: [], waarom: ['Nog geen oefeningen ingesteld — vul ze aan via Beheer › Sport & fiets.'] };
+  }
+  const aantal = { hard: 6, matig: 5, rustig: 4, herstel: 3 }[niveau] ?? 5;
+  const seed = seedGetal(datum);
+  const geroteerd = oefeningen.map((_, i) => oefeningen[(i + seed) % oefeningen.length]);
+  const basis = niveau === 'herstel'
+    ? geroteerd.filter((o) => o.categorie === 'mobiliteit' || o.categorie === 'core')
+    : geroteerd;
+  const gekozen = (basis.length ? basis : geroteerd).slice(0, aantal);
+  const factor = niveau === 'hard' ? 1.15 : niveau === 'herstel' ? 0.7 : 1;
+  return {
+    oefeningen: gekozen.map((o) => ({ ...o, sets: Math.max(1, Math.round((o.sets || 3) * factor)) })),
+    waarom: [`Sessie afgestemd op ${NIVEAU_LABEL[niveau] || 'vandaag'} — elke oefening heeft een eigen waarom hieronder.`],
+  };
+}
+
+// Slecht fietsweer (veel regen/harde wind) -> binnen blijven kan geen kwaad,
+// maar we vervangen het advies bewust door een evenwaardige home fitness-sessie
+// in plaats van de gebruiker zonder alternatief te laten staan.
+function slechtFietsWeer(weer) {
+  if (!weer) return null;
+  const regen = weer.neerslagKans ?? weer.precipProb ?? 0;
+  const wind = weer.windKmh ?? weer.wind ?? 0;
+  if (regen >= 60) return `veel kans op regen (${regen}%)`;
+  if (wind >= 45) return `harde wind (${wind} km/u)`;
+  return null;
+}
+
+export function genereerFietsAdvies({ niveau, weer = null }) {
+  const minuten = { hard: 75, matig: 50, rustig: 35, herstel: 25 }[niveau] ?? 45;
+  const km = Math.round((minuten / 60) * 22); // ±22 km/u gemiddeld
+  const zoneTekst = {
+    hard: 'Hartslagzone 3-4, met 4-6 intervallen van 3 min stevig / 2 min rustig',
+    matig: 'Hartslagzone 2-3, rustig duurtempo zonder intervallen',
+    rustig: 'Hartslagzone 1-2, comfortabel tempo',
+    herstel: 'Hartslagzone 1, heel licht — vooral de benen losrijden',
+  }[niveau] || 'Hartslagzone 2, rustig tempo';
+  const weerReden = slechtFietsWeer(weer);
+  return {
+    km, minuten, zoneTekst, weerWaarschuwing: weerReden,
+    waarom: weerReden
+      ? [`±${km} km (~${minuten} min) past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}, maar ${weerReden} — overweeg binnen te trainen.`]
+      : [`±${km} km (~${minuten} min) past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}.`],
+  };
+}
+
+export function genereerWandelAdvies({ niveau, garmin, stappenDoel }) {
+  const km = { hard: 7, matig: 5, rustig: 3.5, herstel: 2.5 }[niveau] ?? 4;
+  const stappenVandaag = garmin?.stappen ?? null;
+  const restStappen = stappenDoel != null && stappenVandaag != null ? Math.max(0, stappenDoel - stappenVandaag) : null;
+  if (restStappen != null && restStappen > 0) {
+    return {
+      km, stappenAdvies: restStappen,
+      waarom: [`Je hebt vandaag nog ${restStappen.toLocaleString('nl-BE')} stappen tot je doel — een wandeling van ±${km} km helpt dat te halen.`],
+    };
+  }
+  return { km, stappenAdvies: null, waarom: [`±${km} km past bij je huidige ${NIVEAU_LABEL[niveau] || 'belastbaarheid'}.`] };
+}
+
+export function genereerSportInhoud({ sport, niveau, oefeningen = [], garmin = null, stappenDoel = null, datum, weer = null }) {
+  if (sport === 'homefitness') return { type: 'homefitness', ...genereerHomeFitness({ oefeningen, niveau, datum }) };
+  if (sport === 'fietsen') return { type: 'fietsen', ...genereerFietsAdvies({ niveau, weer }) };
+  if (sport === 'wandelen') return { type: 'wandelen', ...genereerWandelAdvies({ niveau, garmin, stappenDoel }) };
+  if (sport === 'judo') return { type: 'judo', waarom: ['Vaste judotraining/-les — geen extra invulling nodig.'] };
+  return { type: 'rust', waarom: ['Geplande rustdag — geen training nodig.'] };
+}
+
+```
+
+### `src/services/taken.js`
+
+Afvinken + streak-berekening
+
+```js
+// Afvinken van taken/gewoontes + streak-bijhouden.
+import { doc, setDoc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
+import { datumKey } from './tijd';
+
+const logId = (datum, taakId) => `${datum}_${taakId}`;
+
+// Markeer een taak als (on)gedaan voor een dag en werk de streak bij.
+export async function zetTaakGedaan(uid, taak, datumObj, gedaan) {
+  const datum = typeof datumObj === 'string' ? datumObj : datumKey(datumObj);
+  const logRef = doc(db, 'users', uid, 'takenLog', logId(datum, taak.id));
+  await setDoc(logRef, { taakId: taak.id, datum, gedaan, op: serverTimestamp() }, { merge: true });
+
+  // Streak alleen relevant voor gewoontes.
+  if (taak.type !== 'gewoonte') return;
+
+  const taakRef = doc(db, 'users', uid, 'taken', taak.id);
+  const snap = await getDoc(taakRef);
+  const t = snap.exists() ? snap.data() : {};
+  const gisteren = vorigeDatum(datum);
+
+  let streak = t.streak || 0;
+  let beste = t.beste || 0;
+  let laatste = t.laatsteGedaan || null;
+
+  if (gedaan) {
+    if (laatste === datum) return; // al geteld
+    streak = laatste === gisteren ? streak + 1 : 1;
+    laatste = datum;
+    beste = Math.max(beste, streak);
+  } else {
+    // ongedaan maken van vandaag: stap één terug
+    if (laatste === datum) {
+      streak = Math.max(0, streak - 1);
+      laatste = streak > 0 ? gisteren : null;
+    }
+  }
+  await updateDoc(taakRef, { streak, beste, laatsteGedaan: laatste });
+}
+
+function vorigeDatum(datum) {
+  const d = new Date(datum + 'T12:00:00');
+  d.setDate(d.getDate() - 1);
+  return datumKey(d);
+}
+
+```
+
+### `src/services/tijd.js`
+
+Tijd/datum/week-helpers (incl. dagOrdinal voor deterministische rotatie)
+
+```js
+// Kleine tijd-helpers. Tijden zijn strings "HH:MM"; intern rekenen we in minuten.
+export const toMin = (hhmm) => {
+  if (!hhmm || typeof hhmm !== 'string') return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+export const toHHMM = (min) => {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+};
+export const addMin = (hhmm, delta) => toHHMM(toMin(hhmm) + delta);
+export const duurMin = (a, b) => toMin(b) - toMin(a);
+
+export const DAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+export const dagKortVanDatum = (d) => DAG_KORT[d.getDay()];
+
+export const datumKey = (d) => {
+  const x = d instanceof Date ? d : new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
+
+// ISO-weeknummer + jaar -> "YYYY-Www"
+export function weekKey(d) {
+  const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNr = (x.getUTCDay() + 6) % 7;
+  x.setUTCDate(x.getUTCDate() - dayNr + 3);
+  const firstThursday = new Date(Date.UTC(x.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((x - firstThursday) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${x.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+export const nuMin = () => {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+};
+
+// Dagnummer sinds epoch — basis voor deterministische, eerlijke round-robin-
+// rotaties (reva-oefeningen, maaltijdsuggesties) zonder willekeur.
+export const dagOrdinal = (datum) => Math.floor(new Date(`${datum}T00:00:00Z`).getTime() / 86400000);
+
+```
+
+### `src/services/vakanties.js`
+
+Vakantieperiodes (verlof/geenJudo/buitenland) als datumreeksen
+
+```js
+// Vakantieperiodes als datum-reeksen (YYYY-MM-DD; string-vergelijking volstaat).
+// Een periode kan 'verlof' zijn (jij bent vrij) en/of 'geenJudo' (clubs dicht:
+// geen eigen training én geen lesgeven).
+
+export function vakantieVoorDatum(lijst, datum) {
+  for (const v of lijst || []) {
+    if (v.van && v.tot && datum >= v.van && datum <= v.tot) return v;
+  }
+  return null;
+}
+
+// Gecombineerde vlaggen over ÁLLE periodes die deze datum overlappen. Belangrijk
+// bij overlap: als één periode 'geenJudo' is en een andere 'verlof', gelden beide.
+// (Anders zou alleen de eerst-gevonden periode tellen en kon judovrij wegvallen.)
+export function vakantieFlags(lijst, datum) {
+  let verlof = false, geenJudo = false, buitenland = false, periode = null;
+  for (const v of lijst || []) {
+    if (v.van && v.tot && datum >= v.van && datum <= v.tot) {
+      if (!periode) periode = v;
+      if (v.verlof) verlof = true;
+      if (v.geenJudo) geenJudo = true;
+      if (v.buitenland) buitenland = true;
+    }
+  }
+  return { verlof, geenJudo, buitenland, periode };
+}
+
+// Eerste periode die een van de gegeven dagdatums overlapt (voor weekbanner).
+export function vakantieInWeek(lijst, datums) {
+  for (const v of lijst || []) {
+    if (v.van && v.tot && datums.some((d) => d >= v.van && d <= v.tot)) return v;
+  }
+  return null;
+}
+
+export function vakantieLabel(v) {
+  if (!v) return '';
+  const suffix = v.buitenland ? ' (buitenland)' : '';
+  if (v.geenJudo && v.verlof) return `Verlof + judovrij${suffix}`;
+  if (v.geenJudo) return `Judovrij (clubs dicht)${suffix}`;
+  if (v.verlof) return `Persoonlijk verlof${suffix}`;
+  return 'Vakantie';
+}
+
+```
+
+## Tests
+
+### `test/belasting.test.js`
+
+Unit-tests: belasting.js (ACWR)
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -9346,7 +9588,9 @@ describe('acwrBerekenen (opbouw-ratio)', () => {
 
 ```
 
-## `test/blessures.test.js`
+### `test/blessures.test.js`
+
+Unit-tests: blessures.js (reva-rotatie)
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -9443,7 +9687,9 @@ describe('blessureBlokDuur', () => {
 
 ```
 
-## `test/coach.test.js`
+### `test/coach.test.js`
+
+Unit-tests: coach.js (sportadvies)
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -9508,7 +9754,9 @@ describe('coachAdvies', () => {
 
 ```
 
-## `test/doelen.test.js`
+### `test/doelen.test.js`
+
+Unit-tests: doelen.js
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -9542,7 +9790,9 @@ describe('doelProgress', () => {
 
 ```
 
-## `test/ics.test.js`
+### `test/ics.test.js`
+
+Unit-tests: functions/lib/ics.js
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -9626,7 +9876,9 @@ describe('ICS-parser', () => {
 
 ```
 
-## `test/maaltijden.test.js`
+### `test/maaltijden.test.js`
+
+Unit-tests: maaltijden.js (suggesties/boodschappenlijst)
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -9757,7 +10009,9 @@ describe('MOMENTEN', () => {
 
 ```
 
-## `test/noordster.test.js`
+### `test/noordster.test.js`
+
+Unit-tests: noordster.js (North Star-score)
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -9854,7 +10108,9 @@ describe('noordster — reva-blok met oefeningen-checklist', () => {
 
 ```
 
-## `test/periodisering.test.js`
+### `test/periodisering.test.js`
+
+Unit-tests: periodisering.js (trainingscyclus)
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -9920,7 +10176,9 @@ describe('periodiseringBepalen', () => {
 
 ```
 
-## `test/planner.test.js`
+### `test/planner.test.js`
+
+Unit-tests: planner.js (dagplan-generatie)
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -10226,7 +10484,9 @@ describe('berekenFietsAdvies', () => {
 
 ```
 
-## `test/reflectie.test.js`
+### `test/reflectie.test.js`
+
+Unit-tests: reflectie.js
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -10377,7 +10637,9 @@ describe('coach — groot verlof (thuis vs. buitenland)', () => {
 
 ```
 
-## `test/sportcoach.test.js`
+### `test/sportcoach.test.js`
+
+Unit-tests: sportcoach.js
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -10468,7 +10730,9 @@ describe('genereerSportInhoud', () => {
 
 ```
 
-## `test/tijd.test.js`
+### `test/tijd.test.js`
+
+Unit-tests: tijd.js
 
 ```js
 import { describe, it, expect } from 'vitest';
@@ -10501,7 +10765,9 @@ describe('tijd-helpers', () => {
 
 ```
 
-## `test/vakanties.test.js`
+### `test/vakanties.test.js`
+
+Unit-tests: vakanties.js
 
 ```js
 import { describe, it, expect } from 'vitest';
