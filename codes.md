@@ -4,7 +4,7 @@ Automatisch gegenereerd bestand. Bevat de volledige inhoud van alle
 relevante bron-, config- en testbestanden uit deze repository, samengevoegd
 in 1 bestand voor een externe audit. Genereer opnieuw indien verouderd.
 
-Branch: `claude/dashboard-datumkiezer`
+Branch: `claude/caveman-full-4o2v2o`
 
 ## Inhoudsopgave
 
@@ -77,6 +77,7 @@ Branch: `claude/dashboard-datumkiezer`
 - `src/services/data.js`
 - `src/services/doelen.js`
 - `src/services/garmin.js`
+- `src/services/maaltijden.js`
 - `src/services/noordster.js`
 - `src/services/periodisering.js`
 - `src/services/planner.js`
@@ -92,6 +93,7 @@ Branch: `claude/dashboard-datumkiezer`
 - `test/coach.test.js`
 - `test/doelen.test.js`
 - `test/ics.test.js`
+- `test/maaltijden.test.js`
 - `test/noordster.test.js`
 - `test/periodisering.test.js`
 - `test/planner.test.js`
@@ -487,6 +489,7 @@ src/
     tijd.js               tijd/datum/week-helpers
     garmin.js             leest ruwe Garmin-dag uit tot samenvatting
     coach.js              Garmin + zelfrapportage -> sportadvies (uitlegbaar: waarom/zekerheid)
+    maaltijden.js         dag-deterministische receptsuggesties, schaling, boodschappenlijst
     reflectie.js          stemming/energie/tevredenheid-schalen + trend-helpers
     noordster.js          North Star-score (therapietrouw/consistentie) uit dagdata
     push.js               FCM-token registreren (client)
@@ -503,16 +506,17 @@ scripts/                  generateMessagingSw.mjs (build), gen_icons.py
 
 ## Firestore-datamodel (onder `users/{uid}`)
 ```
-instellingen/{algemeen|werk|sport|push|gezondheid}
+instellingen/{algemeen|werk|sport|push|gezondheid|voeding}
 weken/{YYYY-Www}          { dagen: {ma..zo: werkmodus}, vakantie }
 blokTemplates/{id}
 taken/{id}                gewoonte/eenmalig + streak
 takenLog/{datum_taakId}
 reva/{id}                 oefening + blessureActief
-maaltijden/{id}
+maaltijden/{id}           naam/type/eiwitG/kcal + ingredienten[], doelen[], houdbaar, aantalEters
 dagen/{YYYY-MM-DD}        { gedaan{blokId}, plan[] (incl. checkbaar/sleutel),
                            pushLog{}, verzet{blokId:{start,eind}} (ingehaalde blokken),
-                           checkin: { ochtend{stemming,energie}, avond{tevreden,dankbaar,reflectie} } }
+                           checkin: { ochtend{stemming,energie}, avond{tevreden,dankbaar,reflectie} },
+                           maaltijdPlan: { [moment]: {recipeId, aantalEters} } (override, optioneel) }
 garminDaily/{datum}       server-only (Admin SDK)
 agendaEvents/{id}         server-only (icsSync)
 weer/{datum}              server-only (weerSync)
@@ -571,6 +575,20 @@ Volgende fases:
   'herstel'); in het buitenland blijft de duur standaard (geen aanname over
   faciliteiten daar). `vakantieFlags()` geeft dit door als `vakantieType`
   ('thuis'/'buitenland'/null) aan `coachAdvies()`, met uitleg in `waarom`.
+- **Fase 5.6 — Maaltijdplanning (✓):** `services/maaltijden.js` kiest per
+  moment (ontbijt/lunch/diner/3 snacks) **2 exacte suggesties** uit de eigen
+  receptenbank, dag-deterministisch (`dagOrdinal`, gedeeld met `blessures.js`),
+  gefilterd op de actieve voedingsdoelen en geschaald op het aantal eters.
+  `planner.js` vervangt het generieke maaltijdblok door het gekozen recept
+  (`bron: 'maaltijdplan'`, dus afvinkbaar en telt mee voor de North Star) en
+  plant 3 snackmomenten via `vindVrijSlot` (nooit in conflict). Een expliciete
+  keuze (`dagen/{datum}.maaltijdPlan`) wint altijd over de suggestie. Zonder
+  recepten blijft het bestaande generieke blok ongewijzigd (veilige terugval).
+  `genereerBoodschappenlijst` telt ingrediënten op over een periode en splitst
+  vers (wekelijks) van houdbaar (maandelijks-bulk); de maandlijst rekent puur
+  op recepten (geen extra Firestore-reads), de weeklijst houdt rekening met al
+  gekozen dagen. Bewust **niet** gebouwd: AH/Colruyt-scraping of een
+  winkelwagen-integratie.
 - **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
 - **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —
@@ -772,7 +790,38 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
     is read-only en geeft géén foutmelding in de UI, enkel een stille
     write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 138 unit-tests groen (`npm test`). Build groen (`npm run build`).
+- **Fase 5.6 — Maaltijdplanning (volledige feature):** de coach plant nu per
+  maaltijdmoment **exact** wat en hoeveel je eet, uit een eigen receptenbank
+  (`maaltijden/{id}`, uitgebreid met `ingredienten`/`doelen`/`houdbaar`/
+  `aantalEters` — `eiwitG`/`kcal` blijven voor de bestaande dagtracker). Zelfde
+  dag-deterministische round-robin als reva (`tijd.js` → `dagOrdinal`, nu
+  gedeeld i.p.v. lokaal in `blessures.js`): `services/maaltijden.js` →
+  `kiesSuggesties` geeft 2 suggesties per moment (gefilterd op de — meerdere
+  combineerbare — `instellingen.voeding.doelen`), `gekozenMaaltijd` laat een
+  expliciete keuze (`dagen/{datum}.maaltijdPlan.{moment}`) altijd winnen. Pure
+  functie van datum + recepten → werkt ook voor toekomstige dagen zonder dat
+  daarvoor al een dagdoc bestaat (nodig voor de maandvooruitblik, zie verder).
+  `planner.js` overschrijft het generieke ontbijt/lunch/dinerblok met het
+  gekozen recept + geschaalde ingrediënten (`bron: 'maaltijdplan'`, dus
+  afvinkbaar en meegeteld in de North Star — zonder recept blijft het oude
+  generieke, niet-afvinkbare blok bestaan, geen regressie). **3 snackmomenten**
+  (ook 's avonds, expliciete gebruikerswens) hergebruiken `vindVrijSlot` (de
+  reva-fix hierboven) zodat een snack nooit conflicteert met een vast blok;
+  uit te zetten via `instellingen.voeding.snacksAan`. **Boodschappenlijst**
+  (`genereerBoodschappenlijst`) telt ingrediënten op over een periode en
+  splitst ze in **vers** (wekelijks) vs. **houdbaar** (bulk-aankoop), op basis
+  van het `houdbaar`-vlag per recept; de maandvooruitblik berekent dit bewust
+  **zonder** dagdocs op te halen (geen extra Firestore-reads), de weekweergave
+  haalt wél bestaande dagdocs op voor realisme. UI: `pages/Maaltijden.jsx`
+  kreeg een "Vandaag kiezen"-sectie (tikbare suggestiekaarten) en een
+  "Boodschappenlijst"-sectie (week/maand-toggle + kopiëren naar klembord);
+  `pages/Beheer.jsx` kreeg de doelen-multiselect/eters-stepper/snacks-toggle in
+  de bestaande "Voeding & doelen"-rubriek. **Bewust uitgesteld** (expliciete
+  gebruikerskeuze): AH/Colruyt-scraping voor automatische menu's/winkelwagens,
+  en een hogere Garmin-syncfrequentie voor een realtime opstaan-tijd — dat
+  laatste is een apart, los te plannen werkpunt.
+
+Tests: 158 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -993,12 +1042,13 @@ twee gefixte bugs in deze feature):
 ```bash
 npm install
 npm run dev      # lokaal draaien
-npm test         # 135 unit-tests
+npm test         # 158 unit-tests
 npm run build    # productie-build (genereert ook firebase-messaging-sw.js)
 ```
 
-- **Branch:** ontwikkel op `claude/dashboard-datumkiezer`, push daarheen. Geen PR
-  aanmaken tenzij gevraagd. Merge naar `main` triggert de deploy.
+- **Branch:** ontwikkel op de branch die de sessie/opdracht aangeeft, push
+  daarheen. Geen PR aanmaken tenzij gevraagd. Merge naar `main` triggert de
+  deploy.
 - **Bij een nieuwe top-level Firestore-subcollectie:** voeg altijd meteen een
   regel toe in `firestore.rules` (zie §4.5) — de catch-all is read-only en
   geeft géén foutmelding in de UI bij een geweigerde write.
@@ -3938,6 +3988,14 @@ export const DAG_NAMEN = {
 
 // Sporten die de coach op niet-judo dagen kan inplannen + invullen. Judo blijft
 // een vast, niet-gedetailleerd blok (zie sport.judoEigenClub/judoLesgeven).
+// Voedingsdoelen — meerdere tegelijk combineerbaar (bv. spiermassa + prestatie).
+export const VOEDINGSDOELEN = {
+  afvallen: { naam: 'Afvallen', kort: 'Afvallen' },
+  spiermassa: { naam: 'Spiermassa opbouwen', kort: 'Spiermassa' },
+  onderhoud: { naam: 'Onderhoud / gezond eten', kort: 'Onderhoud' },
+  prestatie: { naam: 'Prestatie (judo/sport)', kort: 'Prestatie' },
+};
+
 export const SPORTEN = {
   homefitness: { naam: 'Home fitness', kort: 'Fitness' },
   fietsen: { naam: 'Fietsen', kort: 'Fietsen' },
@@ -4033,6 +4091,11 @@ export const DEFAULT_INSTELLINGEN = {
     stappenDoel: 8000,
     voedingTips: true,
     doel: 'algemeen',   // coach-doel: afvallen|kracht|uithouding|herstel|algemeen
+  },
+  voeding: {
+    doelen: ['onderhoud'],     // VOEDINGSDOELEN-keys, meerdere tegelijk mogelijk
+    aantalEtersStandaard: 1,
+    snacksAan: true,
   },
 };
 
@@ -4320,6 +4383,7 @@ export function useDagPlan(datumObj = new Date()) {
         datum, dagKort, instellingen, werkModus,
         taken, reva, blessures, maaltijden, agendaEvents, garmin: garminSam,
         weer, blessureActief, isVakantie, geenJudo, coachNiveau: advies.niveau, revaTrouw,
+        maaltijdPlan: dag?.maaltijdPlan || {},
       });
 
       // Adaptief: verzette (ingehaalde) blokken krijgen hun nieuwe tijd. Zo "faalt"
@@ -4336,6 +4400,7 @@ export function useDagPlan(datumObj = new Date()) {
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
         werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, periodisering, advies, weer, vakantieType,
+        maaltijden, maaltijdPlan: dag?.maaltijdPlan || {},
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen
@@ -4344,7 +4409,7 @@ export function useDagPlan(datumObj = new Date()) {
         const sleutelTypes = new Set(['judo', 'lesgeven', 'sport', 'reva', 'maaltijd', 'slaap', 'voetbal']);
         // checkbaar = exact dezelfde definitie als op het dashboard, zodat de
         // North Star-score (therapietrouw) op afvinkbare blokken klopt.
-        const isCheckbaar = (b) => ['taak', 'judo', 'agenda'].includes(b.bron) || b.type === 'sport' || b.type === 'reva';
+        const isCheckbaar = (b) => ['taak', 'judo', 'agenda', 'maaltijdplan'].includes(b.bron) || b.type === 'sport' || b.type === 'reva';
         const minimaal = plan.blokken.map((b) => ({
           id: b.id, start: b.start, eind: b.eind, titel: b.titel, type: b.type,
           push: b.push !== false, detail: b.detail || null,
@@ -4436,9 +4501,19 @@ export function useDagPlan(datumObj = new Date()) {
     herlaad();
   }, [uid, datum]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Expliciete maaltijdkeuze (wint altijd over de deterministische suggestie) —
+  // opgeslagen in dagen/{datum}.maaltijdPlan, zelfde merge-patroon als verzet.
+  const kiesMaaltijd = useCallback(async (moment, recipeId, aantalEters) => {
+    if (!uid) return;
+    const maaltijdPlan = { ...(staat.maaltijdPlan || {}), [moment]: { recipeId, aantalEters } };
+    setStaat((s) => ({ ...s, maaltijdPlan }));
+    await saveDag(uid, datum, { maaltijdPlan });
+    herlaad();
+  }, [uid, datum, staat.maaltijdPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const herlaad = useCallback(() => setVersie((v) => v + 1), []);
 
-  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, herlaad };
+  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, kiesMaaltijd, herlaad };
 }
 
 ```
@@ -4454,7 +4529,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { activeerPush } from '../services/push';
 import { syncAgendaNu } from '../services/agenda';
-import { PUSH_INTENSITEIT, APP_NAAM, DAGEN, DAG_NAMEN, SPORTEN } from '../config/appConfig';
+import { PUSH_INTENSITEIT, APP_NAAM, DAGEN, DAG_NAMEN, SPORTEN, VOEDINGSDOELEN } from '../config/appConfig';
 import { IcoBell, IcoLogout, IcoPlus, IcoTrash, IcoChevron } from '../components/Icons';
 
 // Gedeelde beheer-helpers bovenop de SettingsContext.
@@ -4849,6 +4924,11 @@ function SubSport() {
 function SubVoeding() {
   const { I, bewaar, bewaarMelding } = useBeheer();
   if (!I) return <Laden />;
+  const voeding = I.voeding || { doelen: ['onderhoud'], aantalEtersStandaard: 1, snacksAan: true };
+  const toggleDoel = (key) => {
+    const huidig = voeding.doelen || [];
+    bewaar('voeding', { doelen: huidig.includes(key) ? huidig.filter((d) => d !== key) : [...huidig, key] });
+  };
   return (
     <Sub titel="Voeding & doelen">
       <section className="card stack">
@@ -4864,6 +4944,31 @@ function SubVoeding() {
         </Veld>
         <p className="small dim" style={{ margin: 0 }}>
           Bij dit aantal stappen verschijnt een badge bij “stappen” op het Dashboard.
+        </p>
+
+        <div className="divider" />
+        <div className="card-title" style={{ margin: 0 }}>Maaltijdplanning</div>
+        <div className="field">
+          <label>Voedingsdoelen <span className="small dim">(meerdere combineerbaar)</span></label>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {Object.entries(VOEDINGSDOELEN).map(([k, v]) => (
+              <button key={k} type="button" className={'btn sm' + ((voeding.doelen || []).includes(k) ? ' primary' : ' ghost')}
+                onClick={() => toggleDoel(k)}>{v.kort}</button>
+            ))}
+          </div>
+        </div>
+        <Veld label="Aantal eters (standaard)">
+          <input className="input" type="number" min="1" defaultValue={voeding.aantalEtersStandaard ?? 1}
+            onBlur={(e) => bewaarMelding('voeding', { aantalEtersStandaard: Math.max(1, Number(e.target.value) || 1) })} />
+        </Veld>
+        <label className="row between">
+          <span>Snacks inplannen (3 momenten/dag)</span>
+          <input type="checkbox" checked={voeding.snacksAan !== false}
+            onChange={(e) => bewaarMelding('voeding', { snacksAan: e.target.checked })} style={{ width: 22, height: 22 }} />
+        </label>
+        <p className="small dim" style={{ margin: 0 }}>
+          Bepaalt welke maaltijdsuggesties de Coach toont bij “Vandaag kiezen” (Maaltijden-pagina) en in de
+          dagplanning — per maaltijd kan je het aantal eters daar nog overschrijven.
         </p>
       </section>
     </Sub>
@@ -5860,10 +5965,16 @@ import {
   getDocById, saveDag,
 } from '../services/data';
 import { datumKey } from '../services/tijd';
-import { IcoPlus, IcoTrash, IcoEdit, IcoFork } from '../components/Icons';
+import {
+  MOMENTEN, kiesSuggesties, gekozenMaaltijd, schaalIngredienten, ingredientenTekst,
+  genereerBoodschappenlijst,
+} from '../services/maaltijden';
+import { VOEDINGSDOELEN } from '../config/appConfig';
+import { IcoPlus, IcoTrash, IcoEdit, IcoFork, IcoCheck } from '../components/Icons';
 
 const TYPES = { ontbijt: 'Ontbijt', lunch: 'Lunch', diner: 'Diner', snack: 'Snack' };
-const LEEG = { naam: '', type: 'lunch', eiwitG: 25, kcal: 500 };
+const MOMENT_LABELS = { ontbijt: 'Ontbijt', lunch: 'Lunch', diner: 'Diner', snack1: 'Snack 1', snack2: 'Snack 2', snack3: 'Snack 3' };
+const LEEG = { naam: '', type: 'lunch', eiwitG: 25, kcal: 500, aantalEters: 1, houdbaar: false, doelen: [], ingredienten: [] };
 
 export default function Maaltijden() {
   const { user } = useAuth();
@@ -5872,21 +5983,56 @@ export default function Maaltijden() {
   const datum = datumKey(new Date());
   const [maaltijden, setMaaltijden] = useState([]);
   const doelen = instellingen?.gezondheid || { eiwitDoelG: 110, waterDoelL: 2.5 };
+  const voedingInst = instellingen?.voeding || { doelen: ['onderhoud'], aantalEtersStandaard: 1, snacksAan: true };
   const [voeding, setVoeding] = useState({ eiwitG: 0, waterL: 0 });
+  const [maaltijdPlan, setMaaltijdPlan] = useState({});
   const [form, setForm] = useState(LEEG);
   const [editId, setEditId] = useState(null);
   const [open, setOpen] = useState(false);
+  const [periode, setPeriode] = useState('week');
+  const [lijst, setLijst] = useState({ vers: [], houdbaar: [] });
 
   useEffect(() => {
     if (!user) return;
-    getDocById(user.uid, 'dagen', datum).then((d) => { if (d?.voeding) setVoeding(d.voeding); });
+    getDocById(user.uid, 'dagen', datum).then((d) => {
+      if (d?.voeding) setVoeding(d.voeding);
+      if (d?.maaltijdPlan) setMaaltijdPlan(d.maaltijdPlan);
+    });
     return subscribeCollection(user.uid, 'maaltijden', setMaaltijden);
   }, [user, datum]);
+
+  useEffect(() => {
+    if (!user || !maaltijden.length) { setLijst({ vers: [], houdbaar: [] }); return; }
+    (async () => {
+      const dagen = periode === 'week' ? 7 : 28;
+      const start = new Date();
+      const periodeData = Array.from({ length: dagen }, (_, i) => {
+        const d = new Date(start); d.setDate(d.getDate() + i); return datumKey(d);
+      });
+      // Week: bestaande dagdocs ophalen voor realistische (al gekozen) lijst.
+      // Maand: bewust géén dagdocs ophalen — zuiver berekend (geen extra reads).
+      let dagDocs = {};
+      if (periode === 'week') {
+        const docs = await Promise.all(periodeData.map((d) => getDocById(user.uid, 'dagen', d)));
+        dagDocs = Object.fromEntries(periodeData.map((d, i) => [d, docs[i]]).filter(([, v]) => v));
+      }
+      setLijst(genereerBoodschappenlijst({
+        periode: periodeData, recepten: maaltijden, doelen: voedingInst.doelen,
+        aantalEtersStandaard: voedingInst.aantalEtersStandaard, dagDocs,
+      }));
+    })();
+  }, [user, maaltijden, periode, voedingInst.doelen, voedingInst.aantalEtersStandaard]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bewaarVoeding = async (patch) => {
     const v = { ...voeding, ...patch };
     setVoeding(v);
     await saveDag(user.uid, datum, { voeding: v });
+  };
+
+  const kiesMaaltijd = async (moment, recipeId, aantalEters) => {
+    const plan = { ...maaltijdPlan, [moment]: { recipeId, aantalEters } };
+    setMaaltijdPlan(plan);
+    await saveDag(user.uid, datum, { maaltijdPlan: plan });
   };
 
   const start = (m) => {
@@ -5896,14 +6042,47 @@ export default function Maaltijden() {
   };
   const bewaar = async () => {
     if (!form.naam.trim()) return toast('Geef een naam.');
-    const payload = { naam: form.naam.trim(), type: form.type, eiwitG: Number(form.eiwitG) || 0, kcal: Number(form.kcal) || 0 };
+    const payload = {
+      naam: form.naam.trim(), type: form.type, eiwitG: Number(form.eiwitG) || 0, kcal: Number(form.kcal) || 0,
+      aantalEters: Number(form.aantalEters) || 1, houdbaar: !!form.houdbaar, doelen: form.doelen || [],
+      ingredienten: (form.ingredienten || []).filter((i) => i.naam?.trim()).map((i) => ({
+        naam: i.naam.trim(), hoeveelheid: Number(i.hoeveelheid) || 0, eenheid: i.eenheid || '',
+      })),
+    };
     if (editId) await updateItem(user.uid, 'maaltijden', editId, payload);
     else await addItem(user.uid, 'maaltijden', payload);
     setOpen(false); toast('Bewaard.');
   };
 
+  const wijzigIngredient = (idx, patch) => {
+    const ingredienten = [...(form.ingredienten || [])];
+    ingredienten[idx] = { ...ingredienten[idx], ...patch };
+    setForm({ ...form, ingredienten });
+  };
+  const voegIngredientToe = () => setForm({ ...form, ingredienten: [...(form.ingredienten || []), { naam: '', hoeveelheid: '', eenheid: 'g' }] });
+  const verwijderIngredient = (idx) => setForm({ ...form, ingredienten: (form.ingredienten || []).filter((_, i) => i !== idx) });
+  const toggleDoel = (key) => {
+    const huidig = form.doelen || [];
+    setForm({ ...form, doelen: huidig.includes(key) ? huidig.filter((d) => d !== key) : [...huidig, key] });
+  };
+
+  const kopieer = async () => {
+    const regel = (i) => `- ${i.hoeveelheid}${i.eenheid} ${i.naam}`;
+    const tekst = [
+      'Vers (deze week):', ...lijst.vers.map(regel),
+      '', 'Houdbaar (bulk):', ...lijst.houdbaar.map(regel),
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(tekst);
+      toast('Boodschappenlijst gekopieerd.');
+    } catch {
+      toast('Kopiëren mislukt.');
+    }
+  };
+
   const eiwitPct = Math.min(100, Math.round((voeding.eiwitG / (doelen.eiwitDoelG || 110)) * 100));
   const waterPct = Math.min(100, Math.round((voeding.waterL / (doelen.waterDoelL || 2.5)) * 100));
+  const momenten = MOMENTEN.filter((m) => voedingInst.snacksAan !== false || !m.startsWith('snack'));
 
   return (
     <div className="stack reveal">
@@ -5920,10 +6099,72 @@ export default function Maaltijden() {
           onMin={() => bewaarVoeding({ waterL: Math.max(0, Math.round(((voeding.waterL || 0) - 0.25) * 100) / 100) })} />
       </section>
 
+      {/* Vandaag kiezen */}
+      <section className="stack" style={{ gap: 10 }}>
+        <h2 style={{ margin: 0 }}>Vandaag kiezen</h2>
+        {momenten.map((moment) => {
+          const suggesties = kiesSuggesties({ recepten: maaltijden, moment, doelen: voedingInst.doelen, datum, aantal: 2 });
+          const override = maaltijdPlan[moment] || null;
+          const gekozen = gekozenMaaltijd({ recepten: maaltijden, moment, doelen: voedingInst.doelen, datum, override });
+          if (!suggesties.length) return null;
+          return (
+            <div className="card tight stack" key={moment} style={{ gap: 8 }}>
+              <div className="small dim">{MOMENT_LABELS[moment]}</div>
+              {suggesties.map((recept) => {
+                const eters = override?.recipeId === recept.id ? (override.aantalEters || recept.aantalEters || 1) : (voedingInst.aantalEtersStandaard || 1);
+                const geschaald = schaalIngredienten(recept.ingredienten || [], recept.aantalEters || 1, eters);
+                const actief = gekozen?.recept?.id === recept.id;
+                return (
+                  <button key={recept.id} className="card tight row between"
+                    style={{ width: '100%', textAlign: 'left', cursor: 'pointer', border: actief ? '1px solid var(--primary)' : '1px solid var(--border)' }}
+                    onClick={() => kiesMaaltijd(moment, recept.id, eters)}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }}>{recept.naam}</div>
+                      <div className="small dim">{ingredientenTekst(geschaald) || '—'} · voor {eters} eter(s)</div>
+                    </div>
+                    {actief && <IcoCheck width={18} height={18} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+        {momenten.every((m) => !kiesSuggesties({ recepten: maaltijden, moment: m, doelen: voedingInst.doelen, datum }).length) && (
+          <div className="empty">Nog geen recepten met ingrediënten — voeg er hieronder toe.</div>
+        )}
+      </section>
+
+      {/* Boodschappenlijst */}
+      <section className="stack" style={{ gap: 10 }}>
+        <div className="row between">
+          <h2 style={{ margin: 0 }}>Boodschappenlijst</h2>
+          <div className="row" style={{ gap: 6 }}>
+            <button className={`btn sm${periode === 'week' ? ' primary' : ''}`} onClick={() => setPeriode('week')}>Deze week</button>
+            <button className={`btn sm${periode === 'maand' ? ' primary' : ''}`} onClick={() => setPeriode('maand')}>Komende maand</button>
+          </div>
+        </div>
+        {!lijst.vers.length && !lijst.houdbaar.length && <div className="empty">Niets te kopen — voeg recepten met ingrediënten toe.</div>}
+        {!!lijst.vers.length && (
+          <div className="card tight stack">
+            <div className="small dim">Vers (wekelijks)</div>
+            {lijst.vers.map((i) => <div key={`${i.naam}|${i.eenheid}`}>{i.hoeveelheid}{i.eenheid} {i.naam}</div>)}
+          </div>
+        )}
+        {!!lijst.houdbaar.length && (
+          <div className="card tight stack">
+            <div className="small dim">Houdbaar (in bulk)</div>
+            {lijst.houdbaar.map((i) => <div key={`${i.naam}|${i.eenheid}`}>{i.hoeveelheid}{i.eenheid} {i.naam}</div>)}
+          </div>
+        )}
+        {(!!lijst.vers.length || !!lijst.houdbaar.length) && (
+          <button className="btn ghost sm" onClick={kopieer}>Kopiëren</button>
+        )}
+      </section>
+
       {/* Maaltijdenbibliotheek */}
       <section className="stack" style={{ gap: 10 }}>
         <div className="row between">
-          <h2 style={{ margin: 0 }}>Mijn maaltijden</h2>
+          <h2 style={{ margin: 0 }}>Mijn recepten</h2>
           <button className="btn primary sm" onClick={() => start(null)}><IcoPlus width={18} height={18} /> Nieuw</button>
         </div>
         {maaltijden.length === 0 && <div className="empty">Nog geen maaltijden. Voeg je vaste gerechten toe.</div>}
@@ -5933,7 +6174,11 @@ export default function Maaltijden() {
               <IcoFork width={18} height={18} style={{ color: 'var(--primary)' }} />
               <div>
                 <div style={{ fontWeight: 600 }}>{m.naam}</div>
-                <div className="small dim">{TYPES[m.type] || m.type} · {m.eiwitG}g eiwit · {m.kcal} kcal</div>
+                <div className="small dim">
+                  {TYPES[m.type] || m.type} · {m.eiwitG}g eiwit · {m.kcal} kcal
+                  {m.ingredienten?.length ? ` · ${ingredientenTekst(m.ingredienten)}` : ''}
+                  {m.houdbaar ? ' · houdbaar' : ''}
+                </div>
               </div>
             </div>
             <div className="row" style={{ gap: 2 }}>
@@ -5947,7 +6192,7 @@ export default function Maaltijden() {
       </section>
 
       {open && (
-        <div className="card stack" style={{ position: 'fixed', inset: 'auto 12px 90px 12px', maxWidth: 820, margin: '0 auto', zIndex: 50 }}>
+        <div className="card stack" style={{ position: 'fixed', inset: 'auto 12px 90px 12px', maxWidth: 820, margin: '0 auto', zIndex: 50, maxHeight: '80vh', overflowY: 'auto' }}>
           <h2 style={{ margin: 0 }}>{editId ? 'Maaltijd bewerken' : 'Nieuwe maaltijd'}</h2>
           <div className="field"><label>Naam</label>
             <input className="input" value={form.naam} onChange={(e) => setForm({ ...form, naam: e.target.value })} placeholder="bv. Kip met rijst" /></div>
@@ -5960,7 +6205,39 @@ export default function Maaltijden() {
               <input className="input" type="number" value={form.eiwitG} onChange={(e) => setForm({ ...form, eiwitG: e.target.value })} /></div>
             <div className="field" style={{ width: 110 }}><label>Kcal</label>
               <input className="input" type="number" value={form.kcal} onChange={(e) => setForm({ ...form, kcal: e.target.value })} /></div>
+            <div className="field" style={{ width: 110 }}><label>Eters</label>
+              <input className="input" type="number" min="1" value={form.aantalEters} onChange={(e) => setForm({ ...form, aantalEters: e.target.value })} /></div>
           </div>
+
+          <div className="field">
+            <label>Doelen <span className="small dim">(leeg = past bij elk doel)</span></label>
+            <div className="row wrap" style={{ gap: 6 }}>
+              {Object.entries(VOEDINGSDOELEN).map(([k, v]) => (
+                <button key={k} type="button" className={`btn sm${(form.doelen || []).includes(k) ? ' primary' : ' ghost'}`} onClick={() => toggleDoel(k)}>{v.kort}</button>
+              ))}
+            </div>
+          </div>
+
+          <label className="row" style={{ gap: 8 }}>
+            <input type="checkbox" checked={!!form.houdbaar} onChange={(e) => setForm({ ...form, houdbaar: e.target.checked })} />
+            Houdbaar (bulk-aankoop) i.p.v. vers (wekelijks)
+          </label>
+
+          <div className="field stack">
+            <div className="row between"><label style={{ margin: 0 }}>Ingrediënten</label>
+              <button type="button" className="btn ghost sm" onClick={voegIngredientToe}><IcoPlus width={16} height={16} /> Ingrediënt</button></div>
+            {(form.ingredienten || []).map((i, idx) => (
+              <div className="row" style={{ gap: 8 }} key={idx}>
+                <input className="input grow" placeholder="naam" value={i.naam} onChange={(e) => wijzigIngredient(idx, { naam: e.target.value })} />
+                <input className="input" style={{ width: 90 }} type="number" placeholder="hoev." value={i.hoeveelheid} onChange={(e) => wijzigIngredient(idx, { hoeveelheid: e.target.value })} />
+                <select className="select" style={{ width: 90 }} value={i.eenheid} onChange={(e) => wijzigIngredient(idx, { eenheid: e.target.value })}>
+                  {['g', 'ml', 'stuk', 'el', 'tl'].map((e2) => <option key={e2} value={e2}>{e2}</option>)}
+                </select>
+                <button type="button" className="icon-btn" onClick={() => verwijderIngredient(idx)} aria-label="Verwijderen"><IcoTrash width={16} height={16} /></button>
+              </div>
+            ))}
+          </div>
+
           <div className="row between">
             <button className="btn ghost" onClick={() => setOpen(false)}>Annuleren</button>
             <button className="btn primary" onClick={bewaar}>Bewaren</button>
@@ -6925,6 +7202,7 @@ export function belastingStatus({ trainingStatus = null, readinessReeks = [] } =
 // gekozen betekent geen automatische sportveto, nooit een stellig "mag niet"
 // op wankele basis.
 import { BLESSURE_REGIOS } from '../config/appConfig';
+import { dagOrdinal } from './tijd';
 
 export function isBlessureActief(b, datum) {
   if (!b || b.actief === false) return false;
@@ -6945,10 +7223,6 @@ export function vermijdSportenVanBlessures(blessures = [], datum) {
     (BLESSURE_REGIOS[b.regio]?.vermijdSport || []).forEach((s) => set.add(s));
   });
   return [...set];
-}
-
-function dagOrdinal(datum) {
-  return Math.floor(new Date(`${datum}T00:00:00Z`).getTime() / 86400000);
 }
 
 // Eerlijke round-robin: elke dag een andere, opeenvolgende schijf van de actieve
@@ -7554,6 +7828,106 @@ export function garminSamenvatting(g) {
 
 ```
 
+## `src/services/maaltijden.js`
+
+```js
+// Maaltijdplanning: kiest concrete, exacte suggesties uit de eigen receptenbank
+// (geen scraping van winkelsites — bewuste keuze, zie HANDOVER.md), schaalt
+// hoeveelheden op het aantal eters, en stelt een boodschappenlijst samen.
+// Premium-coach principe: dag-deterministische round-robin (net als
+// `blessures.js` → `kiesOefeningenVanDag`), geen willekeur, geen scraping —
+// voorspelbaar en uitlegbaar boven "slim".
+import { dagOrdinal } from './tijd';
+
+// Drie vaste, herkenbare snackmomenten + de drie hoofdmaaltijden. De recepten
+// zelf kennen enkel het brede type 'snack' (zie Maaltijden.jsx) — elk
+// snackmoment kiest via een eigen rotatie-offset (slotIndex) zodat ze niet
+// stelselmatig hetzelfde voorstellen, met veilige terugval als er maar één
+// snackrecept bestaat.
+export const MOMENTEN = ['ontbijt', 'lunch', 'diner', 'snack1', 'snack2', 'snack3'];
+
+export function receptType(moment) {
+  return moment.startsWith('snack') ? 'snack' : moment;
+}
+
+function slotIndex(moment) {
+  return moment === 'snack2' ? 1 : moment === 'snack3' ? 2 : 0;
+}
+
+// Eerlijke round-robin over de recepten die bij moment + doel passen — geen
+// recept gekozen voor `doelen` betekent dat het bij elk doel past (veilige,
+// inclusieve terugval, geen recepten verstoppen door een ontbrekend tag).
+export function kiesSuggesties({ recepten = [], moment, doelen = [], datum, aantal = 2 }) {
+  const type = receptType(moment);
+  const passend = recepten.filter((r) =>
+    (r.type || r.moment) === type
+    && (!r.doelen?.length || !doelen.length || r.doelen.some((d) => doelen.includes(d))));
+  if (!passend.length) return [];
+  const offset = (dagOrdinal(datum) + slotIndex(moment)) % passend.length;
+  const n = Math.min(aantal, passend.length);
+  const gekozen = [];
+  for (let i = 0; i < n; i++) gekozen.push(passend[(offset + i) % passend.length]);
+  return gekozen;
+}
+
+// Override (expliciete gebruikerskeuze) wint altijd; anders de eerste van de
+// deterministische suggesties. Pure functie van datum + recepten — werkt ook
+// voor toekomstige dagen zonder dat daarvoor al een dagdoc bestaat.
+export function gekozenMaaltijd({ recepten = [], moment, doelen = [], datum, override = null }) {
+  if (override?.recipeId) {
+    const recept = recepten.find((r) => r.id === override.recipeId);
+    if (recept) return { recept, aantalEters: override.aantalEters || recept.aantalEters || 1 };
+  }
+  const [recept] = kiesSuggesties({ recepten, moment, doelen, datum, aantal: 1 });
+  if (!recept) return null;
+  return { recept, aantalEters: recept.aantalEters || 1 };
+}
+
+function rondAf(waarde, eenheid) {
+  return ['g', 'ml'].includes(eenheid) ? Math.round(waarde / 5) * 5 : Math.round(waarde * 10) / 10;
+}
+
+export function schaalIngredienten(ingredienten = [], vanEters, naarEters) {
+  const ratio = (naarEters || 1) / (vanEters || 1);
+  return ingredienten.map((i) => ({ ...i, hoeveelheid: rondAf((i.hoeveelheid || 0) * ratio, i.eenheid) }));
+}
+
+export function ingredientenTekst(ingredienten = []) {
+  return ingredienten.map((i) => `${i.hoeveelheid}${i.eenheid || ''} ${i.naam}`).join(', ');
+}
+
+// Boodschappenlijst over een periode (datums als "YYYY-MM-DD"), opgeteld per
+// (naam, eenheid) en gegroepeerd in vers/houdbaar voor de UI (wekelijks vs.
+// maandelijks in bulk). `dagDocs` is optioneel — enkel voor al gerealiseerde
+// keuzes (bv. deze week); voor toekomstige dagen zonder dagdoc valt dit terug
+// op de deterministische suggestie, dus géén extra Firestore-reads nodig voor
+// een vooruitblik van een maand.
+export function genereerBoodschappenlijst({ periode = [], recepten = [], doelen = [], aantalEtersStandaard = 1, dagDocs = {} }) {
+  const totalen = new Map();
+  periode.forEach((datum) => {
+    MOMENTEN.forEach((moment) => {
+      const override = dagDocs[datum]?.maaltijdPlan?.[moment] || null;
+      const gekozen = gekozenMaaltijd({ recepten, moment, doelen, datum, override });
+      if (!gekozen) return;
+      const eters = override?.aantalEters || aantalEtersStandaard;
+      const geschaald = schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters);
+      geschaald.forEach((i) => {
+        const key = `${i.naam}|${i.eenheid || ''}`;
+        const bestaand = totalen.get(key) || { naam: i.naam, eenheid: i.eenheid || '', hoeveelheid: 0, houdbaar: !!gekozen.recept.houdbaar };
+        bestaand.hoeveelheid += i.hoeveelheid || 0;
+        totalen.set(key, bestaand);
+      });
+    });
+  });
+  const lijst = [...totalen.values()].sort((a, b) => a.naam.localeCompare(b.naam));
+  return {
+    vers: lijst.filter((i) => !i.houdbaar),
+    houdbaar: lijst.filter((i) => i.houdbaar),
+  };
+}
+
+```
+
 ## `src/services/noordster.js`
 
 ```js
@@ -7713,8 +8087,27 @@ import { BLOK_TYPES, SPORTEN } from '../config/appConfig';
 import { toMin, toHHMM, addMin } from './tijd';
 import { kiesSportVanDag, genereerSportInhoud } from './sportcoach';
 import { isBlessureActief, isVerlopenNietGemeld, vermijdSportenVanBlessures, kiesOefeningenVanDag, blessureBlokDuur } from './blessures';
+import { gekozenMaaltijd, schaalIngredienten, ingredientenTekst } from './maaltijden';
 
 const kleurVoor = (type) => (BLOK_TYPES[type]?.kleur || BLOK_TYPES.routine.kleur);
+
+const SNACK_DUUR_MIN = 15;
+
+// Maaltijdblok met een concreet, uitlegbaar voorstel (naam + exacte hoeveelheden)
+// uit de eigen receptenbank, geschaald op het aantal eters. Geen passend recept
+// gevonden (lege bank, of geen match voor het doel) → val veilig terug op het
+// generieke blok van vroeger, geen regressie.
+function maaltijdBlok(arr, start, eind, label, moment, { recepten, doelen, datum, maaltijdPlan, aantalEtersStandaard }) {
+  const override = maaltijdPlan?.[moment] || null;
+  const gekozen = gekozenMaaltijd({ recepten, moment, doelen, datum, override });
+  if (!gekozen) {
+    maakBlok(arr, start, eind, label, 'maaltijd', { bron: 'maaltijd' });
+    return;
+  }
+  const eters = override?.aantalEters || aantalEtersStandaard || 1;
+  const detail = ingredientenTekst(schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters));
+  maakBlok(arr, start, eind, `${label} — ${gekozen.recept.naam}`, 'maaltijd', { bron: 'maaltijdplan', detail, id: `maaltijd-${moment}` });
+}
 
 function maakBlok(arr, start, eind, titel, type, opts = {}) {
   if (!start || !eind) return;
@@ -7770,13 +8163,19 @@ export function genereerDagPlan({
   datum, dagKort, instellingen, werkModus,
   taken = [], reva = [], blessures = [], maaltijden = [], agendaEvents = [],
   garmin = null, weer = null, blessureActief = false, isVakantie = false, geenJudo = false,
-  coachNiveau = null, revaTrouw = null,
+  coachNiveau = null, revaTrouw = null, maaltijdPlan = {},
 }) {
   const I = instellingen || {};
   const alg = I.algemeen || {};
   const werk = I.werk || {};
   const sport = I.sport || {};
   const gezondheid = I.gezondheid || {};
+  const voeding = I.voeding || {};
+  const recepten = maaltijden;
+  const maaltijdCtx = {
+    recepten, doelen: voeding.doelen || [], datum, maaltijdPlan,
+    aantalEtersStandaard: voeding.aantalEtersStandaard || 1,
+  };
   const blok = [];
   const advies = { tekst: [] };
   let werkEindTijd = null;
@@ -7795,7 +8194,7 @@ export function genereerDagPlan({
 
   // 1) Ochtendroutine + ontbijt
   maakBlok(blok, opstaan, addMin(opstaan, 25), 'Opstaan & klaarmaken', 'routine', { bron: 'routine' });
-  maakBlok(blok, addMin(opstaan, 25), addMin(opstaan, 45), 'Ontbijt', 'maaltijd', { bron: 'maaltijd' });
+  maaltijdBlok(blok, addMin(opstaan, 25), addMin(opstaan, 45), 'Ontbijt', 'ontbijt', maaltijdCtx);
 
   // 2) Werk + woon-werk
   if (werktVandaag) {
@@ -7820,7 +8219,7 @@ export function genereerDagPlan({
     const lunch = '13:00';
     if (toMin(lunch) > toMin(start) && toMin(lunch) < toMin(eind)) {
       maakBlok(blok, start, lunch, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk' });
-      maakBlok(blok, lunch, addMin(lunch, pauze), 'Middagpauze + lunch', 'maaltijd', { bron: 'maaltijd' });
+      maaltijdBlok(blok, lunch, addMin(lunch, pauze), 'Middagpauze + lunch', 'lunch', maaltijdCtx);
       maakBlok(blok, addMin(lunch, pauze), eind, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk', push: false });
     } else {
       maakBlok(blok, start, eind, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk' });
@@ -7961,8 +8360,31 @@ export function genereerDagPlan({
   if (!heeftAvondeten && werktVandaag) {
     const et = isWo ? null : '18:45';
     if (et) {
-      maakBlok(blok, et, addMin(et, 40), 'Avondeten', 'maaltijd', { bron: 'maaltijd' });
+      maaltijdBlok(blok, et, addMin(et, 40), 'Avondeten', 'diner', maaltijdCtx);
     }
+  }
+
+  // 7b) Snacks: 3 vaste momenten (voormiddag/namiddag/avond-ontspanning), elk
+  //     via `vindVrijSlot` om werk/judo/agenda heen geschoven zodat ze nooit
+  //     een conflict opleveren. Stil overgeslagen zonder passend snackrecept
+  //     of zonder ruimte vóór het afbouwen — geen geforceerd blok.
+  if (voeding.snacksAan !== false) {
+    const voorkeuren = {
+      snack1: addMin(opstaan, 210),
+      snack2: '15:30',
+      snack3: addMin(slapen, -150),
+    };
+    ['snack1', 'snack2', 'snack3'].forEach((moment) => {
+      const override = maaltijdPlan?.[moment] || null;
+      const gekozen = gekozenMaaltijd({ recepten, doelen: voeding.doelen || [], datum, moment, override });
+      if (!gekozen) return;
+      const start = vindVrijSlot(blok, voorkeuren[moment], SNACK_DUUR_MIN);
+      const eind = addMin(start, SNACK_DUUR_MIN);
+      if (toMin(eind) > toMin(addMin(slapen, -30))) return; // geen ruimte meer vóór het afbouwen
+      const eters = override?.aantalEters || voeding.aantalEtersStandaard || 1;
+      const detail = ingredientenTekst(schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters));
+      maakBlok(blok, start, eind, `Snack — ${gekozen.recept.naam}`, 'maaltijd', { bron: 'maaltijdplan', detail, id: `maaltijd-${moment}` });
+    });
   }
 
   // 8) Afbouwen + slaap. Het slaapblok loopt van bedtijd tot het opstaan-uur
@@ -8377,6 +8799,10 @@ export const nuMin = () => {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
 };
+
+// Dagnummer sinds epoch — basis voor deterministische, eerlijke round-robin-
+// rotaties (reva-oefeningen, maaltijdsuggesties) zonder willekeur.
+export const dagOrdinal = (datum) => Math.floor(new Date(`${datum}T00:00:00Z`).getTime() / 86400000);
 
 ```
 
@@ -9200,6 +9626,137 @@ describe('ICS-parser', () => {
 
 ```
 
+## `test/maaltijden.test.js`
+
+```js
+import { describe, it, expect } from 'vitest';
+import {
+  MOMENTEN, receptType, kiesSuggesties, gekozenMaaltijd, schaalIngredienten,
+  ingredientenTekst, genereerBoodschappenlijst,
+} from '../src/services/maaltijden.js';
+
+const recepten = [
+  { id: 'kip', naam: 'Kip met rijst', type: 'lunch', aantalEters: 2, houdbaar: false,
+    doelen: ['spiermassa', 'prestatie'], ingredienten: [{ naam: 'kip', hoeveelheid: 300, eenheid: 'g' }, { naam: 'rijst', hoeveelheid: 200, eenheid: 'g' }] },
+  { id: 'salade', naam: 'Salade', type: 'lunch', aantalEters: 1, houdbaar: false, doelen: ['afvallen'],
+    ingredienten: [{ naam: 'sla', hoeveelheid: 100, eenheid: 'g' }] },
+  { id: 'pasta', naam: 'Pasta', type: 'lunch', aantalEters: 2, houdbaar: false, doelen: [],
+    ingredienten: [{ naam: 'pasta', hoeveelheid: 150, eenheid: 'g' }] },
+  { id: 'noten', naam: 'Noten', type: 'snack', aantalEters: 1, houdbaar: true,
+    ingredienten: [{ naam: 'noten', hoeveelheid: 30, eenheid: 'g' }] },
+];
+
+describe('receptType', () => {
+  it('herleidt elk snackmoment naar het brede type snack', () => {
+    expect(receptType('snack1')).toBe('snack');
+    expect(receptType('snack2')).toBe('snack');
+    expect(receptType('snack3')).toBe('snack');
+    expect(receptType('ontbijt')).toBe('ontbijt');
+  });
+});
+
+describe('kiesSuggesties', () => {
+  it('filtert op moment + doel, lege doelen-array past bij elk doel', () => {
+    const s = kiesSuggesties({ recepten, moment: 'lunch', doelen: ['afvallen'], datum: '2026-06-29' });
+    const ids = s.map((r) => r.id);
+    expect(ids).toContain('salade'); // matcht doel
+    expect(ids).toContain('pasta');  // geen doelen -> past overal
+    expect(ids).not.toContain('kip'); // ander doel, geen match
+  });
+
+  it('valt veilig terug op lege lijst zonder passende recepten', () => {
+    expect(kiesSuggesties({ recepten: [], moment: 'lunch', datum: '2026-06-29' })).toEqual([]);
+    expect(kiesSuggesties({ recepten, moment: 'diner', datum: '2026-06-29' })).toEqual([]);
+  });
+
+  it('roteert dag-deterministisch (zelfde datum -> zelfde resultaat, geen willekeur)', () => {
+    const a = kiesSuggesties({ recepten, moment: 'lunch', datum: '2026-06-29', aantal: 2 });
+    const b = kiesSuggesties({ recepten, moment: 'lunch', datum: '2026-06-29', aantal: 2 });
+    expect(a.map((r) => r.id)).toEqual(b.map((r) => r.id));
+  });
+
+  it('snack-momenten gebruiken een verschillende rotatie-offset binnen dezelfde dag', () => {
+    const snacks = [
+      { id: 's1', naam: 'Snack 1', type: 'snack', ingredienten: [] },
+      { id: 's2', naam: 'Snack 2', type: 'snack', ingredienten: [] },
+      { id: 's3', naam: 'Snack 3', type: 'snack', ingredienten: [] },
+    ];
+    const m1 = kiesSuggesties({ recepten: snacks, moment: 'snack1', datum: '2026-06-29', aantal: 1 })[0].id;
+    const m2 = kiesSuggesties({ recepten: snacks, moment: 'snack2', datum: '2026-06-29', aantal: 1 })[0].id;
+    const m3 = kiesSuggesties({ recepten: snacks, moment: 'snack3', datum: '2026-06-29', aantal: 1 })[0].id;
+    expect(new Set([m1, m2, m3]).size).toBe(3);
+  });
+});
+
+describe('gekozenMaaltijd', () => {
+  it('override wint altijd over de deterministische suggestie', () => {
+    const g = gekozenMaaltijd({ recepten, moment: 'lunch', datum: '2026-06-29', override: { recipeId: 'kip', aantalEters: 3 } });
+    expect(g.recept.id).toBe('kip');
+    expect(g.aantalEters).toBe(3);
+  });
+
+  it('zonder override valt het terug op de eerste suggestie', () => {
+    const g = gekozenMaaltijd({ recepten, moment: 'lunch', doelen: ['afvallen'], datum: '2026-06-29' });
+    expect(['salade', 'pasta']).toContain(g.recept.id);
+  });
+
+  it('geeft null bij geen passend recept (veilige terugval)', () => {
+    expect(gekozenMaaltijd({ recepten: [], moment: 'diner', datum: '2026-06-29' })).toBeNull();
+  });
+});
+
+describe('schaalIngredienten', () => {
+  it('schaalt proportioneel op het aantal eters', () => {
+    const result = schaalIngredienten([{ naam: 'kip', hoeveelheid: 300, eenheid: 'g' }], 2, 4);
+    expect(result[0].hoeveelheid).toBe(600);
+  });
+  it('rondt gewicht/volume af op 5 (g/ml), behoudt 1 decimaal voor stuks', () => {
+    const result = schaalIngredienten([{ naam: 'kip', hoeveelheid: 301, eenheid: 'g' }, { naam: 'ei', hoeveelheid: 1, eenheid: 'stuk' }], 1, 1);
+    expect(result[0].hoeveelheid % 5).toBe(0);
+    expect(result[1].hoeveelheid).toBe(1);
+  });
+});
+
+describe('ingredientenTekst', () => {
+  it('formatteert als leesbare, komma-gescheiden tekst', () => {
+    expect(ingredientenTekst([{ naam: 'kip', hoeveelheid: 300, eenheid: 'g' }, { naam: 'rijst', hoeveelheid: 200, eenheid: 'g' }]))
+      .toBe('300g kip, 200g rijst');
+  });
+});
+
+describe('genereerBoodschappenlijst', () => {
+  it('telt ingrediënten op over de periode en splitst vers/houdbaar', () => {
+    const lijst = genereerBoodschappenlijst({
+      periode: ['2026-06-29', '2026-06-30'], recepten, doelen: [], aantalEtersStandaard: 1,
+    });
+    expect(lijst.vers.length).toBeGreaterThan(0);
+    expect(lijst.vers.every((i) => i.naam)).toBe(true);
+    expect(lijst.houdbaar.every((i) => i.naam)).toBe(true);
+  });
+
+  it('een override uit dagDocs wint over de deterministische suggestie', () => {
+    const dagDocs = { '2026-06-29': { maaltijdPlan: { lunch: { recipeId: 'kip', aantalEters: 2 } } } };
+    const lijst = genereerBoodschappenlijst({
+      periode: ['2026-06-29'], recepten, doelen: [], aantalEtersStandaard: 1, dagDocs,
+    });
+    const kipIngr = lijst.vers.find((i) => i.naam === 'kip');
+    expect(kipIngr?.hoeveelheid).toBe(300); // 2 eters = basisportie van het recept, geen schaling nodig
+  });
+
+  it('valt veilig terug op een leeg overzicht zonder recepten', () => {
+    const lijst = genereerBoodschappenlijst({ periode: ['2026-06-29'], recepten: [] });
+    expect(lijst).toEqual({ vers: [], houdbaar: [] });
+  });
+});
+
+describe('MOMENTEN', () => {
+  it('bevat de 3 hoofdmaaltijden + 3 snackmomenten', () => {
+    expect(MOMENTEN).toEqual(['ontbijt', 'lunch', 'diner', 'snack1', 'snack2', 'snack3']);
+  });
+});
+
+```
+
 ## `test/noordster.test.js`
 
 ```js
@@ -9467,6 +10024,63 @@ describe('genereerDagPlan', () => {
     const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', taken });
     expect(plan.todos.some((t) => t.titel === 'Water drinken')).toBe(true);
     expect(plan.blokken.some((b) => b.titel === 'Reva')).toBe(true);
+  });
+});
+
+describe('genereerDagPlan — maaltijdplanning', () => {
+  const recepten = [
+    { id: 'havermout', naam: 'Havermout', type: 'ontbijt', aantalEters: 1, doelen: [],
+      ingredienten: [{ naam: 'havermout', hoeveelheid: 60, eenheid: 'g' }, { naam: 'melk', hoeveelheid: 200, eenheid: 'ml' }] },
+    { id: 'kip', naam: 'Kip met rijst', type: 'lunch', aantalEters: 2, doelen: [],
+      ingredienten: [{ naam: 'kip', hoeveelheid: 300, eenheid: 'g' }] },
+    { id: 'pasta', naam: 'Pasta bolognese', type: 'diner', aantalEters: 2, doelen: [],
+      ingredienten: [{ naam: 'pasta', hoeveelheid: 200, eenheid: 'g' }] },
+    { id: 'noten', naam: 'Noten', type: 'snack', aantalEters: 1, doelen: [],
+      ingredienten: [{ naam: 'noten', hoeveelheid: 30, eenheid: 'g' }] },
+  ];
+
+  it('overschrijft het generieke ontbijtblok met een gekozen recept + geschaalde ingrediënten', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', maaltijden: recepten });
+    const ontbijt = plan.blokken.find((b) => /Ontbijt/.test(b.titel));
+    expect(ontbijt.titel).toBe('Ontbijt — Havermout');
+    expect(ontbijt.bron).toBe('maaltijdplan');
+    expect(ontbijt.detail).toBe('60g havermout, 200ml melk');
+  });
+
+  it('zonder passend recept blijft het blok generiek en niet-afvinkbaar (regressie)', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', maaltijden: [] });
+    const ontbijt = plan.blokken.find((b) => b.type === 'ontbijt' || /Ontbijt/.test(b.titel));
+    expect(ontbijt.titel).toBe('Ontbijt');
+    expect(ontbijt.bron).toBe('maaltijd');
+  });
+
+  it('een expliciete override (maaltijdPlan) wint over de deterministische suggestie', () => {
+    const plan = genereerDagPlan({
+      datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', maaltijden: recepten,
+      maaltijdPlan: { lunch: { recipeId: 'kip', aantalEters: 4 } },
+    });
+    const lunch = plan.blokken.find((b) => /Kip met rijst/.test(b.titel));
+    expect(lunch).toBeTruthy();
+    expect(lunch.detail).toBe('600g kip'); // 4 eters = dubbele basisportie (2)
+  });
+
+  it('plant 3 snackmomenten in die nooit overlappen met een vast blok', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'thuis', maaltijden: recepten });
+    const snacks = plan.blokken.filter((b) => b.bron === 'maaltijdplan' && /Snack/.test(b.titel));
+    expect(snacks.length).toBeGreaterThan(0);
+    const vast = plan.blokken.filter((b) => b.vast || ['werk', 'judo', 'lesgeven', 'woonwerk', 'agenda'].includes(b.bron));
+    snacks.forEach((s) => {
+      vast.forEach((v) => {
+        const overlap = toMin(s.start) < toMin(v.eind) && toMin(s.eind) > toMin(v.start);
+        expect(overlap).toBe(false);
+      });
+    });
+  });
+
+  it('slaat snacks stil over als snacksAan uitstaat', () => {
+    const Iuit = { ...I, voeding: { ...I.voeding, snacksAan: false } };
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: Iuit, werkModus: 'thuis', maaltijden: recepten });
+    expect(plan.blokken.some((b) => /Snack/.test(b.titel))).toBe(false);
   });
 });
 

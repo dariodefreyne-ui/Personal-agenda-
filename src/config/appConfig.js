@@ -44,6 +44,14 @@ export const DAG_NAMEN = {
 
 // Sporten die de coach op niet-judo dagen kan inplannen + invullen. Judo blijft
 // een vast, niet-gedetailleerd blok (zie sport.judoEigenClub/judoLesgeven).
+// Voedingsdoelen — meerdere tegelijk combineerbaar (bv. spiermassa + prestatie).
+export const VOEDINGSDOELEN = {
+  afvallen: { naam: 'Afvallen', kort: 'Afvallen' },
+  spiermassa: { naam: 'Spiermassa opbouwen', kort: 'Spiermassa' },
+  onderhoud: { naam: 'Onderhoud / gezond eten', kort: 'Onderhoud' },
+  prestatie: { naam: 'Prestatie (judo/sport)', kort: 'Prestatie' },
+};
+
 export const SPORTEN = {
   homefitness: { naam: 'Home fitness', kort: 'Fitness' },
   fietsen: { naam: 'Fietsen', kort: 'Fietsen' },
@@ -139,6 +147,11 @@ export const DEFAULT_INSTELLINGEN = {
     stappenDoel: 8000,
     voedingTips: true,
     doel: 'algemeen',   // coach-doel: afvallen|kracht|uithouding|herstel|algemeen
+  },
+  voeding: {
+    doelen: ['onderhoud'],     // VOEDINGSDOELEN-keys, meerdere tegelijk mogelijk
+    aantalEtersStandaard: 1,
+    snacksAan: true,
   },
 };
 

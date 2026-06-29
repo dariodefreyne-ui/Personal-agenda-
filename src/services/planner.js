@@ -12,8 +12,27 @@ import { BLOK_TYPES, SPORTEN } from '../config/appConfig';
 import { toMin, toHHMM, addMin } from './tijd';
 import { kiesSportVanDag, genereerSportInhoud } from './sportcoach';
 import { isBlessureActief, isVerlopenNietGemeld, vermijdSportenVanBlessures, kiesOefeningenVanDag, blessureBlokDuur } from './blessures';
+import { gekozenMaaltijd, schaalIngredienten, ingredientenTekst } from './maaltijden';
 
 const kleurVoor = (type) => (BLOK_TYPES[type]?.kleur || BLOK_TYPES.routine.kleur);
+
+const SNACK_DUUR_MIN = 15;
+
+// Maaltijdblok met een concreet, uitlegbaar voorstel (naam + exacte hoeveelheden)
+// uit de eigen receptenbank, geschaald op het aantal eters. Geen passend recept
+// gevonden (lege bank, of geen match voor het doel) → val veilig terug op het
+// generieke blok van vroeger, geen regressie.
+function maaltijdBlok(arr, start, eind, label, moment, { recepten, doelen, datum, maaltijdPlan, aantalEtersStandaard }) {
+  const override = maaltijdPlan?.[moment] || null;
+  const gekozen = gekozenMaaltijd({ recepten, moment, doelen, datum, override });
+  if (!gekozen) {
+    maakBlok(arr, start, eind, label, 'maaltijd', { bron: 'maaltijd' });
+    return;
+  }
+  const eters = override?.aantalEters || aantalEtersStandaard || 1;
+  const detail = ingredientenTekst(schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters));
+  maakBlok(arr, start, eind, `${label} — ${gekozen.recept.naam}`, 'maaltijd', { bron: 'maaltijdplan', detail, id: `maaltijd-${moment}` });
+}
 
 function maakBlok(arr, start, eind, titel, type, opts = {}) {
   if (!start || !eind) return;
@@ -69,13 +88,19 @@ export function genereerDagPlan({
   datum, dagKort, instellingen, werkModus,
   taken = [], reva = [], blessures = [], maaltijden = [], agendaEvents = [],
   garmin = null, weer = null, blessureActief = false, isVakantie = false, geenJudo = false,
-  coachNiveau = null, revaTrouw = null,
+  coachNiveau = null, revaTrouw = null, maaltijdPlan = {},
 }) {
   const I = instellingen || {};
   const alg = I.algemeen || {};
   const werk = I.werk || {};
   const sport = I.sport || {};
   const gezondheid = I.gezondheid || {};
+  const voeding = I.voeding || {};
+  const recepten = maaltijden;
+  const maaltijdCtx = {
+    recepten, doelen: voeding.doelen || [], datum, maaltijdPlan,
+    aantalEtersStandaard: voeding.aantalEtersStandaard || 1,
+  };
   const blok = [];
   const advies = { tekst: [] };
   let werkEindTijd = null;
@@ -94,7 +119,7 @@ export function genereerDagPlan({
 
   // 1) Ochtendroutine + ontbijt
   maakBlok(blok, opstaan, addMin(opstaan, 25), 'Opstaan & klaarmaken', 'routine', { bron: 'routine' });
-  maakBlok(blok, addMin(opstaan, 25), addMin(opstaan, 45), 'Ontbijt', 'maaltijd', { bron: 'maaltijd' });
+  maaltijdBlok(blok, addMin(opstaan, 25), addMin(opstaan, 45), 'Ontbijt', 'ontbijt', maaltijdCtx);
 
   // 2) Werk + woon-werk
   if (werktVandaag) {
@@ -119,7 +144,7 @@ export function genereerDagPlan({
     const lunch = '13:00';
     if (toMin(lunch) > toMin(start) && toMin(lunch) < toMin(eind)) {
       maakBlok(blok, start, lunch, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk' });
-      maakBlok(blok, lunch, addMin(lunch, pauze), 'Middagpauze + lunch', 'maaltijd', { bron: 'maaltijd' });
+      maaltijdBlok(blok, lunch, addMin(lunch, pauze), 'Middagpauze + lunch', 'lunch', maaltijdCtx);
       maakBlok(blok, addMin(lunch, pauze), eind, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk', push: false });
     } else {
       maakBlok(blok, start, eind, kantoor ? 'Werk (kantoor)' : 'Thuiswerk', 'werk', { bron: 'werk' });
@@ -260,8 +285,31 @@ export function genereerDagPlan({
   if (!heeftAvondeten && werktVandaag) {
     const et = isWo ? null : '18:45';
     if (et) {
-      maakBlok(blok, et, addMin(et, 40), 'Avondeten', 'maaltijd', { bron: 'maaltijd' });
+      maaltijdBlok(blok, et, addMin(et, 40), 'Avondeten', 'diner', maaltijdCtx);
     }
+  }
+
+  // 7b) Snacks: 3 vaste momenten (voormiddag/namiddag/avond-ontspanning), elk
+  //     via `vindVrijSlot` om werk/judo/agenda heen geschoven zodat ze nooit
+  //     een conflict opleveren. Stil overgeslagen zonder passend snackrecept
+  //     of zonder ruimte vóór het afbouwen — geen geforceerd blok.
+  if (voeding.snacksAan !== false) {
+    const voorkeuren = {
+      snack1: addMin(opstaan, 210),
+      snack2: '15:30',
+      snack3: addMin(slapen, -150),
+    };
+    ['snack1', 'snack2', 'snack3'].forEach((moment) => {
+      const override = maaltijdPlan?.[moment] || null;
+      const gekozen = gekozenMaaltijd({ recepten, doelen: voeding.doelen || [], datum, moment, override });
+      if (!gekozen) return;
+      const start = vindVrijSlot(blok, voorkeuren[moment], SNACK_DUUR_MIN);
+      const eind = addMin(start, SNACK_DUUR_MIN);
+      if (toMin(eind) > toMin(addMin(slapen, -30))) return; // geen ruimte meer vóór het afbouwen
+      const eters = override?.aantalEters || voeding.aantalEtersStandaard || 1;
+      const detail = ingredientenTekst(schaalIngredienten(gekozen.recept.ingredienten || [], gekozen.recept.aantalEters || 1, eters));
+      maakBlok(blok, start, eind, `Snack — ${gekozen.recept.naam}`, 'maaltijd', { bron: 'maaltijdplan', detail, id: `maaltijd-${moment}` });
+    });
   }
 
   // 8) Afbouwen + slaap. Het slaapblok loopt van bedtijd tot het opstaan-uur

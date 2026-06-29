@@ -4,6 +4,7 @@
 // gekozen betekent geen automatische sportveto, nooit een stellig "mag niet"
 // op wankele basis.
 import { BLESSURE_REGIOS } from '../config/appConfig';
+import { dagOrdinal } from './tijd';
 
 export function isBlessureActief(b, datum) {
   if (!b || b.actief === false) return false;
@@ -24,10 +25,6 @@ export function vermijdSportenVanBlessures(blessures = [], datum) {
     (BLESSURE_REGIOS[b.regio]?.vermijdSport || []).forEach((s) => set.add(s));
   });
   return [...set];
-}
-
-function dagOrdinal(datum) {
-  return Math.floor(new Date(`${datum}T00:00:00Z`).getTime() / 86400000);
 }
 
 // Eerlijke round-robin: elke dag een andere, opeenvolgende schijf van de actieve

@@ -111,6 +111,7 @@ export function useDagPlan(datumObj = new Date()) {
         datum, dagKort, instellingen, werkModus,
         taken, reva, blessures, maaltijden, agendaEvents, garmin: garminSam,
         weer, blessureActief, isVakantie, geenJudo, coachNiveau: advies.niveau, revaTrouw,
+        maaltijdPlan: dag?.maaltijdPlan || {},
       });
 
       // Adaptief: verzette (ingehaalde) blokken krijgen hun nieuwe tijd. Zo "faalt"
@@ -127,6 +128,7 @@ export function useDagPlan(datumObj = new Date()) {
         laden: false, plan, instellingen, garmin: garminSam, taken,
         gedaan: dag?.gedaan || {}, checkin: dag?.checkin || null, verzet,
         werkModus, datum, dagKort, blessureActief, blessures, vermijdSporten, garminSync, acwr, periodisering, advies, weer, vakantieType,
+        maaltijden, maaltijdPlan: dag?.maaltijdPlan || {},
       });
 
       // Persisteer het plan zodat de Cloud Functions slot-herinneringen kunnen
@@ -135,7 +137,7 @@ export function useDagPlan(datumObj = new Date()) {
         const sleutelTypes = new Set(['judo', 'lesgeven', 'sport', 'reva', 'maaltijd', 'slaap', 'voetbal']);
         // checkbaar = exact dezelfde definitie als op het dashboard, zodat de
         // North Star-score (therapietrouw) op afvinkbare blokken klopt.
-        const isCheckbaar = (b) => ['taak', 'judo', 'agenda'].includes(b.bron) || b.type === 'sport' || b.type === 'reva';
+        const isCheckbaar = (b) => ['taak', 'judo', 'agenda', 'maaltijdplan'].includes(b.bron) || b.type === 'sport' || b.type === 'reva';
         const minimaal = plan.blokken.map((b) => ({
           id: b.id, start: b.start, eind: b.eind, titel: b.titel, type: b.type,
           push: b.push !== false, detail: b.detail || null,
@@ -227,7 +229,17 @@ export function useDagPlan(datumObj = new Date()) {
     herlaad();
   }, [uid, datum]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Expliciete maaltijdkeuze (wint altijd over de deterministische suggestie) —
+  // opgeslagen in dagen/{datum}.maaltijdPlan, zelfde merge-patroon als verzet.
+  const kiesMaaltijd = useCallback(async (moment, recipeId, aantalEters) => {
+    if (!uid) return;
+    const maaltijdPlan = { ...(staat.maaltijdPlan || {}), [moment]: { recipeId, aantalEters } };
+    setStaat((s) => ({ ...s, maaltijdPlan }));
+    await saveDag(uid, datum, { maaltijdPlan });
+    herlaad();
+  }, [uid, datum, staat.maaltijdPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const herlaad = useCallback(() => setVersie((v) => v + 1), []);
 
-  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, herlaad };
+  return { ...staat, toggleBlok, bewaarCheckin, verzetBlok, wijzigBlokTijd, herstelBlokTijd, wijzigSlaap, herstelSlaap, kiesMaaltijd, herlaad };
 }
