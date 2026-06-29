@@ -33,3 +33,7 @@ export const nuMin = () => {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
 };
+
+// Dagnummer sinds epoch — basis voor deterministische, eerlijke round-robin-
+// rotaties (reva-oefeningen, maaltijdsuggesties) zonder willekeur.
+export const dagOrdinal = (datum) => Math.floor(new Date(`${datum}T00:00:00Z`).getTime() / 86400000);

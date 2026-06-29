@@ -102,6 +102,63 @@ describe('genereerDagPlan', () => {
   });
 });
 
+describe('genereerDagPlan — maaltijdplanning', () => {
+  const recepten = [
+    { id: 'havermout', naam: 'Havermout', type: 'ontbijt', aantalEters: 1, doelen: [],
+      ingredienten: [{ naam: 'havermout', hoeveelheid: 60, eenheid: 'g' }, { naam: 'melk', hoeveelheid: 200, eenheid: 'ml' }] },
+    { id: 'kip', naam: 'Kip met rijst', type: 'lunch', aantalEters: 2, doelen: [],
+      ingredienten: [{ naam: 'kip', hoeveelheid: 300, eenheid: 'g' }] },
+    { id: 'pasta', naam: 'Pasta bolognese', type: 'diner', aantalEters: 2, doelen: [],
+      ingredienten: [{ naam: 'pasta', hoeveelheid: 200, eenheid: 'g' }] },
+    { id: 'noten', naam: 'Noten', type: 'snack', aantalEters: 1, doelen: [],
+      ingredienten: [{ naam: 'noten', hoeveelheid: 30, eenheid: 'g' }] },
+  ];
+
+  it('overschrijft het generieke ontbijtblok met een gekozen recept + geschaalde ingrediënten', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', maaltijden: recepten });
+    const ontbijt = plan.blokken.find((b) => /Ontbijt/.test(b.titel));
+    expect(ontbijt.titel).toBe('Ontbijt — Havermout');
+    expect(ontbijt.bron).toBe('maaltijdplan');
+    expect(ontbijt.detail).toBe('60g havermout, 200ml melk');
+  });
+
+  it('zonder passend recept blijft het blok generiek en niet-afvinkbaar (regressie)', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', maaltijden: [] });
+    const ontbijt = plan.blokken.find((b) => b.type === 'ontbijt' || /Ontbijt/.test(b.titel));
+    expect(ontbijt.titel).toBe('Ontbijt');
+    expect(ontbijt.bron).toBe('maaltijd');
+  });
+
+  it('een expliciete override (maaltijdPlan) wint over de deterministische suggestie', () => {
+    const plan = genereerDagPlan({
+      datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', maaltijden: recepten,
+      maaltijdPlan: { lunch: { recipeId: 'kip', aantalEters: 4 } },
+    });
+    const lunch = plan.blokken.find((b) => /Kip met rijst/.test(b.titel));
+    expect(lunch).toBeTruthy();
+    expect(lunch.detail).toBe('600g kip'); // 4 eters = dubbele basisportie (2)
+  });
+
+  it('plant 3 snackmomenten in die nooit overlappen met een vast blok', () => {
+    const plan = genereerDagPlan({ datum: '2026-06-24', dagKort: 'wo', instellingen: I, werkModus: 'thuis', maaltijden: recepten });
+    const snacks = plan.blokken.filter((b) => b.bron === 'maaltijdplan' && /Snack/.test(b.titel));
+    expect(snacks.length).toBeGreaterThan(0);
+    const vast = plan.blokken.filter((b) => b.vast || ['werk', 'judo', 'lesgeven', 'woonwerk', 'agenda'].includes(b.bron));
+    snacks.forEach((s) => {
+      vast.forEach((v) => {
+        const overlap = toMin(s.start) < toMin(v.eind) && toMin(s.eind) > toMin(v.start);
+        expect(overlap).toBe(false);
+      });
+    });
+  });
+
+  it('slaat snacks stil over als snacksAan uitstaat', () => {
+    const Iuit = { ...I, voeding: { ...I.voeding, snacksAan: false } };
+    const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: Iuit, werkModus: 'thuis', maaltijden: recepten });
+    expect(plan.blokken.some((b) => /Snack/.test(b.titel))).toBe(false);
+  });
+});
+
 describe('genereerDagPlan — sportcoach-integratie', () => {
   it('voegt een sportblok toe als de coach een niveau meegeeft', () => {
     const plan = genereerDagPlan({ datum: '2026-06-22', dagKort: 'ma', instellingen: I, werkModus: 'thuis', coachNiveau: 'matig' });
