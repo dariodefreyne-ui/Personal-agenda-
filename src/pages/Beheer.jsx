@@ -6,7 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { activeerPush } from '../services/push';
 import { syncAgendaNu } from '../services/agenda';
-import { PUSH_INTENSITEIT, APP_NAAM, DAGEN, DAG_NAMEN, SPORTEN } from '../config/appConfig';
+import { PUSH_INTENSITEIT, APP_NAAM, DAGEN, DAG_NAMEN, SPORTEN, VOEDINGSDOELEN } from '../config/appConfig';
 import { IcoBell, IcoLogout, IcoPlus, IcoTrash, IcoChevron } from '../components/Icons';
 
 // Gedeelde beheer-helpers bovenop de SettingsContext.
@@ -401,6 +401,11 @@ function SubSport() {
 function SubVoeding() {
   const { I, bewaar, bewaarMelding } = useBeheer();
   if (!I) return <Laden />;
+  const voeding = I.voeding || { doelen: ['onderhoud'], aantalEtersStandaard: 1, snacksAan: true };
+  const toggleDoel = (key) => {
+    const huidig = voeding.doelen || [];
+    bewaar('voeding', { doelen: huidig.includes(key) ? huidig.filter((d) => d !== key) : [...huidig, key] });
+  };
   return (
     <Sub titel="Voeding & doelen">
       <section className="card stack">
@@ -416,6 +421,31 @@ function SubVoeding() {
         </Veld>
         <p className="small dim" style={{ margin: 0 }}>
           Bij dit aantal stappen verschijnt een badge bij “stappen” op het Dashboard.
+        </p>
+
+        <div className="divider" />
+        <div className="card-title" style={{ margin: 0 }}>Maaltijdplanning</div>
+        <div className="field">
+          <label>Voedingsdoelen <span className="small dim">(meerdere combineerbaar)</span></label>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {Object.entries(VOEDINGSDOELEN).map(([k, v]) => (
+              <button key={k} type="button" className={'btn sm' + ((voeding.doelen || []).includes(k) ? ' primary' : ' ghost')}
+                onClick={() => toggleDoel(k)}>{v.kort}</button>
+            ))}
+          </div>
+        </div>
+        <Veld label="Aantal eters (standaard)">
+          <input className="input" type="number" min="1" defaultValue={voeding.aantalEtersStandaard ?? 1}
+            onBlur={(e) => bewaarMelding('voeding', { aantalEtersStandaard: Math.max(1, Number(e.target.value) || 1) })} />
+        </Veld>
+        <label className="row between">
+          <span>Snacks inplannen (3 momenten/dag)</span>
+          <input type="checkbox" checked={voeding.snacksAan !== false}
+            onChange={(e) => bewaarMelding('voeding', { snacksAan: e.target.checked })} style={{ width: 22, height: 22 }} />
+        </label>
+        <p className="small dim" style={{ margin: 0 }}>
+          Bepaalt welke maaltijdsuggesties de Coach toont bij “Vandaag kiezen” (Maaltijden-pagina) en in de
+          dagplanning — per maaltijd kan je het aantal eters daar nog overschrijven.
         </p>
       </section>
     </Sub>

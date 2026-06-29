@@ -52,6 +52,7 @@ src/
     tijd.js               tijd/datum/week-helpers
     garmin.js             leest ruwe Garmin-dag uit tot samenvatting
     coach.js              Garmin + zelfrapportage -> sportadvies (uitlegbaar: waarom/zekerheid)
+    maaltijden.js         dag-deterministische receptsuggesties, schaling, boodschappenlijst
     reflectie.js          stemming/energie/tevredenheid-schalen + trend-helpers
     noordster.js          North Star-score (therapietrouw/consistentie) uit dagdata
     push.js               FCM-token registreren (client)
@@ -68,16 +69,17 @@ scripts/                  generateMessagingSw.mjs (build), gen_icons.py
 
 ## Firestore-datamodel (onder `users/{uid}`)
 ```
-instellingen/{algemeen|werk|sport|push|gezondheid}
+instellingen/{algemeen|werk|sport|push|gezondheid|voeding}
 weken/{YYYY-Www}          { dagen: {ma..zo: werkmodus}, vakantie }
 blokTemplates/{id}
 taken/{id}                gewoonte/eenmalig + streak
 takenLog/{datum_taakId}
 reva/{id}                 oefening + blessureActief
-maaltijden/{id}
+maaltijden/{id}           naam/type/eiwitG/kcal + ingredienten[], doelen[], houdbaar, aantalEters
 dagen/{YYYY-MM-DD}        { gedaan{blokId}, plan[] (incl. checkbaar/sleutel),
                            pushLog{}, verzet{blokId:{start,eind}} (ingehaalde blokken),
-                           checkin: { ochtend{stemming,energie}, avond{tevreden,dankbaar,reflectie} } }
+                           checkin: { ochtend{stemming,energie}, avond{tevreden,dankbaar,reflectie} },
+                           maaltijdPlan: { [moment]: {recipeId, aantalEters} } (override, optioneel) }
 garminDaily/{datum}       server-only (Admin SDK)
 agendaEvents/{id}         server-only (icsSync)
 weer/{datum}              server-only (weerSync)
@@ -136,6 +138,20 @@ Volgende fases:
   'herstel'); in het buitenland blijft de duur standaard (geen aanname over
   faciliteiten daar). `vakantieFlags()` geeft dit door als `vakantieType`
   ('thuis'/'buitenland'/null) aan `coachAdvies()`, met uitleg in `waarom`.
+- **Fase 5.6 — Maaltijdplanning (✓):** `services/maaltijden.js` kiest per
+  moment (ontbijt/lunch/diner/3 snacks) **2 exacte suggesties** uit de eigen
+  receptenbank, dag-deterministisch (`dagOrdinal`, gedeeld met `blessures.js`),
+  gefilterd op de actieve voedingsdoelen en geschaald op het aantal eters.
+  `planner.js` vervangt het generieke maaltijdblok door het gekozen recept
+  (`bron: 'maaltijdplan'`, dus afvinkbaar en telt mee voor de North Star) en
+  plant 3 snackmomenten via `vindVrijSlot` (nooit in conflict). Een expliciete
+  keuze (`dagen/{datum}.maaltijdPlan`) wint altijd over de suggestie. Zonder
+  recepten blijft het bestaande generieke blok ongewijzigd (veilige terugval).
+  `genereerBoodschappenlijst` telt ingrediënten op over een periode en splitst
+  vers (wekelijks) van houdbaar (maandelijks-bulk); de maandlijst rekent puur
+  op recepten (geen extra Firestore-reads), de weeklijst houdt rekening met al
+  gekozen dagen. Bewust **niet** gebouwd: AH/Colruyt-scraping of een
+  winkelwagen-integratie.
 - **Fase 6 — Veerkracht & data:** Strava-fallback als Garmin faalt, data-export
   (JSON/CSV), back-up/herstel, robuustere sync.
 - **Fase 7 — Levensbreed (optioneel):** financiën, leerdoelen, sociale planning —

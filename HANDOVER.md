@@ -180,7 +180,38 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
     is read-only en geeft géén foutmelding in de UI, enkel een stille
     write-rollback die als een "flikkerende" of "niet-opslaande" UI overkomt.
 
-Tests: 138 unit-tests groen (`npm test`). Build groen (`npm run build`).
+- **Fase 5.6 — Maaltijdplanning (volledige feature):** de coach plant nu per
+  maaltijdmoment **exact** wat en hoeveel je eet, uit een eigen receptenbank
+  (`maaltijden/{id}`, uitgebreid met `ingredienten`/`doelen`/`houdbaar`/
+  `aantalEters` — `eiwitG`/`kcal` blijven voor de bestaande dagtracker). Zelfde
+  dag-deterministische round-robin als reva (`tijd.js` → `dagOrdinal`, nu
+  gedeeld i.p.v. lokaal in `blessures.js`): `services/maaltijden.js` →
+  `kiesSuggesties` geeft 2 suggesties per moment (gefilterd op de — meerdere
+  combineerbare — `instellingen.voeding.doelen`), `gekozenMaaltijd` laat een
+  expliciete keuze (`dagen/{datum}.maaltijdPlan.{moment}`) altijd winnen. Pure
+  functie van datum + recepten → werkt ook voor toekomstige dagen zonder dat
+  daarvoor al een dagdoc bestaat (nodig voor de maandvooruitblik, zie verder).
+  `planner.js` overschrijft het generieke ontbijt/lunch/dinerblok met het
+  gekozen recept + geschaalde ingrediënten (`bron: 'maaltijdplan'`, dus
+  afvinkbaar en meegeteld in de North Star — zonder recept blijft het oude
+  generieke, niet-afvinkbare blok bestaan, geen regressie). **3 snackmomenten**
+  (ook 's avonds, expliciete gebruikerswens) hergebruiken `vindVrijSlot` (de
+  reva-fix hierboven) zodat een snack nooit conflicteert met een vast blok;
+  uit te zetten via `instellingen.voeding.snacksAan`. **Boodschappenlijst**
+  (`genereerBoodschappenlijst`) telt ingrediënten op over een periode en
+  splitst ze in **vers** (wekelijks) vs. **houdbaar** (bulk-aankoop), op basis
+  van het `houdbaar`-vlag per recept; de maandvooruitblik berekent dit bewust
+  **zonder** dagdocs op te halen (geen extra Firestore-reads), de weekweergave
+  haalt wél bestaande dagdocs op voor realisme. UI: `pages/Maaltijden.jsx`
+  kreeg een "Vandaag kiezen"-sectie (tikbare suggestiekaarten) en een
+  "Boodschappenlijst"-sectie (week/maand-toggle + kopiëren naar klembord);
+  `pages/Beheer.jsx` kreeg de doelen-multiselect/eters-stepper/snacks-toggle in
+  de bestaande "Voeding & doelen"-rubriek. **Bewust uitgesteld** (expliciete
+  gebruikerskeuze): AH/Colruyt-scraping voor automatische menu's/winkelwagens,
+  en een hogere Garmin-syncfrequentie voor een realtime opstaan-tijd — dat
+  laatste is een apart, los te plannen werkpunt.
+
+Tests: 158 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 
@@ -401,12 +432,13 @@ twee gefixte bugs in deze feature):
 ```bash
 npm install
 npm run dev      # lokaal draaien
-npm test         # 135 unit-tests
+npm test         # 158 unit-tests
 npm run build    # productie-build (genereert ook firebase-messaging-sw.js)
 ```
 
-- **Branch:** ontwikkel op `claude/dashboard-datumkiezer`, push daarheen. Geen PR
-  aanmaken tenzij gevraagd. Merge naar `main` triggert de deploy.
+- **Branch:** ontwikkel op de branch die de sessie/opdracht aangeeft, push
+  daarheen. Geen PR aanmaken tenzij gevraagd. Merge naar `main` triggert de
+  deploy.
 - **Bij een nieuwe top-level Firestore-subcollectie:** voeg altijd meteen een
   regel toe in `firestore.rules` (zie §4.5) — de catch-all is read-only en
   geeft géén foutmelding in de UI bij een geweigerde write.
