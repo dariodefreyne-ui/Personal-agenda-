@@ -84,6 +84,3 @@ service cloud.firestore {
     }
   }
 }
-
-```
---- FILE END ---
