@@ -211,7 +211,29 @@ Playwright (smoke) · deploy via GitHub Actions naar Firebase Hosting + Function
   en een hogere Garmin-syncfrequentie voor een realtime opstaan-tijd — dat
   laatste is een apart, los te plannen werkpunt.
 
-Tests: 158 unit-tests groen (`npm test`). Build groen (`npm run build`).
+- **Fix — Garmin-sync: "geen verse data" ondanks gesynct, + exacte sync-tijd.**
+  Bugreport: Gezondheid/Dashboard toonde "Geen verse data voor vandaag" terwijl
+  Garmin Connect zelf alles al gesynct had. **Hoofdoorzaak**: de GitHub Action
+  draait 6x/dag en herschrijft elke run alle velden via `set(payload,
+  merge=True)`; `_safe()` in `garmin/fetchers.py` vangt een mislukte/rate-
+  gelimiteerde Garmin-API-call op en geeft dan `None` terug i.p.v. te crashen —
+  maar Firestore's `merge=True` behandelt een **expliciete** `None` als "zet dit
+  veld op null", niet als "laat dit veld ongewijzigd". Een eerder die dag al
+  succesvol gesyncte waarde (bv. `readiness`) werd dus stilletjes overschreven
+  met null door een latere run waarin diezelfde Garmin-call faalde — vandaar
+  wél een `garminDaily/{datum}`-document (dus "gesynct: vandaag" klopte), maar
+  met lege velden. **Fix** in `garmin/firestore_db.py` → `write_daily()`: velden
+  met waarde `None` worden nu uit de payload gefilterd vóór de merge-write, dus
+  een mislukte call op run N overschrijft nooit meer een gelukte waarde van run
+  N-1 voor diezelfde dag (`write_activity` ongewijzigd — andere risicoprofiel,
+  één volledige fetch per activiteit i.p.v. herhaaldelijk hermergen). Daarnaast
+  toont `services/garmin.js` → `syncStatus()` nu het **exacte tijdstip** uit
+  `syncedAt` naast de relatieve dag (bv. "Laatst gesynct: vandaag om 07:14"
+  i.p.v. enkel "vandaag") — ondersteunt het uitlegbaarheids-principe: "wanneer
+  precies" is nuttiger dan "welke dag" bij een pijplijn die meermaals per dag
+  draait. Nieuwe tests: `test/garmin.test.js`.
+
+Tests: 162 unit-tests groen (`npm test`). Build groen (`npm run build`).
 
 ---
 

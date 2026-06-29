@@ -19,12 +19,19 @@ function tijdVanEpochLocal(ms) {
 }
 
 // Vertaalt de laatste-sync-info naar leesbare status + staleness-vlag.
+// Toont het exacte tijdstip (uit syncedAt) i.p.v. enkel "vandaag" — de
+// pipeline draait om de 3u, dus "vandaag" alleen zegt niet of dat 5 minuten
+// of 11 uur geleden was.
 export function syncStatus(laatsteSync) {
   if (!laatsteSync || !laatsteSync.datum) return { tekst: 'Nog niet gesynct', stale: true, leeg: true };
   const d = new Date(laatsteSync.datum + 'T12:00:00');
   const dagen = Math.floor((Date.now() - d.getTime()) / 864e5);
   const rel = dagen <= 0 ? 'vandaag' : dagen === 1 ? 'gisteren' : `${dagen} dagen geleden`;
-  return { tekst: `Laatst gesynct: ${rel}`, stale: dagen >= 2, leeg: false, dagen };
+  const tijd = laatsteSync.syncedAt instanceof Date && !isNaN(laatsteSync.syncedAt)
+    ? laatsteSync.syncedAt.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const tekst = tijd ? `Laatst gesynct: ${rel} om ${tijd}` : `Laatst gesynct: ${rel}`;
+  return { tekst, stale: dagen >= 2, leeg: false, dagen };
 }
 
 export function garminSamenvatting(g) {

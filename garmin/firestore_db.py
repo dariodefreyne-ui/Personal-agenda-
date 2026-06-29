@@ -74,7 +74,13 @@ def _user_doc():
 
 
 def write_daily(date_str: str, data: dict) -> None:
-    payload = _sanitize(data)
+    # Firestore merge=True alleen overslaat afwezige velden; een expliciete
+    # None (een mislukte/lege Garmin-fetch op deze run, zie fetchers._safe)
+    # zou anders een eerder wél gelukte waarde voor dezelfde dag overschrijven
+    # met null. Velden die deze run niet ophaalden dus gewoon niet meesturen,
+    # zodat een eerdere succesvolle sync (vandaag al 1x geslaagd) intact blijft.
+    payload = {k: v for k, v in data.items() if v is not None}
+    payload = _sanitize(payload)
     payload["syncedAt"] = firestore.SERVER_TIMESTAMP
     _user_doc().collection(config.DAILY_COLLECTION).document(date_str).set(
         payload, merge=True

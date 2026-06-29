@@ -152,6 +152,7 @@ wijzigt.
 - `test/blessures.test.js` — Unit-tests: blessures.js (reva-rotatie)
 - `test/coach.test.js` — Unit-tests: coach.js (sportadvies)
 - `test/doelen.test.js` — Unit-tests: doelen.js
+- `test/garmin.test.js` — Unit-tests: syncStatus (exacte sync-tijd, staleness)
 - `test/ics.test.js` — Unit-tests: functions/lib/ics.js
 - `test/maaltijden.test.js` — Unit-tests: maaltijden.js (suggesties/boodschappenlijst)
 - `test/noordster.test.js` — Unit-tests: noordster.js (North Star-score)
@@ -2940,7 +2941,13 @@ def _user_doc():
 
 
 def write_daily(date_str: str, data: dict) -> None:
-    payload = _sanitize(data)
+    # Firestore merge=True alleen overslaat afwezige velden; een expliciete
+    # None (een mislukte/lege Garmin-fetch op deze run, zie fetchers._safe)
+    # zou anders een eerder wél gelukte waarde voor dezelfde dag overschrijven
+    # met null. Velden die deze run niet ophaalden dus gewoon niet meesturen,
+    # zodat een eerdere succesvolle sync (vandaag al 1x geslaagd) intact blijft.
+    payload = {k: v for k, v in data.items() if v is not None}
+    payload = _sanitize(payload)
     payload["syncedAt"] = firestore.SERVER_TIMESTAMP
     _user_doc().collection(config.DAILY_COLLECTION).document(date_str).set(
         payload, merge=True
@@ -8357,12 +8364,19 @@ function tijdVanEpochLocal(ms) {
 }
 
 // Vertaalt de laatste-sync-info naar leesbare status + staleness-vlag.
+// Toont het exacte tijdstip (uit syncedAt) i.p.v. enkel "vandaag" — de
+// pipeline draait om de 3u, dus "vandaag" alleen zegt niet of dat 5 minuten
+// of 11 uur geleden was.
 export function syncStatus(laatsteSync) {
   if (!laatsteSync || !laatsteSync.datum) return { tekst: 'Nog niet gesynct', stale: true, leeg: true };
   const d = new Date(laatsteSync.datum + 'T12:00:00');
   const dagen = Math.floor((Date.now() - d.getTime()) / 864e5);
   const rel = dagen <= 0 ? 'vandaag' : dagen === 1 ? 'gisteren' : `${dagen} dagen geleden`;
-  return { tekst: `Laatst gesynct: ${rel}`, stale: dagen >= 2, leeg: false, dagen };
+  const tijd = laatsteSync.syncedAt instanceof Date && !isNaN(laatsteSync.syncedAt)
+    ? laatsteSync.syncedAt.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const tekst = tijd ? `Laatst gesynct: ${rel} om ${tijd}` : `Laatst gesynct: ${rel}`;
+  return { tekst, stale: dagen >= 2, leeg: false, dagen };
 }
 
 export function garminSamenvatting(g) {
@@ -9789,6 +9803,48 @@ describe('doelProgress', () => {
     expect(huidigeWaarde({ metric: 'eigen', huidige: 12 }, null)).toBe(12);
     const p = doelProgress({ metric: 'afstand', start: 0, naar: 10, huidige: 4 }, null);
     expect(p.pct).toBe(40);
+  });
+});
+
+```
+
+### `test/garmin.test.js`
+
+Unit-tests: syncStatus (exacte sync-tijd, staleness)
+
+```js
+import { describe, it, expect } from 'vitest';
+import { syncStatus } from '../src/services/garmin.js';
+
+const vandaag = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+describe('syncStatus', () => {
+  it('valt veilig terug op "nog niet gesynct" zonder data', () => {
+    expect(syncStatus(null)).toEqual({ tekst: 'Nog niet gesynct', stale: true, leeg: true });
+  });
+
+  it('toont het exacte tijdstip uit syncedAt naast de relatieve dag', () => {
+    const syncedAt = new Date(`${vandaag()}T07:14:00`);
+    const s = syncStatus({ datum: vandaag(), syncedAt });
+    expect(s.tekst).toBe('Laatst gesynct: vandaag om 07:14');
+    expect(s.stale).toBe(false);
+    expect(s.leeg).toBe(false);
+  });
+
+  it('valt terug op enkel de relatieve dag zonder syncedAt-tijdstip', () => {
+    const s = syncStatus({ datum: vandaag() });
+    expect(s.tekst).toBe('Laatst gesynct: vandaag');
+  });
+
+  it('markeert als stale vanaf 2+ dagen geleden', () => {
+    const eerder = new Date(Date.now() - 3 * 864e5);
+    const datum = `${eerder.getFullYear()}-${String(eerder.getMonth() + 1).padStart(2, '0')}-${String(eerder.getDate()).padStart(2, '0')}`;
+    const s = syncStatus({ datum });
+    expect(s.stale).toBe(true);
+    expect(s.tekst).toMatch(/^Laatst gesynct: \d dagen geleden$/);
   });
 });
 

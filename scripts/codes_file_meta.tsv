@@ -82,6 +82,7 @@ test/belasting.test.js	Tests	Unit-tests: belasting.js (ACWR)
 test/blessures.test.js	Tests	Unit-tests: blessures.js (reva-rotatie)
 test/coach.test.js	Tests	Unit-tests: coach.js (sportadvies)
 test/doelen.test.js	Tests	Unit-tests: doelen.js
+test/garmin.test.js	Tests	Unit-tests: syncStatus (exacte sync-tijd, staleness)
 test/ics.test.js	Tests	Unit-tests: functions/lib/ics.js
 test/maaltijden.test.js	Tests	Unit-tests: maaltijden.js (suggesties/boodschappenlijst)
 test/noordster.test.js	Tests	Unit-tests: noordster.js (North Star-score)
