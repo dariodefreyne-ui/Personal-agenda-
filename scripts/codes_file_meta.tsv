@@ -1,0 +1,93 @@
+.env.example	Config	Voorbeeld-env-variabelen (Firebase-config, secrets-placeholders)
+.firebaserc	Config	Firebase-project-alias
+.github/workflows/deploy.yml	Config	CI: build + deploy naar Firebase Hosting op push naar main
+.github/workflows/garmin-auth.yml	Config	CI: vernieuwt Garmin-sessietoken
+.github/workflows/garmin-backfill.yml	Config	CI: eenmalige/handmatige Garmin-historiek-import
+.github/workflows/garmin-daily.yml	Config	CI: dagelijkse Garmin-sync naar Firestore
+.gitignore	Config	Genegeerde paden
+CLAUDE.md	Config	Architectuur- en productprincipes-gids voor AI-assistenten
+HANDOVER.md	Config	Audit-/sessie-overdrachtslog (chronologisch)
+README.md	Config	Babyproof setup- en deploy-handleiding
+firebase.json	Config	Hosting/Functions/Firestore-deploytargets
+firestore.indexes.json	Config	Samengestelde Firestore-indexen
+firestore.rules	Config	Firestore-security-rules (per-user toegang)
+storage.rules	Config	Firebase Storage-security-rules
+package.json	Config	Frontend-dependencies + npm-scripts
+vite.config.js	Config	Vite/PWA-buildconfiguratie
+index.html	Config	App-entry-HTML
+requirements.txt	Config	Python-dependencies (Garmin-pijplijn)
+functions/index.js	Backend	Cloud Functions-dispatcher: push-dispatcher(10'), icsSync(3u), weerSync(05:30), weekMail(zo)
+functions/lib/ics.js	Backend	Minimale ICS-kalenderparser (gebruikt door icsSync)
+functions/package.json	Backend	Cloud Functions-dependencies (Node 22, CommonJS)
+garmin/__init__.py	Garmin-pijplijn	Python-package-init
+garmin/auth.py	Garmin-pijplijn	Garmin-login/sessiebeheer (interactief)
+garmin/auth_ci.py	Garmin-pijplijn	Garmin-login voor CI (non-interactief, token uit secret)
+garmin/backfill.py	Garmin-pijplijn	Historische Garmin-data eenmalig importeren
+garmin/client.py	Garmin-pijplijn	Garmin Connect-API-client-wrapper
+garmin/config.py	Garmin-pijplijn	Configuratie/credentials-laadlogica
+garmin/fetchers.py	Garmin-pijplijn	Haalt specifieke Garmin-datasoorten op (slaap, HRV, activiteiten, ...)
+garmin/firestore_db.py	Garmin-pijplijn	Schrijft Garmin-data naar Firestore (Admin SDK)
+garmin/import_export.py	Garmin-pijplijn	Import/export-helpers voor Garmin-data
+garmin/sync_daily.py	Garmin-pijplijn	Dagelijkse sync-entrypoint (GitHub Action)
+scripts/gen_icons.py	Garmin-pijplijn	Genereert PWA-app-icons
+scripts/generateMessagingSw.mjs	Frontend	Build-script: genereert public/firebase-messaging-sw.js
+src/App.jsx	Frontend	Root-component + routing
+src/main.jsx	Frontend	React-entrypoint
+src/firebase.js	Frontend	Firebase-SDK-init (app/auth/firestore/functions)
+src/components/BelastingKaart.jsx	Frontend	UI: ACWR-belasting + trainingscyclus-kaart
+src/components/CheckinKaart.jsx	Frontend	UI: ochtend-check-in / avondreflectie
+src/components/CoachKaart.jsx	Frontend	UI: sportadvies-kaart (waarom/zekerheid-uitklap)
+src/components/Daypicker.jsx	Frontend	UI: datumkiezer
+src/components/ErrorBoundary.jsx	Frontend	UI: React-error-boundary
+src/components/Gauge.jsx	Frontend	UI: ronde meter (gebruikt door North Star e.d.)
+src/components/Icons.jsx	Frontend	UI: SVG-icoonset
+src/components/NoordsterKaart.jsx	Frontend	UI: North Star-scorekaart
+src/components/Shell.jsx	Frontend	UI: app-shell (navigatie/layout)
+src/components/Sparkline.jsx	Frontend	UI: kleine trendgrafiek
+src/components/UpdateBanner.jsx	Frontend	UI: "nieuwe versie beschikbaar"-banner
+src/config/appConfig.js	Frontend	Thema's, bloktypes, werkmodi, voedingsdoelen, DEFAULT_INSTELLINGEN
+src/contexts/AuthContext.jsx	Frontend	React-context: Firebase Auth-status
+src/contexts/SettingsContext.jsx	Frontend	React-context: instellingen-cache (beperkt Firestore-reads)
+src/contexts/ThemeContext.jsx	Frontend	React-context: thema (3 donkere varianten)
+src/contexts/ToastContext.jsx	Frontend	React-context: toast-notificaties
+src/hooks/useDagPlan.js	Frontend	Hook: laadt dagdata, berekent + persisteert het dagplan
+src/pages/Beheer.jsx	Frontend	Pagina: no-code instellingenbeheer (alle rubrieken)
+src/pages/Coach.jsx	Frontend	Pagina: sportcoach-advies + belasting
+src/pages/Dashboard.jsx	Frontend	Pagina: "Vandaag" — dagplan, check-in, North Star
+src/pages/Gezondheid.jsx	Frontend	Pagina: eiwit/water/schermtijd/stappen-tracker
+src/pages/Login.jsx	Frontend	Pagina: e-mail-login
+src/pages/Maaltijden.jsx	Frontend	Pagina: receptenbank, dagkeuze, boodschappenlijst
+src/pages/Taken.jsx	Frontend	Pagina: taken/gewoontes + streaks
+src/pages/Voortgang.jsx	Frontend	Pagina: weektrends/gemiddelden
+src/pages/Week.jsx	Frontend	Pagina: weekschema, werkmodi, vakanties
+src/services/agenda.js	Services	Client: roept icsSync Cloud Function aan
+src/services/belasting.js	Services	★ ACWR (acute:chronic load ratio) uit RPE-gewogen sRPE-belasting
+src/services/blessures.js	Services	★ Reva-oefeningenrotatie (dag-deterministisch) bij actieve blessure
+src/services/coach.js	Services	★ Kernlogica: Garmin + zelfrapportage → sportadvies (waarom/databronnen/zekerheid)
+src/services/data.js	Services	Generieke Firestore-CRUD-laag (alles onder users/{uid}/...)
+src/services/doelen.js	Services	Lange-termijndoelen + Garmin-koppeling
+src/services/garmin.js	Services	Leest ruwe Garmin-dagdata uit tot samenvatting
+src/services/maaltijden.js	Services	★ Kernlogica: dag-deterministische receptsuggesties, schaling, boodschappenlijst
+src/services/noordster.js	Services	★ North Star-score (therapietrouw/consistentie) uit dagdata
+src/services/periodisering.js	Services	★ Trainingscyclus (opbouw-/deload-weken), kalenderbepaald
+src/services/planner.js	Services	★ Kernlogica: genereert dagindeling uit werkmodus + ankers + advies + maaltijden
+src/services/push.js	Services	Client: FCM-token registreren
+src/services/reflectie.js	Services	Stemming/energie/tevredenheid-schalen + trend-helpers
+src/services/sportcoach.js	Services	★ Bepaalt WELKE sport + WAT die dag concreet inhoudt (vast schema + adaptieve override)
+src/services/taken.js	Services	Afvinken + streak-berekening
+src/services/tijd.js	Services	Tijd/datum/week-helpers (incl. dagOrdinal voor deterministische rotatie)
+src/services/vakanties.js	Services	Vakantieperiodes (verlof/geenJudo/buitenland) als datumreeksen
+src/styles/global.css	Frontend	Semantische CSS-tokens + thema's
+test/belasting.test.js	Tests	Unit-tests: belasting.js (ACWR)
+test/blessures.test.js	Tests	Unit-tests: blessures.js (reva-rotatie)
+test/coach.test.js	Tests	Unit-tests: coach.js (sportadvies)
+test/doelen.test.js	Tests	Unit-tests: doelen.js
+test/ics.test.js	Tests	Unit-tests: functions/lib/ics.js
+test/maaltijden.test.js	Tests	Unit-tests: maaltijden.js (suggesties/boodschappenlijst)
+test/noordster.test.js	Tests	Unit-tests: noordster.js (North Star-score)
+test/periodisering.test.js	Tests	Unit-tests: periodisering.js (trainingscyclus)
+test/planner.test.js	Tests	Unit-tests: planner.js (dagplan-generatie)
+test/reflectie.test.js	Tests	Unit-tests: reflectie.js
+test/sportcoach.test.js	Tests	Unit-tests: sportcoach.js
+test/tijd.test.js	Tests	Unit-tests: tijd.js
+test/vakanties.test.js	Tests	Unit-tests: vakanties.js
