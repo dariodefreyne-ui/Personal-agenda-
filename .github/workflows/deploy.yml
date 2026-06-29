@@ -27,14 +27,20 @@ jobs:
         run: npm install
 
       - name: Create .env.local from GitHub secret
-        run: echo "${{ secrets.ENV_LOCAL }}" > .env.local
+        run: |
+          cat > .env.local <<'EOF'
+          ${{ secrets.ENV_LOCAL }}
+          EOF
 
       - name: Build app (genereert ook firebase-messaging-sw.js)
         run: npm run build
 
       - name: Setup Firebase service account
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > $HOME/firebase-service-account.json
+          cat > $HOME/firebase-service-account.json <<'EOF'
+          ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EOF
+          chmod 600 $HOME/firebase-service-account.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-service-account.json" >> $GITHUB_ENV
 
       - name: Install Firebase CLI
