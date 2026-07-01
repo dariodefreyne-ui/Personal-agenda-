@@ -269,7 +269,7 @@ async function fetchTekstMetLimiet(url) {
       return tekst;
     }
     const reader = res.body.getReader();
-   ks = [];
+    const chunks = [];
     let totaal = 0;
     while (true) {
       const { done, value } = await reader.read();
@@ -324,6 +324,7 @@ async function syncGebruikerAgenda(userRef) {
   }
   let events = [];
   let diagnose = [];
+  let geslaagdeLinks = 0;
   for (const rawUrl of urls) {
     const geldig = await valideerIcsUrl(rawUrl);
     const kort = String(geldig.url || rawUrl).replace(/^https?:\/\//, '').slice(0, 40);
@@ -332,6 +333,7 @@ async function syncGebruikerAgenda(userRef) {
       const tekst = await fetchTekstMetLimiet(geldig.url);
       const n = parseIcs(tekst);
       events.push(...n);
+      geslaagdeLinks += 1;
       if (diagnose.length < 6) diagnose.push(...icsDiagnose(tekst, 4));
       perLink.push({ link: kort, aantal: n.length });
     } catch (e) {
@@ -347,8 +349,23 @@ async function syncGebruikerAgenda(userRef) {
   const col = userRef.collection('agendaEvents');
   const vandaag = brussel().datum;
   const toekomst = events.filter((e) => e.datum >= vandaag).slice(0, 300);
-  const oud = await col.where('datum', '>=', vandaag).get();
-  await commitAgendaMutaties(col, oud.docs, toekomst);
+
+  // Veiligheidsklep: als er wél links geconfigureerd zijn maar ALLE links
+  // mislukten (netwerkfout, tijdelijke Apple-storing, bug, ...), overschrijven
+  // we de bestaande agendaEvents NIET. Zonder dit wist elke totale storing
+  // stilzwijgend de al gesynchroniseerde agenda (aantal wordt dan 0), terwijl
+  // de bron-agenda's zelf niets veranderd zijn. Bij minstens één geslaagde
+  // link vertrouwen we het resultaat wel (dat is dan de volledige, verse set).
+  const overschrijven = urls.length === 0 || geslaagdeLinks > 0;
+  let bewaardAantal = toekomst.length;
+  if (overschrijven) {
+    const oud = await col.where('datum', '>=', vandaag).get();
+    await commitAgendaMutaties(col, oud.docs, toekomst);
+  } else {
+    // Niets weggeschreven — rapporteer hoeveel er al stond, niet 0.
+    const oud = await col.where('datum', '>=', vandaag).get();
+    bewaardAantal = oud.size;
+  }
 
   // Steekproef van wat er nét is weggeschreven (zo zien we de opgeslagen tijd).
   const opgeslagen = toekomst.slice(0, 6).map((e) => ({
@@ -358,12 +375,14 @@ async function syncGebruikerAgenda(userRef) {
   const nu = brussel();
 
   const status = {
-    aantal: toekomst.length, perLink, links: urls.length,
+    aantal: bewaardAantal, perLink, links: urls.length,
+    overgeslagen: !overschrijven,
     op: admin.firestore.FieldValue.serverTimestamp(),
   };
   await userRef.collection('instellingen').doc('agendaStatus').set(status, { merge: true });
   return {
-    aantal: toekomst.length, perLink, links: urls.length,
+    aantal: bewaardAantal, perLink, links: urls.length,
+    overgeslagen: !overschrijven,
     diagnose, opgeslagen, serverTijd: `${nu.datum} ${nu.hhmm}`,
   };
 }
