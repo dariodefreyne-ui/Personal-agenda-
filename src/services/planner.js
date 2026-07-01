@@ -226,7 +226,17 @@ export function genereerDagPlan({
         garmin, stappenDoel: gezondheid.stappenDoel, datum, weer,
       });
       const duurMin = inhoud.minuten || { hard: 50, matig: 40, rustig: 30, herstel: 20 }[coachNiveau] || 40;
-      const sportStart = werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 90);
+      // Zelfde patroon als reva/snacks: niet blind plaatsen en pas achteraf een
+      // conflict melden, maar meteen rond werk/judo/agenda heen schuiven.
+      const voorkeurSport = werkEindTijd ? addMin(werkEindTijd, 15) : addMin(opstaan, 90);
+      const sportStart = vindVrijSlot(blok, voorkeurSport, duurMin);
+      const verschovenMin = toMin(sportStart) - toMin(voorkeurSport);
+      const teLaat = toMin(addMin(sportStart, duurMin)) > toMin(addMin(slapen, -30));
+      if (teLaat) {
+        advies.tekst.push(`⚠️ Trainingsblok kon pas om ${sportStart} ingepland worden — je dag zit vol, overweeg het te verzetten of te schrappen.`);
+      } else if (verschovenMin >= 20) {
+        advies.tekst.push(`🏋️ Trainingsblok verschoven naar ${sportStart} (voorkeurstijd ${voorkeurSport} was al bezet).`);
+      }
       const detail = inhoud.type === 'homefitness'
         ? (inhoud.oefeningen.length ? inhoud.oefeningen.map((o) => `${o.naam} ${o.sets}×${o.reps}`).join(', ') : inhoud.waarom[0])
         : inhoud.type === 'fietsen'
